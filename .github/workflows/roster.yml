@@ -1,0 +1,94 @@
+# Turns driver sign-up issues into roster.json.
+#
+# A driver opens the "Driver sign-up" issue form, this reads it, updates
+# roster.json and commits. They install nothing. Editing the issue re-runs it,
+# so fixing a typo needs no new submission and no admin.
+
+name: Driver sign-ups
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  roster:
+    # Only sign-up issues; ignore everything else in the repo.
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.issue.labels.*.name, 'driver-signup')
+    runs-on: ubuntu-latest
+    concurrency:
+      # Two drivers submitting at once must not race each other's commit.
+      group: roster-write
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Read the submission
+        env:
+          BODY: ${{ github.event.issue.body }}
+        run: printf '%s' "$BODY" > /tmp/body.md
+
+      - name: Update the roster
+        id: build
+        run: |
+          set +e
+          python scripts/roster_from_issue.py \
+            --body-file /tmp/body.md \
+            --out roster.json \
+            --issue "${{ github.event.issue.number }}" \
+            --user "${{ github.event.issue.user.login }}" \
+            --comment-file /tmp/comment.md
+          echo "rc=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Commit
+        if: steps.build.outputs.rc == '0'
+        run: |
+          git config user.name "pitwall-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- roster.json; then
+            echo "roster unchanged"
+            exit 0
+          fi
+          git add roster.json
+          git commit -m "Roster: sign-up from #${{ github.event.issue.number }}"
+          # Another sign-up may have landed while this one ran.
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && git push && exit 0
+            echo "push race, retrying ($i)"
+            sleep $((RANDOM % 5 + 2))
+          done
+          echo "could not push after 5 attempts"; exit 1
+
+      - name: Reply on the issue
+        if: always() && github.event_name != 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -f /tmp/comment.md ]; then
+            gh issue comment "${{ github.event.issue.number }}" \
+              --repo "${{ github.repository }}" --body-file /tmp/comment.md
+          fi
+
+      - name: Close it once accepted
+        if: steps.build.outputs.rc == '0' && github.event_name != 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue close "${{ github.event.issue.number }}" \
+            --repo "${{ github.repository }}" --reason completed || true
+
+      - name: Reopen if it was rejected
+        if: steps.build.outputs.rc != '0' && github.event_name != 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue reopen "${{ github.event.issue.number }}" \
+            --repo "${{ github.repository }}" || true
