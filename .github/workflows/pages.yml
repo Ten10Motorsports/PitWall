@@ -1,0 +1,60 @@
+# Publishes the league's public pages: the setup handbook, the live showroom,
+# and a landing page with the sign-up link and the current roster.
+#
+# Static hosting only — no server, no data. The live timing feed comes from
+# whoever is running PitWall.exe, not from here.
+
+name: Publish site
+
+on:
+  push:
+    # Covers repos whose default branch is either name. A workflow that only
+    # watches "main" silently never runs on a "master" repo.
+    branches: [main, master]
+    paths:
+      - 'docs/**'
+      - 'site/**'
+      - 'roster.json'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assemble the site
+        run: |
+          mkdir -p _site
+          cp -r site/* _site/ 2>/dev/null || true
+          cp docs/setup-guide.html _site/setup.html 2>/dev/null || true
+          cp docs/preview.html     _site/preview.html 2>/dev/null || true
+          cp roster.json           _site/roster.json 2>/dev/null || echo '{"drivers":[]}' > _site/roster.json
+          # GitHub Pages runs Jekyll unless told not to, which eats folders
+          # starting with an underscore.
+          touch _site/.nojekyll
+          ls -la _site
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: _site }
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
