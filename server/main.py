@@ -54,6 +54,7 @@ from server.control import Control  # noqa: E402
 from server.demo import DemoFeed  # noqa: E402
 from server.engine import Engine  # noqa: E402
 from server.irsdk import IRSDK  # noqa: E402
+from server.leagues import LeagueStore  # noqa: E402
 from server.roster import RosterStore  # noqa: E402
 from server.sessionyaml import parse as parse_session  # noqa: E402
 from server.wanted import WANTED  # noqa: E402
@@ -121,6 +122,7 @@ class PitWall:
 
         self.demo = args.demo
         self.roster = RosterStore(self.data_dir, self.config)
+        self.leagues = LeagueStore(self.data_dir)
         self.engine = Engine(self.config)
         self.engine.roster_lookup = self.roster.lookup
         self.control = Control()
@@ -151,15 +153,23 @@ class PitWall:
             return False
         self.server.hub.hello = {
             "app": "PitWall",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "demo": self.demo,
             "league": self.config.get("league", {}),
+            "event": self.leagues.event_payload(),
             "controlAvailable": self.control.available,
         }
         self._routes()
         return True
 
     # -- HTTP / WS routes -------------------------------------------------
+
+    def _save_config(self) -> None:
+        """Write config to disk. Used by the settings form and by activating
+        a league profile, which changes the same file."""
+        os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
+        with open(self.config_path, "w", encoding="utf-8") as fh:
+            json.dump(self.config, fh, indent=2)
 
     def _routes(self) -> None:
         r = self.server.router
@@ -174,6 +184,7 @@ class PitWall:
                     "ticks": self.stats["ticks"],
                     "uptime": round(time.time() - self.stats["started"], 1),
                     "league": self.config.get("league", {}),
+                    "leagues": self.leagues.status(),
                     "urls": lan_addresses(int(self.config["port"])),
                     "roster": self.roster.status(),
                     "controlAvailable": self.control.available,
@@ -206,9 +217,7 @@ class PitWall:
         def api_config_set(h, body):
             _deep_update(self.config, body or {})
             try:
-                os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
-                with open(self.config_path, "w", encoding="utf-8") as fh:
-                    json.dump(self.config, fh, indent=2)
+                self._save_config()
             except OSError as exc:
                 return h._json({"error": str(exc)}, 500)
             self.server.hub.hello["league"] = self.config.get("league", {})
@@ -262,6 +271,109 @@ class PitWall:
             if not data:
                 return h._json({"error": "no map yet", "status": self.maps.status()}, 404)
             h._json(data)
+
+        # -- league profiles ----------------------------------------------
+
+        def _push_league_change():
+            """
+            Tell every connected overlay the branding and the event changed,
+            so a scene switch is not needed to pick it up. Clients handle a
+            "hello" already, and everything subscribes to meta by default.
+            """
+            self.server.hub.hello["league"] = self.config.get("league", {})
+            self.server.hub.hello["event"] = self.leagues.event_payload()
+            self.server.hub.broadcast("meta", {"type": "hello", **self.server.hub.hello})
+
+        def _apply_league(league):
+            """Push a saved profile into the live config: colours, then roster."""
+            lg = self.config.setdefault("league", {})
+            lg["name"] = league.get("name") or ""
+            lg["accent"] = league.get("accent") or lg.get("accent")
+            lg["secondary"] = league.get("secondary") or lg.get("secondary")
+            lg["logo"] = league.get("logo") or ""
+            lg["hashtag"] = league.get("hashtag") or ""
+
+            pulled = None
+            url = (league.get("rosterUrl") or "").strip()
+            if url:
+                rc = self.config.setdefault("roster", {})
+                rc["mode"] = "url"
+                rc["url"] = url
+                self.roster.config = rc
+                try:
+                    pulled = self.roster.pull()
+                except Exception as exc:
+                    # A roster that will not download must not stop the
+                    # broadcast: names and numbers come from the sim anyway.
+                    pulled = {"error": str(exc)}
+
+            self._save_config()
+            self.engine.config = self.config
+            self.engine.meta_serial += 1
+            self.engine.apply_session_info(self.engine.session_info)
+            _push_league_change()
+            return pulled
+
+        def leagues_get(h, q):
+            h._json(
+                {
+                    "leagues": self.leagues.leagues,
+                    "active": self.leagues.active_id,
+                    "event": self.leagues.event_payload(),
+                    "suggested": {
+                        l["id"]: self.leagues.suggest_round(l) for l in self.leagues.leagues
+                    },
+                }
+            )
+
+        def leagues_save(h, body):
+            saved = self.leagues.upsert(body or {})
+            # Saving the league you are currently broadcasting applies the
+            # edit immediately. That is the whole point of being able to fix
+            # a track name at five to eight.
+            if saved["id"] == self.leagues.active_id:
+                _apply_league(saved)
+            h._json({"ok": True, "league": saved})
+
+        def leagues_delete(h, body):
+            lid = str((body or {}).get("id") or "")
+            h._json({"ok": self.leagues.delete(lid)})
+
+        def leagues_duplicate(h, body):
+            copy = self.leagues.duplicate(str((body or {}).get("id") or ""))
+            if not copy:
+                return h._json({"error": "No league profile with that name is saved."}, 404)
+            h._json({"ok": True, "league": copy})
+
+        def leagues_activate(h, body):
+            body = body or {}
+            rnd = body.get("round")
+            league = self.leagues.activate(
+                str(body.get("id") or ""), int(rnd) if rnd not in (None, "") else None
+            )
+            pulled = _apply_league(league)
+            h._json(
+                {
+                    "ok": True,
+                    "league": league,
+                    "event": self.leagues.event_payload(),
+                    "roster": pulled,
+                    "rosterStatus": self.roster.status(),
+                }
+            )
+
+        def leagues_round(h, body):
+            rnd = (body or {}).get("round")
+            self.leagues.set_round(int(rnd) if rnd not in (None, "") else None)
+            _push_league_change()
+            h._json({"ok": True, "event": self.leagues.event_payload()})
+
+        r.add(("GET", "/api/leagues"), leagues_get)
+        r.add(("POST", "/api/leagues"), leagues_save)
+        r.add(("POST", "/api/leagues/delete"), leagues_delete)
+        r.add(("POST", "/api/leagues/duplicate"), leagues_duplicate)
+        r.add(("POST", "/api/leagues/activate"), leagues_activate)
+        r.add(("POST", "/api/leagues/round"), leagues_round)
 
         r.add(("GET", "/api/trackmap"), api_trackmap)
         r.add(("GET", "/api/status"), api_status)

@@ -273,6 +273,7 @@
   .result.ok { background: rgba(53,208,127,0.12); border: 1px solid rgba(53,208,127,0.35); color: #bff3d8; }
   .result.bad { background: rgba(255,77,77,0.12); border: 1px solid rgba(255,77,77,0.4); color: #ffc9c9; }
   .result.info { background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.35); color: #cfe0ff; }
+  .result.warn { background: rgba(232,168,63,0.13); border: 1px solid rgba(232,168,63,0.4); color: #f5dfae; }
 
   .btnrow { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; }
 
@@ -288,6 +289,7 @@
   .kvlist { display: grid; grid-template-columns: 130px 1fr; gap: 7px 12px; font-size: 12.5px; }
   .kvlist .k { color: var(--text-faint); }
   .kvlist .v { font-family: var(--mono); word-break: break-all; }
+
 
   /* ========================================================= sim control */
 
@@ -323,6 +325,50 @@
     font-family: var(--mono); font-size: 12px;
     background: rgba(0,0,0,0.4); padding: 1px 5px; border-radius: 3px;
   }
+
+  /* --- league profiles -------------------------------------------------- */
+  .lgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(238px, 1fr)); gap: 12px; }
+  .lgcard {
+    border: 1px solid var(--line); border-radius: 8px; padding: 14px 15px;
+    background: rgba(255,255,255,0.02); cursor: pointer; text-align: left;
+    display: flex; flex-direction: column; gap: 3px; font: inherit; color: inherit;
+  }
+  .lgcard:hover { border-color: var(--line-2); background: rgba(255,255,255,0.045); }
+  .lgcard.live { border-color: var(--accent); background: rgba(255,255,255,0.05); }
+  .lgcard .top { display: flex; align-items: center; gap: 8px; }
+  .lgcard .swatch { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+  .lgcard .nm { font-weight: 700; font-size: 14.5px; letter-spacing: -0.01em; }
+  .lgcard .sub2 { font-size: 11.5px; color: var(--text-dim); }
+  .lgcard .nextup { font-size: 12px; margin-top: 6px; color: var(--text); }
+  .lgcard .nextup b { color: var(--accent); }
+  .lgcard .live-chip {
+    align-self: flex-start; margin-top: 8px; font-size: 9.5px; font-weight: 700;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--bg);
+    background: var(--accent); border-radius: 3px; padding: 2px 6px;
+  }
+  .lgcard .acts { display: flex; gap: 6px; margin-top: 10px; }
+  .lgcard .acts button { font-size: 11.5px; padding: 4px 9px; }
+  .lgempty { color: var(--text-dim); font-size: 13.5px; padding: 6px 0 2px; }
+
+  table.sched { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 620px; }
+  table.sched th {
+    text-align: left; font-size: 10px; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--text-faint); font-weight: 700; padding: 0 6px 6px; white-space: nowrap;
+  }
+  table.sched td { padding: 4px 6px; border-top: 1px solid var(--line); vertical-align: middle; }
+  table.sched input { width: 100%; margin: 0; padding: 6px 8px; font-size: 13px; }
+  table.sched .c-rd { width: 54px; }
+  table.sched .c-date { width: 138px; }
+  table.sched .c-time { width: 96px; }
+  table.sched .c-laps { width: 76px; }
+  table.sched .c-x { width: 34px; }
+  table.sched .c-x button { padding: 4px 8px; font-size: 12px; }
+  table.sched tr.isnext td { background: rgba(255,255,255,0.035); }
+
+  #leaguebadge:not(:empty) {
+    font-size: 10px; background: var(--accent); color: var(--bg);
+    border-radius: 8px; padding: 1px 6px; margin-left: 4px; font-weight: 700;
+  }
 </style>
 </head>
 <body class="solid">
@@ -343,6 +389,7 @@
   <nav class="tabs" id="tabs">
     <button data-tab="status" class="on">Status</button>
     <button data-tab="diagnostics">Diagnostics <span id="diagbadge"></span></button>
+    <button data-tab="leagues">Leagues <span id="leaguebadge"></span></button>
     <button data-tab="overlays">Overlays</button>
     <button data-tab="roster">Roster <span id="rosterbadge"></span></button>
     <button data-tab="league">League</button>
@@ -380,6 +427,80 @@
         <button id="diagrefresh">Run again</button>
       </h2>
       <div id="diaglist"></div>
+    </div>
+  </section>
+
+  <!-- =========================================================== LEAGUES -->
+  <section class="tab" id="tab-leagues">
+    <div class="card">
+      <h2>Saved leagues</h2>
+      <p class="lede">A league profile holds the name, the colours, where the
+        roster is read from and the season calendar. Pick one and everything is
+        applied at once, so race night is choose a league, choose a round, open
+        OBS.</p>
+      <div class="lgrid" id="lglist"></div>
+      <div class="btnrow" style="margin-top:14px">
+        <button class="primary" id="lgnew">New league</button>
+        <button id="lgrefresh">Refresh</button>
+      </div>
+      <div class="result" id="lgmsg"></div>
+    </div>
+
+    <div class="card" id="lgeditwrap" hidden>
+      <h2 id="lgedittitle">Edit league</h2>
+      <div class="grid-2">
+        <div class="field">
+          <label for="lgname">League name</label>
+          <input id="lgname" placeholder="GT3 Championship">
+        </div>
+        <div class="field">
+          <label for="lghash">Hashtag</label>
+          <input id="lghash" placeholder="#GT3C">
+        </div>
+        <div class="field">
+          <label for="lgaccent">Accent colour</label>
+          <input id="lgaccent" type="color" value="#e8443a">
+        </div>
+        <div class="field">
+          <label for="lgsecond">Secondary colour</label>
+          <input id="lgsecond" type="color" value="#12b8ff">
+        </div>
+      </div>
+      <div class="field">
+        <label for="lgroster">Roster URL</label>
+        <input id="lgroster" placeholder="https://raw.githubusercontent.com/&hellip;/roster.json">
+        <div class="hint">Read-only. Activating this league points the app at it
+          and pulls the drivers. Leave it empty to keep whatever roster is
+          already loaded.</div>
+      </div>
+      <div class="field">
+        <label for="lglogo">Logo URL</label>
+        <input id="lglogo" placeholder="https://&hellip;/logo.png">
+      </div>
+
+      <h3 class="sub">Season calendar</h3>
+      <p class="hint" style="margin:-8px 0 12px">Only the track is required. A
+        round with no date still works, it just will not be picked
+        automatically on the night.</p>
+      <div class="tablescroll">
+        <table class="sched">
+          <thead>
+            <tr><th>Rd</th><th>Date</th><th>Start</th><th>Track</th><th>Name</th><th>Laps</th><th></th></tr>
+          </thead>
+          <tbody id="lgrounds"></tbody>
+        </table>
+      </div>
+      <div class="btnrow" style="margin-top:6px">
+        <button id="lgaddround">Add a round</button>
+      </div>
+
+      <div class="btnrow" style="margin-top:18px">
+        <button class="primary" id="lgsave">Save league</button>
+        <button id="lgdup">Duplicate</button>
+        <button class="danger" id="lgdel">Delete</button>
+        <button id="lgcancel">Close</button>
+      </div>
+      <div class="result" id="lgeditmsg"></div>
     </div>
   </section>
 
@@ -684,7 +805,7 @@
 
   /* ================================================================ tabs */
 
-  var TABS = ['status', 'diagnostics', 'overlays', 'roster', 'league', 'control'];
+  var TABS = ['status', 'diagnostics', 'leagues', 'overlays', 'roster', 'league', 'control'];
   var loaded = {};
 
   function showTab(name) {
@@ -699,6 +820,7 @@
     if (!loaded[name]) {
       loaded[name] = true;
       if (name === 'diagnostics') runDiagnostics();
+      if (name === 'leagues') loadLeagues();
       if (name === 'overlays') initOverlays();
       if (name === 'roster') loadRoster();
       if (name === 'league') fillLeague();
@@ -1335,6 +1457,276 @@
       say(msgEl, 'bad', 'Could not save: ' + e.message);
     });
   }
+
+  /* ======================================================= league profiles */
+
+  var LG = { list: [], active: null, suggested: {}, editing: null };
+
+  function loadLeagues() {
+    return PW.api('/api/leagues').then(function (j) {
+      LG.list = j.leagues || [];
+      LG.active = j.active || null;
+      LG.suggested = j.suggested || {};
+      renderLeagueList();
+      renderLeagueBadge();
+    }).catch(function (e) {
+      say($('lgmsg'), 'bad', 'Could not read saved leagues: ' + e.message);
+    });
+  }
+
+  function renderLeagueBadge() {
+    var b = $('leaguebadge');
+    if (!b) return;
+    b.textContent = LG.active ? 'LIVE' : '';
+  }
+
+  /** The round the app will use tonight, and where that choice came from. */
+  function roundFor(lg) {
+    var n = lg.activeRound != null ? lg.activeRound : LG.suggested[lg.id];
+    if (n == null) return null;
+    for (var i = 0; i < (lg.schedule || []).length; i++) {
+      if (lg.schedule[i].round === n) return lg.schedule[i];
+    }
+    return null;
+  }
+
+  function roundLabel(r) {
+    if (!r) return 'No round set';
+    var bits = [];
+    bits.push(r.name || ('Round ' + r.round));
+    if (r.track) bits.push(r.track);
+    return bits.join(' \u00b7 ');
+  }
+
+  function renderLeagueList() {
+    if (!LG.list.length) {
+      setHTML($('lglist'), '<div class="lgempty">No leagues saved yet. ' +
+        'Create one and it remembers the colours, the roster and the calendar.</div>');
+      return;
+    }
+    var h = LG.list.map(function (lg) {
+      var live = lg.id === LG.active;
+      var r = roundFor(lg);
+      var out = '<div class="lgcard' + (live ? ' live' : '') + '" data-lg="' + esc(lg.id) + '">';
+      out += '<div class="top"><span class="swatch" style="background:' + esc(lg.accent) + '"></span>' +
+             '<span class="nm">' + esc(lg.name) + '</span></div>';
+      out += '<div class="sub2">' + (lg.schedule || []).length + ' round' +
+             ((lg.schedule || []).length === 1 ? '' : 's') +
+             (lg.rosterUrl ? ' \u00b7 roster linked' : ' \u00b7 no roster URL') + '</div>';
+      out += '<div class="nextup">Next up: <b>' + esc(roundLabel(r)) + '</b></div>';
+      if (live) out += '<span class="live-chip">On air</span>';
+      out += '<div class="acts">' +
+             '<button class="primary" data-go="' + esc(lg.id) + '">' +
+             (live ? 'Re-apply' : 'Go live') + '</button>' +
+             '<button data-edit="' + esc(lg.id) + '">Edit</button>' +
+             '</div>';
+      out += '</div>';
+      return out;
+    }).join('');
+    setHTML($('lglist'), h);
+  }
+
+  $('lglist').addEventListener('click', function (ev) {
+    var go = ev.target.closest('[data-go]');
+    if (go) return activateLeague(go.dataset.go);
+    var ed = ev.target.closest('[data-edit]');
+    if (ed) return editLeague(ed.dataset.edit);
+    var card = ev.target.closest('[data-lg]');
+    if (card) editLeague(card.dataset.lg);
+  });
+
+  function activateLeague(id) {
+    var lg = LG.list.filter(function (x) { return x.id === id; })[0];
+    var rnd = lg ? (lg.activeRound != null ? lg.activeRound : LG.suggested[id]) : null;
+    say($('lgmsg'), 'info', 'Applying\u2026');
+    PW.api('/api/leagues/activate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id, round: rnd })
+    }).then(function (j) {
+      var ev = j.event || {};
+      var n = j.rosterStatus && j.rosterStatus.count;
+      var msg = esc(ev.league || 'League') + ' is on air';
+      if (ev.track) msg += ' \u2014 ' + ev.name + ', ' + ev.track;
+      if (typeof n === 'number') msg += '. ' + n + ' driver profile' + (n === 1 ? '' : 's') + ' loaded.';
+      if (j.roster && j.roster.error) {
+        say($('lgmsg'), 'warn', msg.replace(/\.$/, '') +
+          '. The roster did not download (' + j.roster.error +
+          '), so drivers will show with names and numbers only.');
+      } else {
+        say($('lgmsg'), 'ok', msg);
+      }
+      loadLeagues();
+      pollStatus();
+    }).catch(function (e) {
+      say($('lgmsg'), 'bad', 'Could not apply: ' + e.message);
+    });
+  }
+
+  /* ------------------------------------------------------------- editor */
+
+  function blankLeague() {
+    return { id: '', name: '', accent: '#e8443a', secondary: '#12b8ff',
+             logo: '', hashtag: '', rosterUrl: '', activeRound: null, schedule: [] };
+  }
+
+  function editLeague(id) {
+    var lg = id ? LG.list.filter(function (x) { return x.id === id; })[0] : null;
+    LG.editing = lg ? JSON.parse(JSON.stringify(lg)) : blankLeague();
+    fillLeagueEditor();
+  }
+
+  function fillLeagueEditor() {
+    var lg = LG.editing;
+    if (!lg) { $('lgeditwrap').hidden = true; return; }
+    $('lgeditwrap').hidden = false;
+    $('lgedittitle').textContent = lg.id ? ('Edit \u2014 ' + lg.name) : 'New league';
+    $('lgname').value = lg.name || '';
+    $('lghash').value = lg.hashtag || '';
+    $('lgaccent').value = lg.accent || '#e8443a';
+    $('lgsecond').value = lg.secondary || '#12b8ff';
+    $('lgroster').value = lg.rosterUrl || '';
+    $('lglogo').value = lg.logo || '';
+    $('lgdel').hidden = !lg.id;
+    $('lgdup').hidden = !lg.id;
+    renderRounds();
+    clear($('lgeditmsg'));
+    $('lgeditwrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function renderRounds() {
+    var lg = LG.editing;
+    var next = LG.suggested[lg.id];
+    var h = (lg.schedule || []).map(function (r, i) {
+      var isNext = r.round === (lg.activeRound != null ? lg.activeRound : next);
+      return '<tr' + (isNext ? ' class="isnext"' : '') + ' data-i="' + i + '">' +
+        '<td class="c-rd"><input type="number" min="1" data-f="round" value="' + esc(r.round == null ? '' : r.round) + '"></td>' +
+        '<td class="c-date"><input type="date" data-f="date" value="' + esc(r.date || '') + '"></td>' +
+        '<td class="c-time"><input type="time" data-f="time" value="' + esc(r.time || '') + '"></td>' +
+        '<td><input data-f="track" placeholder="Circuit" value="' + esc(r.track || '') + '"></td>' +
+        '<td><input data-f="name" placeholder="Round ' + esc(r.round || (i + 1)) + '" value="' + esc(r.name || '') + '"></td>' +
+        '<td class="c-laps"><input type="number" min="1" data-f="laps" value="' + esc(r.laps == null ? '' : r.laps) + '"></td>' +
+        '<td class="c-x"><button class="danger" data-rm="' + i + '" title="Remove this round">\u00d7</button></td>' +
+        '</tr>';
+    }).join('');
+    if (!h) h = '<tr><td colspan="7" class="lgempty">No rounds yet. Add one below.</td></tr>';
+    setHTML($('lgrounds'), h);
+  }
+
+  $('lgrounds').addEventListener('input', function (ev) {
+    var inp = ev.target.closest('[data-f]');
+    if (!inp) return;
+    var tr = inp.closest('[data-i]');
+    var row = LG.editing.schedule[+tr.dataset.i];
+    var f = inp.dataset.f;
+    row[f] = (f === 'round' || f === 'laps')
+      ? (inp.value === '' ? null : parseInt(inp.value, 10))
+      : inp.value;
+  });
+
+  $('lgrounds').addEventListener('click', function (ev) {
+    var rm = ev.target.closest('[data-rm]');
+    if (!rm) return;
+    LG.editing.schedule.splice(+rm.dataset.rm, 1);
+    renderRounds();
+  });
+
+  $('lgaddround').addEventListener('click', function () {
+    var sched = LG.editing.schedule;
+    var last = sched.length ? sched[sched.length - 1] : null;
+    var n = last && last.round ? last.round + 1 : sched.length + 1;
+    // Carry the last round's start time forward: a league that races at
+    // eight on a Tuesday races at eight on the next Tuesday too.
+    sched.push({ round: n, date: '', time: last ? (last.time || '') : '', track: '', name: '', laps: null });
+    renderRounds();
+  });
+
+  ['lgname', 'lghash', 'lgaccent', 'lgsecond', 'lgroster', 'lglogo'].forEach(function (id) {
+    $(id).addEventListener('input', function () {
+      var m = { lgname: 'name', lghash: 'hashtag', lgaccent: 'accent',
+                lgsecond: 'secondary', lgroster: 'rosterUrl', lglogo: 'logo' };
+      LG.editing[m[id]] = $(id).value;
+    });
+  });
+
+  $('lgnew').addEventListener('click', function () { editLeague(null); });
+  $('lgrefresh').addEventListener('click', function () { loadLeagues(); });
+  $('lgcancel').addEventListener('click', function () {
+    LG.editing = null;
+    $('lgeditwrap').hidden = true;
+  });
+
+  $('lgsave').addEventListener('click', function () {
+    var lg = LG.editing;
+    if (!lg) return;
+    if (!(lg.name || '').trim()) {
+      return say($('lgeditmsg'), 'bad', 'Give the league a name before saving.');
+    }
+    say($('lgeditmsg'), 'info', 'Saving\u2026');
+    PW.api('/api/leagues', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(lg)
+    }).then(function (j) {
+      LG.editing = j.league;
+      return loadLeagues().then(function () { return j; });
+    }).then(function (j) {
+      // Redraw first: fillLeagueEditor clears the message box, so saying
+      // anything before this point puts the confirmation on screen and then
+      // immediately wipes it.
+      fillLeagueEditor();
+      say($('lgeditmsg'), 'ok',
+        j.league.id === LG.active
+          ? 'Saved, and applied to the live broadcast.'
+          : 'Saved.');
+    }).catch(function (e) {
+      say($('lgeditmsg'), 'bad', 'Could not save: ' + e.message);
+    });
+  });
+
+  $('lgdup').addEventListener('click', function () {
+    if (!LG.editing || !LG.editing.id) return;
+    PW.api('/api/leagues/duplicate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: LG.editing.id })
+    }).then(function (j) {
+      return loadLeagues().then(function () { editLeague(j.league.id); });
+    }).catch(function (e) {
+      say($('lgeditmsg'), 'bad', 'Could not duplicate: ' + e.message);
+    });
+  });
+
+  $('lgdel').addEventListener('click', function () {
+    var lg = LG.editing;
+    if (!lg || !lg.id) return;
+    var btn = $('lgdel');
+    // Two-step delete rather than a confirm() dialog: a modal in a browser
+    // source can wedge OBS, and this page is opened inside OBS often enough.
+    if (btn.dataset.armed !== '1') {
+      btn.dataset.armed = '1';
+      btn.textContent = 'Click again to delete';
+      setTimeout(function () {
+        btn.dataset.armed = '0';
+        btn.textContent = 'Delete';
+      }, 4000);
+      return;
+    }
+    btn.dataset.armed = '0';
+    btn.textContent = 'Delete';
+    PW.api('/api/leagues/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: lg.id })
+    }).then(function () {
+      LG.editing = null;
+      $('lgeditwrap').hidden = true;
+      say($('lgmsg'), 'ok', 'Deleted.');
+      loadLeagues();
+    }).catch(function (e) {
+      say($('lgeditmsg'), 'bad', 'Could not delete: ' + e.message);
+    });
+  });
 
   /* ========================================================= sim control */
 

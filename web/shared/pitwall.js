@@ -23,6 +23,10 @@
     meta: null,
     tick: null,
     hello: null,
+    /* The league round the app is set to, or null when no league profile is
+       active. Sent with "hello", and re-sent when the operator switches
+       league or round, so a graphic follows without being reloaded. */
+    event: null,
     connected: false,
     demo: false,
     _handlers: {},
@@ -131,8 +135,10 @@
       case 'hello':
         PW.hello = msg;
         PW.demo = !!msg.demo;
+        PW.event = msg.event || null;
         if (msg.league) applyLeague(msg.league);
         emit('hello', msg);
+        emit('event', PW.event);
         break;
       case 'meta':
         PW.meta = msg;

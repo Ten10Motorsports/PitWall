@@ -237,6 +237,35 @@ table.roles .one { color: var(--warn); font-weight: 600; }
   h2.step .n { justify-self: start; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+/* --- click-by-click additions ------------------------------------------ */
+.youarehere{background:var(--go-wash);border:1px solid rgba(34,107,69,.30);
+  border-left:5px solid var(--go);border-radius:0 6px 6px 0;padding:15px 20px;margin:0 0 30px}
+.youarehere .k{font-family:var(--display);font-size:10.5px;font-weight:600;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--go);margin-bottom:4px}
+.youarehere p{margin:0;font-size:15px;color:var(--ink-2)}
+.youarehere strong{color:var(--ink)}
+
+ol.clicks{counter-reset:c;list-style:none;padding:0;margin:0 0 18px}
+ol.clicks>li{counter-increment:c;position:relative;padding:0 0 0 34px;margin-bottom:11px}
+ol.clicks>li::before{content:counter(c);position:absolute;left:0;top:1px;width:23px;height:23px;
+  border-radius:50%;background:var(--surface-2);border:1px solid var(--rule-2);color:var(--ink-2);
+  font-family:var(--mono);font-size:11.5px;font-weight:600;display:grid;place-items:center}
+
+.ui{font-weight:600;background:var(--surface-2);border:1px solid var(--rule-2);
+  border-radius:4px;padding:1px 7px;white-space:nowrap;font-size:.94em}
+.expect{display:block;margin-top:7px;font-size:14px;color:var(--go);font-style:italic}
+.expect::before{content:"\2192\00a0";font-style:normal}
+
+h2.step .n{color:#fff;background:var(--accent);padding:4px 8px;border-radius:4px}
+.sub{padding-left:52px}
+.toc a.done{color:var(--ink-3)}
+.toc a.done .n{color:var(--go)}
+.toc a{grid-template-columns:30px 1fr}
+table.roles td:first-child{font-weight:600;white-space:nowrap}
+table.roles .none{color:var(--go);font-weight:600}
+table.roles .one{color:var(--warn);font-weight:600}
+@media (max-width:900px){.sub{padding-left:0}}
 </style>
 
 <div class="shell">
@@ -246,546 +275,439 @@ table.roles .one { color: var(--warn); font-weight: 600; }
       <div class="bars"><i></i><i></i><i></i></div>
       <div><h1>PitWall</h1><p>Race Day Handbook</p></div>
     </div>
-    <div class="meta">
-      Set up once, then a run sheet for every race<br>
-      <strong>iRacing live timing &middot; broadcast &middot; HUD</strong>
-    </div>
+    <div class="meta">Click-by-click setup<br><strong>iRacing live timing &middot; broadcast &middot; HUD</strong></div>
   </header>
 
   <nav class="toc">
-    <h2>Part A &middot; League admin</h2>
+    <h2>Part A &middot; On GitHub</h2>
     <ol>
-      <li><a href="#s1"><span class="n">01</span><span>Put it on GitHub</span></a></li>
-      <li><a href="#s2"><span class="n">02</span><span>Switch on Pages</span></a></li>
-      <li><a href="#s3"><span class="n">03</span><span>Build the app</span></a></li>
-      <li><a href="#s4"><span class="n">04</span><span>Link the roster</span></a></li>
-      <li><a href="#s5"><span class="n">05</span><span>Send one link</span></a></li>
+      <li><a href="#a1" class="done"><span class="n">A1</span><span>Push the files</span></a></li>
+      <li><a href="#a2" class="done"><span class="n">A2</span><span>Add the workflows</span></a></li>
+      <li><a href="#a3"><span class="n">A3</span><span>Two settings</span></a></li>
+      <li><a href="#a4"><span class="n">A4</span><span>Publish the page</span></a></li>
+      <li><a href="#a5"><span class="n">A5</span><span>Build the app</span></a></li>
+      <li><a href="#a6"><span class="n">A6</span><span>Your two links</span></a></li>
     </ol>
-
-    <h2 class="later">Part B &middot; Broadcast</h2>
+    <h2 class="later">Part B &middot; Race PC</h2>
     <ol>
-      <li><a href="#s6"><span class="n">06</span><span>Get the app</span></a></li>
-      <li><a href="#s7"><span class="n">07</span><span>Look around, no sim</span></a></li>
-      <li><a href="#s8"><span class="n">08</span><span>Prepare iRacing</span></a></li>
-      <li><a href="#s9"><span class="n">09</span><span>Go live</span></a></li>
-      <li><a href="#s10"><span class="n">10</span><span>Set up OBS</span></a></li>
-      <li><a href="#s11"><span class="n">11</span><span>The second screen</span></a></li>
-      <li><a href="#s12"><span class="n">12</span><span>Director controls</span></a></li>
+      <li><a href="#b1"><span class="n">B1</span><span>Download and run</span></a></li>
+      <li><a href="#b2"><span class="n">B2</span><span>Check it, no sim</span></a></li>
+      <li><a href="#b3"><span class="n">B3</span><span>Connect the roster</span></a></li>
+      <li><a href="#b4"><span class="n">B4</span><span>iRacing settings</span></a></li>
+      <li><a href="#b5"><span class="n">B5</span><span>Go live</span></a></li>
+      <li><a href="#b6"><span class="n">B6</span><span>Build the OBS scene</span></a></li>
+      <li><a href="#b7"><span class="n">B7</span><span>Timing on a tablet</span></a></li>
     </ol>
-
     <h2 class="later">Part C &middot; Drivers</h2>
-    <ol>
-      <li><a href="#s13"><span class="n">13</span><span>Sign up</span></a></li>
-      <li><a href="#s14"><span class="n">14</span><span>The in-game HUD</span></a></li>
-    </ol>
-
+    <ol><li><a href="#c1"><span class="n">C1</span><span>What to send them</span></a></li></ol>
     <h2 class="later">Reference</h2>
     <ol class="plain">
       <li><a href="#runsheet">Race day run sheet</a></li>
       <li><a href="#options">Overlay URL options</a></li>
       <li><a href="#fix">When it breaks</a></li>
-      <li><a href="#ws">What a WebSocket is</a></li>
-      <li><a href="#nogithub">Without GitHub</a></li>
     </ol>
   </nav>
 
   <main>
 
-    <p class="lede">Set this up once and your league's entire onboarding becomes <strong>one link</strong>. Drivers install nothing. Only the person running the broadcast downloads anything, and it is a single file.</p>
+    <div class="youarehere">
+      <div class="k">You are here</div>
+      <p><strong>A1 and A2 are done</strong> &mdash; the files are on GitHub and the four workflow files are in. Start at <strong>A3</strong>. Everything from here is exact clicks.</p>
+    </div>
 
-    <h3 style="margin-top:26px">Who has to install what</h3>
+    <p class="lede">About <strong>forty minutes</strong> to a working broadcast, most of it waiting on GitHub. Do Part A now; Part B happens at the race PC whenever you get to it.</p>
+
     <div class="tablewrap">
       <table class="roles">
         <thead><tr><th>Role</th><th>What they do</th><th>Install</th></tr></thead>
         <tbody>
           <tr><td>Driver</td><td>Fill in a web form, once</td><td class="none">Nothing</td></tr>
           <tr><td>Steward, engineer, spotter</td><td>Open a URL</td><td class="none">Nothing</td></tr>
-          <tr><td>Co-commentator on your network</td><td>Open a URL</td><td class="none">Nothing</td></tr>
           <tr><td>Broadcast operator</td><td>Double-click one file</td><td class="one">One .exe</td></tr>
-          <tr><td>Driver who wants the HUD</td><td>Double-click one file</td><td class="one">One .exe</td></tr>
         </tbody>
       </table>
     </div>
 
-    <div class="note why">
-      <span class="tag">Why anyone needs the app at all</span>
-      <p>iRacing publishes its live timing data into memory <strong>on the computer running the sim</strong>. No website can reach that, including GitHub. So one program has to run on a PC that is in the session &mdash; but only one, and everyone else just opens pages it serves.</p>
-    </div>
-
-    <!-- ================================================== PART A -->
     <div class="partbar">
-      <div class="k">Part A</div>
-      <h2>League admin, once</h2>
-      <p>About twenty minutes. You never do this again.</p>
+      <div class="k">Part A</div><h2>On GitHub</h2>
+      <p>Once, from any computer. Nothing to install.</p>
     </div>
 
-    <section class="step first" id="s1">
-      <h2 class="step"><span class="n">01</span> Put it on GitHub</h2>
-      <p class="sub">This repository becomes your league's sign-up desk, roster and download page.</p>
-
-      <p>Create a new repository on GitHub, then push the PitWall folder into it. Public or private both work &mdash; public is easier, because drivers can then use the sign-up form without being added as collaborators.</p>
-
-      <div class="cmd titled"><span class="lbl">In the PitWall folder</span><button>Copy</button><pre>git init
-git add .
-git commit -m "PitWall"
-git branch -M main
-git remote add origin https://github.com/YOUR-NAME/YOUR-REPO.git
-git push -u origin main</pre></div>
-
-      <div class="note ok">
-        <span class="tag">Easier: let the included script do it</span>
-        <p>Double-click <strong><code>setup-github.bat</code></strong> in the PitWall folder, paste your repository address when it asks, and it pushes everything correctly. On macOS or Linux use <code>setup-github.sh</code>.</p>
-        <p>Use this rather than dragging files into the GitHub website. The web uploader <strong>flattens every folder</strong> and skips <code>.github</code> because Windows hides names beginning with a dot &mdash; which leaves you with a root full of loose files named <code>index (1).html</code> and no automation at all. GitHub Desktop also works correctly if you prefer buttons.</p>
-      </div>
-
-      <div class="note warn">
-        <span class="tag">One setting to change before anything else</span>
-        <p>Go to <strong>Settings &rarr; Actions &rarr; General</strong>, scroll to <strong>Workflow permissions</strong>, and choose <strong>Read and write permissions</strong>. Save.</p>
-        <p>Without this the sign-up system cannot save the roster or reply to drivers, and it fails with a permissions error that is not obvious.</p>
-      </div>
+    <section class="step first" id="a1">
+      <h2 class="step"><span class="n">A1</span> Push the files</h2>
+      <p class="sub">Done. Your repository shows folders &mdash; server, web, docs and the rest.</p>
     </section>
 
-    <section class="step" id="s2">
-      <h2 class="step"><span class="n">02</span> Switch on Pages</h2>
-      <p class="sub">This publishes your league's public page.</p>
+    <section class="step" id="a2">
+      <h2 class="step"><span class="n">A2</span> Add the workflow files</h2>
+      <p class="sub">Done. Four files under <code>.github</code>.</p>
+      <p>To double-check at any time: click the <span class="ui">Code</span> tab and confirm a <code>.github</code> folder is listed. Inside it, <code>workflows</code> holds three files and <code>ISSUE_TEMPLATE</code> holds one.</p>
+    </section>
 
-      <p><strong>Settings &rarr; Pages &rarr; Source</strong>, and choose <strong>GitHub Actions</strong>.</p>
+    <section class="step" id="a3">
+      <h2 class="step"><span class="n">A3</span> Turn on two settings</h2>
+      <p class="sub">Do this before running anything. Two minutes.</p>
+
+      <h3>Setting 1 &mdash; let the workflows write</h3>
+      <ol class="clicks">
+        <li>On your repository page, click <span class="ui">Settings</span> in the top row of tabs (far right, after Insights).</li>
+        <li>In the left sidebar, scroll down and click <span class="ui">Actions</span>. A short menu opens beneath it.</li>
+        <li>Click <span class="ui">General</span> under Actions.</li>
+        <li>Scroll to the bottom of that page, to the heading <span class="ui">Workflow permissions</span>.</li>
+        <li>Click the radio button for <span class="ui">Read and write permissions</span>.
+          <span class="expect">The option above it is selected by default. Change it.</span></li>
+        <li>Click <span class="ui">Save</span> directly beneath those options.</li>
+      </ol>
+
+      <div class="note warn">
+        <span class="tag">Do not skip this</span>
+        <p>Without it, driver sign-ups cannot save the roster. The workflow runs, turns red, and the error is about permissions rather than anything you did.</p>
+      </div>
+
+      <h3>Setting 2 &mdash; turn on the website</h3>
+      <ol class="clicks">
+        <li>Still in <span class="ui">Settings</span>, click <span class="ui">Pages</span> in the left sidebar.</li>
+        <li>Under <span class="ui">Build and deployment</span>, find the <span class="ui">Source</span> dropdown.</li>
+        <li>Click it and choose <span class="ui">GitHub Actions</span>.
+          <span class="expect">It saves itself. There is no Save button on this one.</span></li>
+      </ol>
 
       <div class="note stop">
-        <span class="tag">Do not click either "Configure" button</span>
-        <p>As soon as you pick GitHub Actions, the page offers you two cards &mdash; <strong>GitHub Pages Jekyll</strong> and <strong>Static HTML</strong> &mdash; each with a <strong>Configure</strong> button. <strong>Ignore both.</strong></p>
-        <p>Those are templates for people starting from nothing. PitWall already ships its own workflow at <code>.github/workflows/pages.yml</code>. Clicking Configure would add a second, competing one.</p>
-        <p>Choosing <strong>GitHub Actions</strong> in that dropdown is the entire configuration. There is nothing else on this screen to set.</p>
+        <span class="tag">Ignore the two cards that appear</span>
+        <p>Two boxes appear, <strong>GitHub Pages Jekyll</strong> and <strong>Static HTML</strong>, each with a <span class="ui">Configure</span> button. <strong>Do not click either.</strong> They would add a second, competing workflow. Choosing GitHub Actions in that dropdown is the entire setting.</p>
       </div>
-
-      <h3>Now make it publish</h3>
-
-      <p>The line reading <em>"Workflow details will appear here once your site has been deployed"</em> means it has not run yet. If you switched Pages on <em>after</em> pushing your code &mdash; which most people do &mdash; the first run either never fired or failed, because Pages was still off.</p>
-
-      <p>Kick it off by hand, once:</p>
-
-      <ol class="rich">
-        <li>Open the <strong>Actions</strong> tab at the top of your repository.</li>
-        <li>Click <strong>Publish site</strong> in the left-hand list.</li>
-        <li>Click <strong>Run workflow</strong> on the right, then <strong>Run workflow</strong> again to confirm.</li>
-      </ol>
-
-      <p>It takes under a minute. A green tick means you are done, and from then on it republishes automatically whenever you change anything.</p>
-
-      <p>Your league page is then live at:</p>
-
-      <div class="cmd"><button>Copy</button><pre>https://YOUR-NAME.github.io/YOUR-REPO/</pre></div>
-
-      <p>It carries the sign-up form, the app download, this handbook, the showroom, and a live entry list that fills in as drivers register.</p>
-
-      <div class="note ok">
-        <span class="tag">Nothing to configure in the page itself</span>
-        <p>The page works out which repository it belongs to from its own address, so there is no config file to edit and no links to paste in. It just works once Pages is on.</p>
-      </div>
-
-      <div class="note warn">
-        <span class="tag">If Actions has no "Publish site" entry at all</span>
-        <p>Then the <code>.github</code> folder did not reach GitHub. It starts with a dot, so some upload methods and file browsers hide it. Check that <code>.github/workflows/</code> exists in your repository, and push it if not:</p>
-      </div>
-
-      <div class="cmd"><button>Copy</button><pre>git add -f .github
-git commit -m "Add workflows"
-git push</pre></div>
     </section>
 
-    <section class="step" id="s3">
-      <h2 class="step"><span class="n">03</span> Build the app</h2>
-      <p class="sub">GitHub compiles it for you. You do not need Python or a build tool.</p>
-
-      <div class="cmd titled"><span class="lbl">Cut the first release</span><button>Copy</button><pre>git tag v1.0.0
-git push --tags</pre></div>
-
-      <p>Or, without the command line: open the <strong>Actions</strong> tab, choose <strong>Build Windows app</strong> on the left, and click <strong>Run workflow</strong>.</p>
-
-      <p>GitHub then, on a Windows machine it provides:</p>
-
-      <ol class="rich">
-        <li>Compiles PitWall into a single <code>PitWall.exe</code>.</li>
-        <li><strong>Starts it and checks it actually serves pages.</strong></li>
-        <li>Attaches it to a release, but only if step 2 passed.</li>
+    <section class="step" id="a4">
+      <h2 class="step"><span class="n">A4</span> Publish your league page</h2>
+      <p class="sub">One minute.</p>
+      <ol class="clicks">
+        <li>Click the <span class="ui">Actions</span> tab at the top of your repository.</li>
+        <li>In the left sidebar under "All workflows", click <span class="ui">Publish site</span>.
+          <span class="expect">If you still see "Get started with GitHub Actions", the .github files are missing &mdash; go back to A2.</span></li>
+        <li>On the right, click the grey <span class="ui">Run workflow</span> button. A small panel drops down.</li>
+        <li>In that panel, click the green <span class="ui">Run workflow</span> button.</li>
+        <li>Wait ten seconds and refresh the page.
+          <span class="expect">A run appears with an amber spinner, then a green tick after roughly 40 seconds.</span></li>
       </ol>
 
-      <p>Takes about three minutes. When it is done, the download button on your league page works.</p>
+      <p>Your league page is now live. Replace the two capitalised parts with your own:</p>
+      <div class="cmd titled"><span class="lbl">Your league page</span><button>Copy</button><pre>https://YOUR-ORG.github.io/YOUR-REPO/</pre></div>
+
+      <p>Open it. You should see the Race Hub with four cards: Sign up, Get the app, See it working, Setup handbook.</p>
+
+      <div class="note warn">
+        <span class="tag">If the run goes red</span>
+        <p>Click the failed run, then the job name, and read the last red line. The usual cause is that <span class="ui">Source</span> under Settings &rarr; Pages was not set to <strong>GitHub Actions</strong> before running. Set it, then run the workflow again.</p>
+      </div>
+    </section>
+
+    <section class="step" id="a5">
+      <h2 class="step"><span class="n">A5</span> Build the app</h2>
+      <p class="sub">Three minutes, and GitHub does all of it.</p>
+
+      <p>The quickest route also gives you a permanent download link, so do it this way:</p>
+
+      <ol class="clicks">
+        <li>Go to your repository's <span class="ui">Code</span> tab.</li>
+        <li>In the right-hand sidebar, under <span class="ui">Releases</span>, click <span class="ui">Create a new release</span>.</li>
+        <li>Click <span class="ui">Choose a tag</span>. Type <code>v1.0.0</code> into the box.</li>
+        <li>Click <span class="ui">+ Create new tag: v1.0.0 on publish</span> that appears just below.</li>
+        <li>In <span class="ui">Release title</span>, type <code>v1.0.0</code>.</li>
+        <li>Click the green <span class="ui">Publish release</span> button at the bottom.</li>
+        <li>Click the <span class="ui">Actions</span> tab. A <strong>Build Windows app</strong> run has started by itself.
+          <span class="expect">Three minutes. It installs Python, builds the .exe, then starts it and checks it actually serves pages before finishing.</span></li>
+        <li>When it shows a green tick, go back to <span class="ui">Code</span> and click your release under <span class="ui">Releases</span>.
+          <span class="expect">PitWall.exe and PitWall-windows.zip are now attached to it.</span></li>
+      </ol>
+
+      <div class="note ok">
+        <span class="tag">From now on</span>
+        <p>The <strong>Download the latest release</strong> button on your league page works, and anybody in your league can get the app from it. To ship an update later, publish a new release with a new tag such as <code>v1.0.1</code>.</p>
+      </div>
 
       <div class="note why">
         <span class="tag">Why the build tests itself</span>
-        <p>A release that does not start is worse than no release, because you find out on race night. This one fetches the status endpoint and five pages from the built executable before it will publish it. If that fails, the release simply does not appear and the Actions log says why.</p>
-      </div>
-
-      <p>To ship an update later, tag a new version. Everyone downloads from the same link and their roster, settings and cached track maps survive, because those sit next to the executable rather than inside it.</p>
-    </section>
-
-    <section class="step" id="s4">
-      <h2 class="step"><span class="n">04</span> Link the roster</h2>
-      <p class="sub">So every copy of the app sees the same drivers.</p>
-
-      <p>Create <code>config/pitwall.json</code> in the repository (copy <code>config/pitwall.example.json</code>) and set the roster block to point at your own repository:</p>
-
-      <div class="cmd"><button>Copy</button><pre>{
-  "league": {
-    "name": "Your League",
-    "accent": "#e8443a"
-  },
-  "roster": {
-    "mode": "url",
-    "url": "https://raw.githubusercontent.com/YOUR-NAME/YOUR-REPO/main/roster.json",
-    "autoPullSeconds": 300
-  }
-}</pre></div>
-
-      <p>Now whoever runs the broadcast in a given week automatically has every driver's photo, flag and bio, refreshed every five minutes. There is also a <strong>Pull</strong> button on the control panel's Roster tab.</p>
-
-      <div class="note warn">
-        <span class="tag">Put this file next to the .exe</span>
-        <p>When people run the downloaded app, it looks for <code>config/pitwall.json</code> in the folder <em>beside</em> <code>PitWall.exe</code>. Include that folder when you tell people what to download, or paste the settings into the <strong>League</strong> tab of the control panel instead, which writes the same file.</p>
+        <p>A release that does not start is worse than no release, because you find out on race night. This one fetches the status endpoint and five pages from the built executable before it will publish it. If that fails, no release appears and the Actions log says why.</p>
       </div>
     </section>
 
-    <section class="step" id="s5">
-      <h2 class="step"><span class="n">05</span> Send one link</h2>
-      <p class="sub">This is your entire onboarding message.</p>
-
-      <p>Post your Pages URL in your league Discord. Something like:</p>
-
-      <div class="cmd titled"><span class="lbl">Suggested wording</span><button>Copy</button><pre>Sign up for the broadcast here:
-https://YOUR-NAME.github.io/YOUR-REPO/
-
-Takes two minutes and you only ever do it once. You need your
-iRacing CUSTOMER ID - the number under Account > My Account
-> Customer ID on the iRacing website. Not your name, not your
-car number.
-
-Nothing to install.</pre></div>
-
-      <p>Say the customer ID part explicitly. It is the single field people get wrong, and every wrong one is a driver whose card does not appear on the broadcast.</p>
-
-      <p><strong>Part A is done.</strong> You never repeat it.</p>
+    <section class="step" id="a6">
+      <h2 class="step"><span class="n">A6</span> Your two links</h2>
+      <p class="sub">Part A is finished. These are what you use from here.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>What</th><th>Address</th></tr></thead>
+          <tbody>
+            <tr><td><strong>League page</strong><br><span style="color:var(--ink-3);font-size:13px">Send to drivers</span></td><td><code>https://YOUR-ORG.github.io/YOUR-REPO/</code></td></tr>
+            <tr><td><strong>Roster file</strong><br><span style="color:var(--ink-3);font-size:13px">Needed in B3</span></td><td><code>https://raw.githubusercontent.com/YOUR-ORG/YOUR-REPO/main/roster.json</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><strong>Save that second address somewhere now</strong> &mdash; you paste it into the app in step B3.</p>
     </section>
 
-    <!-- ================================================== PART B -->
     <div class="partbar">
-      <div class="k">Part B</div>
-      <h2>Whoever runs the broadcast</h2>
-      <p>The only person who installs anything. About fifteen minutes the first time.</p>
+      <div class="k">Part B</div><h2>On the race PC</h2>
+      <p>The Windows machine that runs iRacing. Only this person installs anything.</p>
     </div>
 
-    <section class="step first" id="s6">
-      <h2 class="step"><span class="n">06</span> Get the app</h2>
-      <p class="sub">One file. No Python, no installer, no setup wizard.</p>
-
-      <ol class="rich">
-        <li>Open the league page and click <strong>Download the latest release</strong>.</li>
-        <li>Download <code>PitWall-windows.zip</code> and extract it somewhere sensible, like <code>C:\PitWall</code>.</li>
-        <li>Double-click <strong><code>PitWall.exe</code></strong>.</li>
+    <section class="step first" id="b1">
+      <h2 class="step"><span class="n">B1</span> Download and run it</h2>
+      <p class="sub">Two minutes.</p>
+      <ol class="clicks">
+        <li>On the race PC, open your league page and click <span class="ui">Download the latest release</span>.</li>
+        <li>Download <code>PitWall-windows.zip</code>.</li>
+        <li>In Downloads, <strong>right-click</strong> it and choose <span class="ui">Extract All&hellip;</span></li>
+        <li>Clear the box, type exactly <code>C:\PitWall</code>, click <span class="ui">Extract</span>.</li>
+        <li>Open <code>C:\PitWall</code> and <strong>double-click <code>PitWall.exe</code></strong>.</li>
+        <li>If Windows says <span class="ui">Windows protected your PC</span>, click <span class="ui">More info</span> then <span class="ui">Run anyway</span>.
+          <span class="expect">This appears because the app is not code-signed. Certificates cost several hundred pounds a year.</span></li>
       </ol>
-
-      <p>A console window opens and your browser opens the control panel. That is the install.</p>
-
+      <p>A black console window opens and your browser opens the <strong>control panel</strong>.</p>
       <div class="note warn">
-        <span class="tag">Two things Windows may do</span>
-        <p><strong>SmartScreen</strong> may say "Windows protected your PC" because the file is not code-signed. Click <em>More info</em> then <em>Run anyway</em>. Code signing certificates cost several hundred pounds a year, which is why small tools rarely have one.</p>
-        <p><strong>Do not extract into Program Files.</strong> Windows will block the app writing its roster and settings there. A plain folder on your C: drive is best. Avoid a OneDrive-synced folder too, since sync can lock files mid-race.</p>
+        <span class="tag">Two rules</span>
+        <p><strong>Leave the black window open</strong> while you race. Closing it stops PitWall.</p>
+        <p><strong>Do not extract into Program Files</strong> or a OneDrive folder &mdash; Windows blocks the app writing its roster and settings there.</p>
       </div>
-
-      <p>Leave the console window open while you race. Closing it stops PitWall. To stop it deliberately, click it and press <kbd>Ctrl</kbd> + <kbd>C</kbd>.</p>
     </section>
 
-    <section class="step" id="s7">
-      <h2 class="step"><span class="n">07</span> Look around without iRacing</h2>
-      <p class="sub">Build your whole OBS scene collection with the sim closed.</p>
-
-      <p>Open a command prompt in the PitWall folder and run:</p>
-
+    <section class="step" id="b2">
+      <h2 class="step"><span class="n">B2</span> Check it works, with iRacing closed</h2>
+      <p class="sub">Do your whole OBS setup here, not on race night.</p>
+      <ol class="clicks">
+        <li>Stop PitWall if it is running: click the black window and press <kbd>Ctrl</kbd>+<kbd>C</kbd>.</li>
+        <li>In <code>C:\PitWall</code>, click once in the address bar at the top of the Explorer window, type <code>cmd</code>, press <kbd>Enter</kbd>.
+          <span class="expect">A black window opens already pointed at C:\PitWall.</span></li>
+        <li>Type this and press <kbd>Enter</kbd>:</li>
+      </ol>
       <div class="cmd"><button>Copy</button><pre>PitWall.exe --demo --demo-roster --speed 14</pre></div>
+      <p>A synthetic 24-car race is now running. A full race takes about five minutes, with pit stops, a safety car and a chequered flag. Every graphic behaves exactly as it will on race night.</p>
 
-      <p>That runs a synthetic twenty-four car, two-class race, compressed so a full race takes about five minutes. Pit stops, a safety car, a fight for the lead, a chequered flag. Every graphic behaves exactly as it will on race night.</p>
-
-      <div class="note why">
-        <span class="tag">Do your setup here, not on race night</span>
-        <p>Build your scenes, pick your colours and check every graphic against this. Then on race night the only new thing being tested is whether the telemetry connects, rather than whether your lower third is the right colour.</p>
-      </div>
-
-      <p>There is also <code>preview.html</code> in the download &mdash; a full race running in your browser with nothing started at all. Useful for showing people what the broadcast will look like.</p>
-
-      <h3>Find your way around the control panel</h3>
+      <h3>The control panel tabs</h3>
       <div class="tablewrap">
         <table>
           <thead><tr><th>Tab</th><th>What it is for</th></tr></thead>
           <tbody>
-            <tr><td><strong>Status</strong></td><td>Connected or not, what session, how many overlays are listening, and the exact addresses to open on other devices.</td></tr>
+            <tr><td><strong>Status</strong></td><td>Connected or not, what session, and the addresses for other devices.</td></tr>
             <tr><td><strong>Diagnostics</strong></td><td>Tells you why something is not working. Read this first when a graphic is blank.</td></tr>
-            <tr><td><strong>Overlays</strong></td><td>Every browser source with its URL, recommended size, live preview, and a builder for the options.</td></tr>
+            <tr><td><strong>Overlays</strong></td><td>Every OBS source with its URL, size, live preview and a URL builder.</td></tr>
             <tr><td><strong>Roster</strong></td><td>Driver profiles. Pull from GitHub, delete, import, export.</td></tr>
-            <tr><td><strong>League</strong></td><td>Name, logo and colours. Every graphic picks them up instantly.</td></tr>
+            <tr><td><strong>League</strong></td><td>Your name and colours, plus where the roster lives.</td></tr>
             <tr><td><strong>Sim control</strong></td><td>Camera and replay control for directing.</td></tr>
           </tbody>
         </table>
       </div>
     </section>
 
-    <section class="step" id="s8">
-      <h2 class="step"><span class="n">08</span> Prepare iRacing</h2>
-      <p class="sub">Four settings. Three are one-time.</p>
+    <section class="step" id="b3">
+      <h2 class="step"><span class="n">B3</span> Connect it to your roster</h2>
+      <p class="sub">So driver photos and flags appear automatically. One minute.</p>
+      <ol class="clicks">
+        <li>In the control panel, click the <span class="ui">League</span> tab.</li>
+        <li>Fill in <span class="ui">League name</span>, and pick an <span class="ui">Accent colour</span> if you want. Every graphic picks these up instantly.</li>
+        <li>Scroll down to the roster storage settings on the same tab.</li>
+        <li>Set <span class="ui">Mode</span> to <code>url</code>.</li>
+        <li>Paste your roster address into <span class="ui">URL (url mode only)</span> &mdash; the one you saved in A6.</li>
+      </ol>
+      <div class="cmd"><button>Copy</button><pre>https://raw.githubusercontent.com/YOUR-ORG/YOUR-REPO/main/roster.json</pre></div>
+      <ol class="clicks" style="counter-reset:c 5">
+        <li>Click <span class="ui">Save</span>.</li>
+        <li>Click the <span class="ui">Roster</span> tab, then click <span class="ui">Pull</span>.
+          <span class="expect">It reports how many drivers it fetched. Zero is correct if nobody has signed up yet.</span></li>
+      </ol>
+      <div class="note ok">
+        <span class="tag">From now on</span>
+        <p>Whoever runs the broadcast in a given week gets every driver's photo, flag and bio automatically. Hit <span class="ui">Pull</span> at the start of race night for the latest sign-ups.</p>
+      </div>
+    </section>
 
-      <h3>1. Max Cars, on the iRacing website</h3>
-      <p>Go to <a href="https://members.iracing.com">members.iracing.com</a> &rarr; Account, and set <strong>Max Cars to 63</strong>. Also set your connection to <strong>1 Mbit/s or faster</strong>.</p>
+    <section class="step" id="b4">
+      <h2 class="step"><span class="n">B4</span> Three iRacing settings</h2>
+      <p class="sub">One-time. Skip the second if you only want broadcast graphics.</p>
 
+      <h3>1. Max Cars &mdash; on the iRacing website</h3>
+      <ol class="clicks">
+        <li>Go to <a href="https://members.iracing.com">members.iracing.com</a> and sign in.</li>
+        <li>Open your <span class="ui">Account</span> settings.</li>
+        <li>Set <span class="ui">Max Cars</span> to <strong>63</strong>.</li>
+        <li>Set your connection speed to <strong>1 Mbit/s or faster</strong>.</li>
+      </ol>
       <div class="note why">
-        <span class="tag">Why this one matters</span>
-        <p>Below 63, iRacing does not send reliable position data for the back of the field. No timing tool can invent it. If cars at the tail flicker or vanish, this is almost always the reason.</p>
+        <span class="tag">Why this one matters most</span>
+        <p>Below 63, iRacing does not send reliable position data for the back of the field. No timing tool can invent it. If cars at the tail flicker or vanish, this is nearly always why.</p>
       </div>
 
-      <h3>2. Display mode &mdash; only if you want the in-game HUD</h3>
-      <p>In iRacing: <em>Options &rarr; Graphics</em>. Turn <strong>Full Screen off</strong> and <strong>Border off</strong>, then <strong>restart iRacing</strong>. Changing it without restarting often leaves a border behind.</p>
-
+      <h3>2. Windowed mode &mdash; only for the in-game HUD</h3>
+      <ol class="clicks">
+        <li>In iRacing, open <span class="ui">Options</span> then <span class="ui">Graphics</span>.</li>
+        <li>Untick <span class="ui">Full Screen</span>.</li>
+        <li>Untick <span class="ui">Border</span>.</li>
+        <li><strong>Restart iRacing.</strong> Changing this without restarting often leaves a border behind.</li>
+      </ol>
       <div class="note stop">
-        <span class="tag">If you race in VR, read this</span>
-        <p>The in-game HUD <strong>cannot work in VR</strong>, and that is not something I can fix in code. A headset's compositor never sees desktop windows, so no overlay of this kind can appear inside it.</p>
-        <p>Use the <a href="#s11">second-screen timing page</a> on a phone or tablet instead &mdash; it shows more than a HUD would anyway. Your OBS broadcast graphics are completely unaffected and work in any display mode, VR included.</p>
+        <span class="tag">If you race in VR</span>
+        <p>The in-game HUD <strong>cannot work in VR</strong>. A headset's compositor never sees desktop windows, so no overlay of this kind can appear inside it. This is not something that can be coded around.</p>
+        <p>Use the <a href="#b7">timing page on a phone or tablet</a> instead. Your OBS broadcast graphics are completely unaffected and work in any display mode, VR included.</p>
       </div>
-
-      <p>If you only want the broadcast graphics and the timing page, skip this step. Exclusive fullscreen is fine for those.</p>
 
       <h3>3. Telemetry &mdash; check it is on</h3>
-      <p>Almost always already correct. Open <code>Documents\iRacing\app.ini</code> in Notepad and find <code>irsdkEnableMem</code>:</p>
-      <div class="cmd"><button>Copy</button><pre>irsdkEnableMem=1</pre></div>
-      <p>If it is <code>0</code>, change it to <code>1</code> and restart iRacing. Diagnostics checks this for you.</p>
-
-      <h3>4. Display scaling &mdash; only for the in-game HUD</h3>
-      <p>Windows <em>Settings &rarr; System &rarr; Display &rarr; Scale</em> should be <strong>100%</strong>. At 125% or higher, HUD positions drift.</p>
+      <ol class="clicks">
+        <li>Open <code>Documents\iRacing\app.ini</code> in Notepad.</li>
+        <li>Press <kbd>Ctrl</kbd>+<kbd>F</kbd>, type <code>irsdkEnableMem</code>, press <kbd>Enter</kbd>.</li>
+        <li>It should read <code>irsdkEnableMem=1</code>. If it says <code>0</code>, change it, save, restart iRacing.</li>
+      </ol>
     </section>
 
-    <section class="step" id="s9">
-      <h2 class="step"><span class="n">09</span> Go live</h2>
-      <p class="sub">One double-click.</p>
-
-      <ol class="rich">
-        <li>Start iRacing and get into a session &mdash; a test drive, a practice session, or a replay all work.</li>
-        <li>Double-click <strong><code>PitWall.exe</code></strong>.</li>
-        <li>Open the control panel's <strong>Status</strong> tab.</li>
+    <section class="step" id="b5">
+      <h2 class="step"><span class="n">B5</span> Go live</h2>
+      <p class="sub">The moment of truth.</p>
+      <ol class="clicks">
+        <li>Start iRacing and get into a session &mdash; a test drive, practice session or replay all work.</li>
+        <li>Double-click <code>PitWall.exe</code> (not the demo command this time).</li>
+        <li>In the control panel, click the <span class="ui">Status</span> tab.</li>
       </ol>
-
-      <p>The big tile should read <strong>Connected to iRacing</strong> with your track and session below it.</p>
-
       <div class="note ok">
-        <span class="tag">If it says connected</span>
-        <p>Setup is done. Every overlay, the timing page and the HUD now have real data. On to <a href="#s10">step 10</a>.</p>
+        <span class="tag">If the big tile says "Connected to iRacing"</span>
+        <p>Setup is done. Every overlay, the timing page and the HUD now have real data. On to B6.</p>
       </div>
-
       <div class="note stop">
         <span class="tag">If it does not</span>
-        <p>Click <strong>Diagnostics</strong>. It checks the real causes and names the one affecting you &mdash; not in a session, telemetry disabled, an elevation mismatch, and so on &mdash; each with its specific fix.</p>
-        <p>This tab exists because "I installed it, nothing appeared, and the app said nothing" is the standard experience with overlay software. Read what it tells you rather than searching forums.</p>
+        <p>Click the <span class="ui">Diagnostics</span> tab. It checks the real causes and names the one affecting you, each with its fix. Read what it says rather than searching forums &mdash; that page exists precisely because "nothing appeared and the app said nothing" is the standard experience with overlay software.</p>
       </div>
-
-      <p>You can start PitWall before or after iRacing, in either order. It watches for the sim, connects when it appears, and reconnects on its own when you move between sessions. Leave it running all evening.</p>
+      <p>You can start PitWall before or after iRacing, either order. It watches for the sim, connects when it appears, and reconnects on its own between sessions. Leave it running all evening.</p>
     </section>
 
-    <section class="step" id="s10">
-      <h2 class="step"><span class="n">10</span> Set up OBS</h2>
-      <p class="sub">Each graphic is a Browser source. Nothing to install in OBS.</p>
+    <section class="step" id="b6">
+      <h2 class="step"><span class="n">B6</span> Build the OBS scene</h2>
+      <p class="sub">Six sources. About ten minutes, once.</p>
+      <p>Each graphic is a <strong>Browser</strong> source. Nothing to install in OBS.</p>
 
-      <p><strong>Sources &rarr; + &rarr; Browser</strong>. For each one, paste the URL and set Width and Height from this table.</p>
+      <h3>The first one, in full</h3>
+      <ol class="clicks">
+        <li>Open OBS and select the scene you want the graphics in.</li>
+        <li>In the <span class="ui">Sources</span> box along the bottom, click the <span class="ui">+</span> button.</li>
+        <li>Choose <span class="ui">Browser</span> from the list.</li>
+        <li>Type a name &mdash; <code>Timing tower</code> &mdash; and click <span class="ui">OK</span>.</li>
+        <li>A properties window opens. In the <span class="ui">URL</span> box, select everything already there, delete it, and paste:</li>
+      </ol>
+      <div class="cmd"><button>Copy</button><pre>http://127.0.0.1:8099/broadcast/tower.html</pre></div>
+      <ol class="clicks" style="counter-reset:c 5">
+        <li>Set <span class="ui">Width</span> to <code>460</code> and <span class="ui">Height</span> to <code>1080</code>.</li>
+        <li>Make sure <span class="ui">Shutdown source when not visible</span> is <strong>unticked</strong>.</li>
+        <li>Click <span class="ui">OK</span>.
+          <span class="expect">The tower appears in your scene with live cars in it.</span></li>
+        <li>Drag it to the left edge of the canvas.</li>
+      </ol>
 
+      <h3>Now the other five</h3>
+      <p>Identical steps each time. Only the name, URL, width and height change.</p>
       <div class="tablewrap">
         <table>
-          <thead><tr><th>Graphic</th><th>URL</th><th>W</th><th>H</th></tr></thead>
+          <thead><tr><th>Name it</th><th>URL</th><th>W</th><th>H</th></tr></thead>
           <tbody>
-            <tr><td>Timing tower</td><td><code>http://127.0.0.1:8099/broadcast/tower.html</code></td><td class="num">460</td><td class="num">1080</td></tr>
-            <tr><td>Session bar</td><td><code>.../broadcast/session-bar.html</code></td><td class="num">1920</td><td class="num">120</td></tr>
-            <tr><td>Driver card</td><td><code>.../broadcast/driver-card.html?auto=1</code></td><td class="num">1920</td><td class="num">1080</td></tr>
-            <tr><td>Battle box</td><td><code>.../broadcast/battle.html?max=1.5</code></td><td class="num">1920</td><td class="num">1080</td></tr>
-            <tr><td>Track map</td><td><code>.../broadcast/trackmap.html</code></td><td class="num">600</td><td class="num">600</td></tr>
-            <tr><td>Standings board</td><td><code>.../broadcast/standings.html</code></td><td class="num">1920</td><td class="num">1080</td></tr>
+            <tr><td>Session bar</td><td><code>http://127.0.0.1:8099/broadcast/session-bar.html</code></td><td class="num">1920</td><td class="num">120</td></tr>
+            <tr><td>Driver card</td><td><code>http://127.0.0.1:8099/broadcast/driver-card.html?auto=1&amp;pos=tr</code></td><td class="num">1920</td><td class="num">1080</td></tr>
+            <tr><td>Battle box</td><td><code>http://127.0.0.1:8099/broadcast/battle.html?max=1.5&amp;pos=br</code></td><td class="num">1920</td><td class="num">1080</td></tr>
+            <tr><td>Track map</td><td><code>http://127.0.0.1:8099/broadcast/trackmap.html</code></td><td class="num">600</td><td class="num">600</td></tr>
+            <tr><td>Standings board</td><td><code>http://127.0.0.1:8099/broadcast/standings.html</code></td><td class="num">1920</td><td class="num">1080</td></tr>
           </tbody>
         </table>
       </div>
 
-      <p>Leave <strong>"Shutdown source when not visible" unticked</strong>. The graphics reconnect by themselves, but keeping them alive avoids a visible flash when you cut to a scene.</p>
-
       <div class="note warn">
-        <span class="tag">Do not resize the full-frame graphics</span>
-        <p>The driver card, battle box and standings board are 1920&times;1080 and position themselves <em>inside</em> that frame. Drop them at 0,0 and leave them. To move one to a different corner, add <code>?pos=br</code> (or <code>tl</code>, <code>tr</code>). Scaling a browser source makes the text soft.</p>
+        <span class="tag">Do not resize the three full-frame ones</span>
+        <p>Driver card, battle box and standings board are 1920&times;1080 and position themselves <em>inside</em> that frame. Drop them at position 0, 0 and leave them. To move one, change its URL instead &mdash; <code>pos=bl</code>, <code>br</code>, <code>tl</code> or <code>tr</code>. Scaling a browser source makes the text soft.</p>
+        <p>The card is set to <code>pos=tr</code> above so it clears the tower down your left edge.</p>
       </div>
-
-      <h3>A scene layout that works</h3>
-      <p><strong>Race scene</strong> &mdash; your iRacing capture, plus:</p>
-      <ul>
-        <li>Session bar at the top, position 0,0</li>
-        <li>Tower down the left, position 0,120</li>
-        <li>Driver card at 0,0 with <code>?auto=1</code></li>
-        <li>Battle box at 0,0 with <code>?max=1.5</code></li>
-        <li>Track map bottom right</li>
-      </ul>
 
       <div class="note ok">
-        <span class="tag">Set these two and forget them</span>
-        <p>The driver card with <code>?auto=1</code> appears for eight seconds whenever you cut to a new car, then hides. The battle box hides unless there is a real fight closer than 1.5 seconds. Leave both in the scene permanently and never touch them mid-race.</p>
+        <span class="tag">Two of them look after themselves</span>
+        <p>The driver card with <code>auto=1</code> appears for eight seconds whenever you cut to a new car, then hides. The battle box with <code>max=1.5</code> stays hidden unless there is a real fight closer than 1.5 seconds. Leave both in the scene permanently and never touch them mid-race.</p>
       </div>
 
-      <p><strong>Pre-race and results</strong> &mdash; use the standings board over a holding graphic. It re-titles itself to RESULTS and promotes the podium automatically at the chequered flag, so one source covers both.</p>
-
-      <div class="note warn">
-        <span class="tag">If the tower is on the left, move the driver card</span>
-        <p>They both want the bottom-left corner and will overlap. Either put the card bottom-right with <code>?pos=br</code>, or start it clear of the tower.</p>
-      </div>
-
-      <h3>Customising a graphic</h3>
-      <p>Options go on the end of the URL. The <strong>Overlays</strong> tab has a builder that writes them with a live preview. For example, intervals plus last lap, grouped by class, slightly enlarged:</p>
-      <div class="cmd"><button>Copy</button><pre>http://127.0.0.1:8099/broadcast/tower.html?rows=16&col=int&col2=last&group=class&scale=1.1</pre></div>
-      <p>Full list in the <a href="#options">reference table</a>.</p>
+      <h3>Where to put them</h3>
+      <ul class="rich">
+        <li><strong>Session bar</strong> &mdash; top of screen, position 0, 0</li>
+        <li><strong>Timing tower</strong> &mdash; down the left, position 0, 120</li>
+        <li><strong>Driver card</strong> &mdash; position 0, 0, leave it</li>
+        <li><strong>Battle box</strong> &mdash; position 0, 0, leave it</li>
+        <li><strong>Track map</strong> &mdash; bottom right</li>
+        <li><strong>Standings board</strong> &mdash; put this in a <em>separate</em> scene for pre-race and results. It re-titles itself to RESULTS at the chequered flag automatically.</li>
+      </ul>
     </section>
 
-    <section class="step" id="s11">
-      <h2 class="step"><span class="n">11</span> The second screen</h2>
-      <p class="sub">Full timing on a laptop, tablet or phone. Nothing installed on that device.</p>
-
-      <p>On the <strong>Status</strong> tab, find <em>On your network</em>. It lists an address like:</p>
-      <div class="cmd"><button>Copy</button><pre>http://192.168.1.24:8099/timing</pre></div>
-      <p>Type that into a browser on any device on the same network. That is it.</p>
-
+    <section class="step" id="b7">
+      <h2 class="step"><span class="n">B7</span> Timing on a phone or tablet</h2>
+      <p class="sub">Nothing to install on that device.</p>
+      <ol class="clicks">
+        <li>In the control panel, click the <span class="ui">Status</span> tab.</li>
+        <li>Scroll to the section headed <span class="ui">On your network</span>.</li>
+        <li>Next to <strong>Live timing</strong>, click <span class="ui">Copy</span>. It looks like <code>http://192.168.1.24:8099/timing</code></li>
+        <li>Send that address to the device, or type it in by hand.</li>
+        <li>Open it in any browser there.</li>
+      </ol>
       <div class="note warn">
         <span class="tag">Use the network address, not 127.0.0.1</span>
-        <p><code>127.0.0.1</code> means "this machine" and will never work from another device. Copy the address from the <em>On your network</em> section.</p>
+        <p><code>127.0.0.1</code> means "this machine" and will never work from another device. Copy the one from the <em>On your network</em> section.</p>
       </div>
-
-      <p>The first time, Windows will ask whether to allow PitWall through the firewall. <strong>Say yes, with "Private networks" ticked.</strong> If you clicked Cancel, go to Windows Defender Firewall &rarr; <em>Allow an app through firewall</em> and find it there.</p>
-
-      <p>Other things that block it: the two devices being on genuinely different networks (a guest network usually blocks device-to-device traffic entirely), or client isolation on the Wi-Fi.</p>
-
-      <p>The page reflows into a card list on a phone, so it is usable one-handed. Tap any car for its full profile, lap history and lap-time chart.</p>
-
-      <div class="note why">
-        <span class="tag">Remote viewers</span>
-        <p>For someone in another house &mdash; a co-commentator, stewards watching from home &mdash; you need a tunnel from the broadcast PC. <a href="https://tailscale.com">Tailscale</a> or Cloudflare Tunnel are both free and about a one-line setup, and give an address that works from anywhere. This is the one part of the system that is not covered by GitHub.</p>
-      </div>
+      <p>The first time, Windows asks whether to allow PitWall through the firewall. <strong>Say yes, with "Private networks" ticked.</strong> If you clicked Cancel, go to Windows Defender Firewall &rarr; <span class="ui">Allow an app through firewall</span> and find it there.</p>
+      <p>The page reflows into a card list on a phone. Tap any car for its profile, lap history and lap-time chart.</p>
     </section>
 
-    <section class="step" id="s12">
-      <h2 class="step"><span class="n">12</span> Director controls</h2>
-      <p class="sub">Drive iRacing's camera from the control panel.</p>
-
-      <p>The <strong>Sim control</strong> tab gives you: cut to a specific car, to the leader, to the most exciting battle, or to the last incident; pick a camera group; jump to the previous or next incident in the replay; jump back to live; change replay speed; trigger screenshots.</p>
-
-      <div class="note why">
-        <span class="tag">This is iRacing's own interface</span>
-        <p>These use the remote-control channel iRacing publishes for exactly this. Nothing is injected into the game and no memory is written. PitWall only ever <em>reads</em> the sim.</p>
-      </div>
-
-      <div class="note warn">
-        <span class="tag">If the buttons do nothing</span>
-        <p>If iRacing runs as administrator and PitWall does not, Windows silently discards these commands &mdash; no error, nothing happens. Run both the same way, ideally neither elevated. Diagnostics flags this.</p>
-      </div>
-    </section>
-
-    <!-- ================================================== PART C -->
     <div class="partbar">
-      <div class="k">Part C</div>
-      <h2>Drivers</h2>
-      <p>Two minutes, once, and nothing to install.</p>
+      <div class="k">Part C</div><h2>Drivers</h2>
+      <p>Send them one link. They install nothing.</p>
     </div>
 
-    <section class="step first" id="s13">
-      <h2 class="step"><span class="n">13</span> Sign up</h2>
-      <p class="sub">This is what your drivers do. Send them this section.</p>
+    <section class="step first" id="c1">
+      <h2 class="step"><span class="n">C1</span> What to send them</h2>
+      <p class="sub">Post this in your league Discord.</p>
+      <div class="cmd titled"><span class="lbl">Copy this, swap in your address</span><button>Copy</button><pre>Sign up for the broadcast here:
+https://YOUR-ORG.github.io/YOUR-REPO/
 
-      <p>Open the league page and click <strong>Sign up</strong>. Fill in the form and submit. That is all.</p>
+Takes two minutes and you only ever do it once.
 
-      <p>What you can add:</p>
-      <ul>
-        <li><strong>iRacing customer ID</strong> and <strong>name</strong> &mdash; required</li>
-        <li>Car number, team, country (for your flag)</li>
-        <li>A <strong>headshot</strong> &mdash; drag an image straight into the box and it uploads</li>
-        <li>Pronouns, hometown, a one-line bio for the commentary team</li>
-        <li>Twitch, YouTube, Instagram, X, Discord</li>
-        <li>A sponsor and logo, and an accent colour for your card</li>
+You need your iRacing CUSTOMER ID - the number on the iRacing
+website under Account &gt; My Account &gt; Customer ID. It is not
+your name and not your car number. Everything links on that,
+so a wrong one means your card never appears on stream.
+
+You can drag a photo straight into the form. Nothing to install.</pre></div>
+      <p>Say the customer ID part explicitly. It is the one field people get wrong, and every wrong one is a driver whose card is missing on race night.</p>
+
+      <h3>What happens when they submit</h3>
+      <ul class="rich">
+        <li>A workflow reads the form, checks it, and adds them to <code>roster.json</code>.</li>
+        <li>They get a reply listing exactly what was recorded, and the issue closes.</li>
+        <li>Their name appears on your league page's entry list.</li>
+        <li>To change anything they <strong>edit their own submission</strong> and it updates automatically. No new form, no admin, no duplicates.</li>
       </ul>
-
-      <div class="note warn">
-        <span class="tag">The customer ID is the field everyone gets wrong</span>
-        <p>It is the number on the iRacing website under <strong>Account &rarr; My Account &rarr; Customer ID</strong>. Numbers only. It is not your display name and not your car number.</p>
-        <p>Everything joins on this, so a wrong one means your card never appears on the broadcast. If you put something else in, the form will reject it and tell you.</p>
-      </div>
-
-      <p>Within a minute you get a reply listing exactly what was recorded, and your name appears on the league page's entry list.</p>
-
-      <div class="note ok">
-        <span class="tag">Changing your entry</span>
-        <p><strong>Edit your own submission</strong> and it updates automatically. No new form, no asking an admin, and no duplicate entry &mdash; matching is on your customer ID, so re-submitting replaces rather than adds.</p>
-      </div>
-
-      <div class="note why">
-        <span class="tag">Why the customer ID and not your name</span>
-        <p>Names change, and in team endurance races the driver in the car changes mid-stint. The customer ID is the only key that survives both.</p>
-      </div>
+      <p>Drivers need a free GitHub account for this. If that is a problem for anyone, they can use the sign-up page inside the app instead &mdash; the <code>/register</code> address on the Status tab &mdash; while PitWall is running.</p>
     </section>
 
-    <section class="step" id="s14">
-      <h2 class="step"><span class="n">14</span> The in-game HUD</h2>
-      <p class="sub">Optional, and only for drivers who want overlays on their own screen.</p>
-
-      <p>Six transparent widgets that sit over iRacing: relative, standings, pedal trace, fuel and tyres, delta bar, and a flag and spotter strip.</p>
-
-      <p>Download the same <code>PitWall.exe</code>, run it on your own PC while you drive, and add the HUD pages as overlays. For proper transparent always-on-top windows, the HUD shell in <code>hud-app/</code> needs <a href="https://nodejs.org">Node.js</a>:</p>
-
-      <div class="cmd titled"><span class="lbl">One time</span><button>Copy</button><pre>cd hud-app
-npm install</pre></div>
-      <div class="cmd titled"><span class="lbl">Each time, after PitWall is running</span><button>Copy</button><pre>npm start</pre></div>
-
-      <div class="tablewrap">
-        <table>
-          <thead><tr><th>Key</th><th>Does</th></tr></thead>
-          <tbody>
-            <tr><td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>E</kbd></td><td>Unlock the widgets to drag and resize. Press again to lock.</td></tr>
-            <tr><td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>H</kbd></td><td>Hide or show everything.</td></tr>
-            <tr><td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd></td><td>Reload all widgets.</td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <p>The tray icon next to the clock toggles individual widgets. Positions save automatically.</p>
-
-      <div class="note why">
-        <span class="tag">Why they go click-through when locked</span>
-        <p>Locked widgets ignore the mouse entirely, so a click meant for the sim can never be swallowed by an invisible overlay on top of it. That is a mistake every overlay tool makes at least once, and it is infuriating mid-race.</p>
-      </div>
-
-      <div class="note stop">
-        <span class="tag">Requirements</span>
-        <p>iRacing must be in <strong>windowed or borderless</strong> mode, and this does <strong>not work in VR</strong> (see <a href="#s8">step 8</a>). If either applies, put the timing page on a phone or tablet instead, or add the same widgets as OBS sources on a second monitor.</p>
-      </div>
-    </section>
-
-    <!-- ============================================== REFERENCE -->
     <div class="partbar">
-      <div class="k">Reference</div>
-      <h2>Race day and everything else</h2>
-      <p>Once set up, the run sheet below is the only part of this page you need.</p>
+      <div class="k">Reference</div><h2>Race day and everything else</h2>
+      <p>Once set up, the run sheet is the only part of this page you need.</p>
     </div>
 
     <section class="step first" id="runsheet">
       <h2 class="step"><span class="n">&#9873;</span> Race day run sheet</h2>
       <p class="sub">Ticks are saved in this browser.</p>
-
       <ul class="checklist" id="checks">
-        <li><span class="when">&minus;1 week</span><input type="checkbox" id="c1"><label for="c1">Post the league page link in Discord. Say <strong>customer ID</strong>, not name.</label></li>
-        <li><span class="when">&minus;1 day</span><input type="checkbox" id="c2"><label for="c2">Check the entry list on the league page. Chase anyone missing.</label></li>
-        <li><span class="when">&minus;1 day</span><input type="checkbox" id="c3"><label for="c3">Run <code>PitWall.exe --demo --speed 14</code> and click through every OBS scene.</label></li>
-        <li><span class="when">&minus;1 hr</span><input type="checkbox" id="c4"><label for="c4">Start iRacing, join the session, then start PitWall.</label></li>
-        <li><span class="when">&minus;1 hr</span><input type="checkbox" id="c5"><label for="c5">Roster tab &rarr; <strong>Pull</strong>, so you have the latest sign-ups.</label></li>
-        <li><span class="when">&minus;1 hr</span><input type="checkbox" id="c6"><label for="c6"><strong>Diagnostics</strong> &mdash; everything green or explained.</label></li>
-        <li><span class="when">&minus;45 min</span><input type="checkbox" id="c7"><label for="c7">Status says <strong>Connected</strong>, with the right track and session.</label></li>
-        <li><span class="when">&minus;45 min</span><input type="checkbox" id="c8"><label for="c8">Open the timing page on your second device. Car count looks right.</label></li>
-        <li><span class="when">&minus;30 min</span><input type="checkbox" id="c9"><label for="c9">Every OBS graphic is live, not a frozen frame from last week's cache.</label></li>
-        <li><span class="when">&minus;30 min</span><input type="checkbox" id="c10"><label for="c10">Spot-check three driver cards. Missing ones mean a wrong customer ID.</label></li>
-        <li><span class="when">&minus;20 min</span><input type="checkbox" id="c11"><label for="c11">Let one car run a clean lap so the track map builds.</label></li>
-        <li><span class="when">&minus;10 min</span><input type="checkbox" id="c12"><label for="c12">Test one camera cut from the Sim control tab.</label></li>
-        <li><span class="when">Post-race</span><input type="checkbox" id="c13"><label for="c13">Leave the standings board up &mdash; it becomes the results board at the flag.</label></li>
+        <li><span class="when">&minus;1 week</span><input type="checkbox" id="k1"><label for="k1">Post the league page link in Discord. Say <strong>customer ID</strong>, not name.</label></li>
+        <li><span class="when">&minus;1 day</span><input type="checkbox" id="k2"><label for="k2">Check the entry list on the league page. Chase anyone missing.</label></li>
+        <li><span class="when">&minus;1 day</span><input type="checkbox" id="k3"><label for="k3">Run <code>PitWall.exe --demo --speed 14</code> and click through every OBS scene.</label></li>
+        <li><span class="when">&minus;1 hr</span><input type="checkbox" id="k4"><label for="k4">Start iRacing, join the session, then start PitWall.</label></li>
+        <li><span class="when">&minus;1 hr</span><input type="checkbox" id="k5"><label for="k5">Roster tab &rarr; <strong>Pull</strong>, for the latest sign-ups.</label></li>
+        <li><span class="when">&minus;1 hr</span><input type="checkbox" id="k6"><label for="k6"><strong>Diagnostics</strong> &mdash; everything green or explained.</label></li>
+        <li><span class="when">&minus;45 min</span><input type="checkbox" id="k7"><label for="k7">Status says <strong>Connected</strong>, right track and session.</label></li>
+        <li><span class="when">&minus;45 min</span><input type="checkbox" id="k8"><label for="k8">Timing page open on your second device, car count looks right.</label></li>
+        <li><span class="when">&minus;30 min</span><input type="checkbox" id="k9"><label for="k9">Every OBS graphic is live, not a frozen frame from last week.</label></li>
+        <li><span class="when">&minus;30 min</span><input type="checkbox" id="k10"><label for="k10">Spot-check three driver cards. Missing ones mean a wrong customer ID.</label></li>
+        <li><span class="when">&minus;20 min</span><input type="checkbox" id="k11"><label for="k11">Let one car run a clean lap so the track map builds.</label></li>
+        <li><span class="when">&minus;10 min</span><input type="checkbox" id="k12"><label for="k12">Test one camera cut from the Sim control tab.</label></li>
+        <li><span class="when">Post-race</span><input type="checkbox" id="k13"><label for="k13">Switch to the standings scene &mdash; it becomes the results board at the flag.</label></li>
       </ul>
       <div class="resetline"><button id="resetchecks" type="button">Clear all ticks</button></div>
     </section>
@@ -793,7 +715,6 @@ npm install</pre></div>
     <section class="step" id="options">
       <h2 class="step"><span class="n">&#8942;</span> Overlay URL options</h2>
       <p class="sub">Add to any browser source URL after a <code>?</code>, joined with <code>&amp;</code>.</p>
-
       <h3>On every graphic</h3>
       <div class="tablewrap">
         <table>
@@ -801,168 +722,80 @@ npm install</pre></div>
           <tbody>
             <tr><td><code>scale</code></td><td class="num">1.15</td><td>Size multiplier. Better than resizing in OBS, which softens text.</td></tr>
             <tr><td><code>accent</code></td><td class="num">%23ff8800</td><td>Override the accent colour. Write <code>#</code> as <code>%23</code>.</td></tr>
-            <tr><td><code>opacity</code></td><td class="num">0.75</td><td>Panel opacity, 0 to 1. Lower it when the video underneath matters.</td></tr>
+            <tr><td><code>opacity</code></td><td class="num">0.75</td><td>Panel opacity, 0 to 1.</td></tr>
             <tr><td><code>names</code></td><td class="num">surname</td><td><code>full</code>, <code>short</code>, <code>surname</code>, <code>abbrev</code>.</td></tr>
             <tr><td><code>class</code></td><td class="num">GT3</td><td>Show only one class.</td></tr>
-            <tr><td><code>debug</code></td><td class="num">1</td><td>Show a connection dot. Red means it cannot reach PitWall.</td></tr>
-            <tr><td><code>bg</code></td><td class="num">1</td><td>Solid background, for checking a graphic outside OBS.</td></tr>
-            <tr><td><code>server</code></td><td class="num">http://192.168.1.24:8099</td><td>Point the page at a different PitWall machine.</td></tr>
+            <tr><td><code>debug</code></td><td class="num">1</td><td>Connection dot. Red means it cannot reach PitWall.</td></tr>
+            <tr><td><code>server</code></td><td class="num">http://192.168.1.24:8099</td><td>Point at a different PitWall machine.</td></tr>
           </tbody>
         </table>
       </div>
-
       <h3>Timing tower</h3>
       <div class="tablewrap">
         <table>
           <thead><tr><th>Option</th><th>Values</th><th>Does</th></tr></thead>
           <tbody>
-            <tr><td><code>rows</code></td><td class="num">16</td><td>Row count. Default fills the available height.</td></tr>
-            <tr><td><code>col</code></td><td class="num">gap · int · last · best · delta</td><td>The main data column.</td></tr>
+            <tr><td><code>rows</code></td><td class="num">16</td><td>Row count. Default fills the height.</td></tr>
+            <tr><td><code>col</code></td><td class="num">gap &middot; int &middot; last &middot; best &middot; delta</td><td>The main data column.</td></tr>
             <tr><td><code>col2</code></td><td class="num">same values</td><td>An optional second column.</td></tr>
-            <tr><td><code>group</code></td><td class="num">class</td><td>Break into class blocks with headers.</td></tr>
-            <tr><td><code>focus</code></td><td class="num">1</td><td>Follow the camera car and keep it visible.</td></tr>
-            <tr><td><code>top</code></td><td class="num">5</td><td>Pin the top N and scroll the rest around the focus car, as real broadcasts do.</td></tr>
-            <tr><td><code>header</code></td><td class="num">0</td><td>Hide the header block.</td></tr>
+            <tr><td><code>group</code></td><td class="num">class</td><td>Break into class blocks.</td></tr>
+            <tr><td><code>focus</code></td><td class="num">1</td><td>Follow the camera car.</td></tr>
+            <tr><td><code>top</code></td><td class="num">5</td><td>Pin the top N, scroll the rest around the focus car.</td></tr>
           </tbody>
         </table>
       </div>
-
       <h3>Driver card and battle box</h3>
       <div class="tablewrap">
         <table>
           <thead><tr><th>Option</th><th>Values</th><th>Does</th></tr></thead>
           <tbody>
-            <tr><td><code>auto</code></td><td class="num">1</td><td>Card appears on a camera cut, then hides. The mode directors use.</td></tr>
-            <tr><td><code>hold</code></td><td class="num">8</td><td>Seconds to hold the card in auto mode.</td></tr>
-            <tr><td><code>pos</code></td><td class="num">bl · br · tl · tr</td><td>Which corner of the frame.</td></tr>
-            <tr><td><code>compact</code></td><td class="num">1</td><td>Slimmer card, no bio.</td></tr>
-            <tr><td><code>max</code></td><td class="num">1.5</td><td>Battle box hides above this gap. A battle box showing four seconds is a lie.</td></tr>
+            <tr><td><code>auto</code></td><td class="num">1</td><td>Card appears on a camera cut, then hides.</td></tr>
+            <tr><td><code>hold</code></td><td class="num">8</td><td>Seconds to hold the card.</td></tr>
+            <tr><td><code>pos</code></td><td class="num">bl &middot; br &middot; tl &middot; tr</td><td>Which corner of the frame.</td></tr>
+            <tr><td><code>max</code></td><td class="num">1.5</td><td>Battle box hides above this gap.</td></tr>
             <tr><td><code>stack</code></td><td class="num">3</td><td>Show up to N battles stacked.</td></tr>
-            <tr><td><code>pick</code></td><td class="num">closest · lead · class</td><td>Which fight to show.</td></tr>
           </tbody>
         </table>
       </div>
+      <p>The control panel's <span class="ui">Overlays</span> tab has a builder that writes these URLs for you, with a live preview.</p>
     </section>
 
     <section class="step" id="fix">
       <h2 class="step"><span class="n">&#9888;</span> When it breaks</h2>
       <p class="sub">Diagnostics first. This is the summary.</p>
-
       <div class="tablewrap">
         <table>
           <thead><tr><th>Symptom</th><th>Usually</th></tr></thead>
           <tbody>
-            <tr><td>HUD invisible in-game</td><td>iRacing in exclusive fullscreen, or you are in VR. See <a href="#s8">step 8</a>.</td></tr>
-            <tr><td>Everything blank, no data</td><td>iRacing not in a session, or <code>irsdkEnableMem=0</code>. Diagnostics names it.</td></tr>
+            <tr><td>HUD invisible in-game</td><td>iRacing in exclusive fullscreen, or you are in VR. See B4.</td></tr>
+            <tr><td>Everything blank, no data</td><td>iRacing not in a session, or <code>irsdkEnableMem=0</code>.</td></tr>
             <tr><td>Back of the field flickering</td><td>Max Cars below 63 on the iRacing website.</td></tr>
-            <tr><td>Sim stutters with overlays on</td><td>G-SYNC, or a second GPU compositing the desktop. Diagnostics explains both fixes. It is almost never the overlay's rendering cost.</td></tr>
-            <tr><td>Phone cannot open the timing page</td><td>Firewall, or you used <code>127.0.0.1</code>. See <a href="#s11">step 11</a>.</td></tr>
-            <tr><td>A driver's profile missing</td><td>Wrong customer ID, or you have not pulled the roster on this machine.</td></tr>
-            <tr><td>Camera buttons do nothing</td><td>iRacing elevated, PitWall not.</td></tr>
+            <tr><td>Sim stutters with overlays on</td><td>G-SYNC, or a second GPU compositing the desktop. Diagnostics explains both. Almost never the overlay's rendering cost.</td></tr>
+            <tr><td>Phone cannot open the timing page</td><td>Firewall, or you used <code>127.0.0.1</code>. See B7.</td></tr>
+            <tr><td>A driver's profile missing</td><td>Wrong customer ID, or you have not hit Pull on the Roster tab.</td></tr>
+            <tr><td>Camera buttons do nothing</td><td>iRacing running as administrator, PitWall not.</td></tr>
             <tr><td>Graphic frozen in OBS</td><td>Right-click the source &rarr; <em>Refresh cache of current page</em>.</td></tr>
             <tr><td>Windows blocks the download</td><td>SmartScreen. <em>More info</em> &rarr; <em>Run anyway</em>. The app is unsigned.</td></tr>
             <tr><td>Gaps showing a dash</td><td>Working as intended, under caution. See below.</td></tr>
             <tr><td>Track map empty</td><td>Nobody has driven a clean lap there yet. It builds itself, then caches forever.</td></tr>
-            <tr><td>Sign-up form did nothing</td><td>Workflow permissions. <a href="#s1">Step 1</a>, the warning box.</td></tr>
+            <tr><td>Sign-up form did nothing</td><td>Workflow permissions. See A3.</td></tr>
             <tr><td>No release to download</td><td>The build failed its own test. Check the Actions tab.</td></tr>
-            <tr><td>Pages says "workflow details will appear once deployed"</td><td>It has not run yet. Actions tab &rarr; <em>Publish site</em> &rarr; <strong>Run workflow</strong>. Do not use the Configure buttons.</td></tr>
-            <tr><td>No workflows in the Actions tab</td><td>The <code>.github</code> folder never got pushed. It is hidden by the leading dot. <code>git add -f .github</code></td></tr>
+            <tr><td>League page 404s</td><td>Pages Source not set to GitHub Actions, or Publish site has not been run. See A3 and A4.</td></tr>
           </tbody>
         </table>
       </div>
-
       <div class="note why">
         <span class="tag">Why gaps go blank under yellow</span>
         <p>Under caution the field is bunched behind a pace car, and a gap calculated from lap distance describes nothing real. Same for delta on any lap that touched pit lane &mdash; a car sitting in its box accumulates lap time without accumulating distance, which is how other tools end up showing a delta of +200 seconds.</p>
         <p>PitWall shows a dash instead. A number you cannot act on is worse than no number, on a broadcast most of all.</p>
       </div>
-
       <p>The longer version, with the exact NVIDIA and Windows settings, is in <code>docs/TROUBLESHOOTING.md</code>.</p>
-    </section>
-
-    <section class="step" id="ws">
-      <h2 class="step"><span class="n">&#8734;</span> What a WebSocket is</h2>
-      <p class="sub">Nothing to set up. It is just how the pieces talk.</p>
-
-      <p>An ordinary web page works like posting a letter. Your browser asks the server for something, gets it, and the conversation ends. To find out whether anything changed, it has to ask again. And again.</p>
-
-      <p>Fine for a news article. Useless for a timing tower that changes fifteen times a second.</p>
-
-      <p>A <strong>WebSocket</strong> is a phone call instead. The browser dials once, the line stays open, and either end talks whenever it has something to say.</p>
-
-      <div class="flow">
-        <svg viewBox="0 0 640 232" role="img" aria-label="iRacing feeds the PitWall app, which sends one live WebSocket feed to the OBS graphics, the timing page and the in-game HUD.">
-          <defs>
-            <marker id="ar" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-              <path d="M0,1 L7,4 L0,7 Z" fill="currentColor"/>
-            </marker>
-          </defs>
-          <g font-family="Public Sans, sans-serif" font-size="12.5" fill="currentColor" color="currentColor">
-            <rect x="222" y="6" width="196" height="40" rx="5" fill="none" stroke="currentColor" stroke-opacity=".35"/>
-            <text x="320" y="31" text-anchor="middle" font-weight="600">iRacing</text>
-
-            <path d="M320,48 L320,74" stroke="currentColor" stroke-opacity=".45" fill="none" marker-end="url(#ar)"/>
-            <text x="330" y="66" font-size="10.5" fill-opacity=".65">shared memory, read only</text>
-
-            <rect x="222" y="78" width="196" height="44" rx="5" fill="#d13b2e" fill-opacity=".12" stroke="#d13b2e" stroke-opacity=".65"/>
-            <text x="320" y="99" text-anchor="middle" font-weight="600">PitWall</text>
-            <text x="320" y="113" text-anchor="middle" font-size="10.5" fill-opacity=".7">works out every number once</text>
-
-            <path d="M320,124 L320,146" stroke="currentColor" stroke-opacity=".45" fill="none"/>
-            <path d="M110,146 L530,146" stroke="currentColor" stroke-opacity=".45" fill="none"/>
-            <text x="332" y="141" font-size="10.5" fill-opacity=".65">one live WebSocket feed</text>
-
-            <path d="M110,146 L110,172" stroke="currentColor" stroke-opacity=".45" fill="none" marker-end="url(#ar)"/>
-            <path d="M320,146 L320,172" stroke="currentColor" stroke-opacity=".45" fill="none" marker-end="url(#ar)"/>
-            <path d="M530,146 L530,172" stroke="currentColor" stroke-opacity=".45" fill="none" marker-end="url(#ar)"/>
-
-            <rect x="20" y="176" width="180" height="46" rx="5" fill="none" stroke="currentColor" stroke-opacity=".35"/>
-            <text x="110" y="196" text-anchor="middle" font-weight="600">OBS graphics</text>
-            <text x="110" y="211" text-anchor="middle" font-size="10.5" fill-opacity=".7">tower, card, map</text>
-
-            <rect x="230" y="176" width="180" height="46" rx="5" fill="none" stroke="currentColor" stroke-opacity=".35"/>
-            <text x="320" y="196" text-anchor="middle" font-weight="600">Timing page</text>
-            <text x="320" y="211" text-anchor="middle" font-size="10.5" fill-opacity=".7">laptop, tablet, phone</text>
-
-            <rect x="440" y="176" width="180" height="46" rx="5" fill="none" stroke="currentColor" stroke-opacity=".35"/>
-            <text x="530" y="196" text-anchor="middle" font-weight="600">In-game HUD</text>
-            <text x="530" y="211" text-anchor="middle" font-size="10.5" fill-opacity=".7">over the sim</text>
-          </g>
-        </svg>
-      </div>
-
-      <ul>
-        <li><strong>Your tower and timing page cannot disagree.</strong> The gaps are worked out once and the same numbers go to everything. There is no second copy of the maths to drift.</li>
-        <li><strong>Any device works.</strong> WebSockets are a standard browser feature, which is why your phone needs nothing installed.</li>
-        <li><strong>It heals itself.</strong> Restart PitWall mid-session and every graphic reconnects within a couple of seconds. You do not touch OBS.</li>
-      </ul>
-    </section>
-
-    <section class="step" id="nogithub">
-      <h2 class="step"><span class="n">&#8592;</span> Without GitHub</h2>
-      <p class="sub">If you would rather not use GitHub at all.</p>
-
-      <p>Everything works standalone. You lose the automatic build, the shared roster and the public sign-up page, and you gain a Python install.</p>
-
-      <ol class="rich">
-        <li>Install Python 3.9 or newer from <a href="https://www.python.org/downloads/">python.org</a>. <strong>Tick "Add python.exe to PATH"</strong> during setup.</li>
-        <li>Unzip PitWall somewhere sensible.</li>
-        <li>Double-click <code>run.bat</code>, or <code>run-demo.bat</code> to look around without iRacing.</li>
-      </ol>
-
-      <p>Sign-ups then use the app's own form. Send drivers the address on the Status tab, ending in <code>/register</code>, while PitWall is running. The roster is saved locally in <code>data/roster.json</code>, which you can export and share by hand.</p>
-
-      <p>Steps 8 to 12 of this guide apply unchanged.</p>
-
-      <p>You can also build the <code>.exe</code> yourself:</p>
-      <div class="cmd"><button>Copy</button><pre>pip install pyinstaller
-python scripts/build_exe.py</pre></div>
     </section>
 
     <p class="endnote">
       PitWall reads iRacing through the SDK iRacing publishes for this purpose, read-only. Nothing is injected into the sim, no graphics API is hooked, and no game files are modified. Camera and replay control use <code>irsdk_broadcastMsg</code>, iRacing's own remote-control interface.
       <br><br>
-      Deeper reference in the <code>docs</code> folder: <code>GITHUB_HOSTING.md</code>, <code>OBS_SETUP.md</code>, <code>GITHUB_ROSTER.md</code>, <code>TROUBLESHOOTING.md</code>.
+      Deeper reference in the <code>docs</code> folder: <code>GITHUB_HOSTING.md</code>, <code>OBS_SETUP.md</code>, <code>TROUBLESHOOTING.md</code>.
     </p>
 
   </main>
@@ -971,42 +804,32 @@ python scripts/build_exe.py</pre></div>
 <script>
 (function () {
   'use strict';
-
   document.querySelectorAll('.cmd button').forEach(function (btn) {
     btn.addEventListener('click', function () {
       var pre = btn.parentElement.querySelector('pre');
       if (!pre) return;
       var text = pre.textContent;
-      var done = function () {
-        btn.textContent = 'Copied';
-        btn.classList.add('done');
+      function done() {
+        btn.textContent = 'Copied'; btn.classList.add('done');
         setTimeout(function () { btn.textContent = 'Copy'; btn.classList.remove('done'); }, 1600);
-      };
+      }
       function fallback() {
         var ta = document.createElement('textarea');
-        ta.value = text;
-        ta.style.cssText = 'position:fixed;opacity:0';
-        document.body.appendChild(ta);
-        ta.select();
+        ta.value = text; ta.style.cssText = 'position:fixed;opacity:0';
+        document.body.appendChild(ta); ta.select();
         try { document.execCommand('copy'); done(); } catch (e) { btn.textContent = 'Select it'; }
         ta.remove();
       }
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(done, fallback);
-      } else {
-        fallback();
-      }
+      } else { fallback(); }
     });
   });
 
-  var KEY = 'pitwall.runsheet.v2';
+  var KEY = 'pitwall.runsheet.v3';
   var boxes = Array.prototype.slice.call(document.querySelectorAll('#checks input'));
-  function read() {
-    try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { return {}; }
-  }
-  function write(state) {
-    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* private mode */ }
-  }
+  function read() { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { return {}; } }
+  function write(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {} }
   var saved = read();
   boxes.forEach(function (b) {
     if (saved[b.id]) b.checked = true;

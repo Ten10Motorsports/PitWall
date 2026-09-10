@@ -42,7 +42,7 @@ ships with Python.
 | Source | Size | What it is |
 |---|---|---|
 | `broadcast/tower.html` | 460 × 1080 | Timing tower. Position, class, gaps, pit state, fastest lap. |
-| `broadcast/session-bar.html` | 1920 × 120 | Track, session, flag, laps or clock, fastest lap, weather, SoF. |
+| `broadcast/session-bar.html` | 1920 × 120 | League, round, track, session, flag, laps or clock, fastest lap, weather, SoF. Drops the least important blocks rather than overlapping when they do not all fit. |
 | `broadcast/driver-card.html` | 1920 × 1080 | The "who is this" card, built from driver-submitted profiles. |
 | `broadcast/battle.html` | 1920 × 1080 | Battle box for the closest fight, with a closing/opening trend. |
 | `broadcast/trackmap.html` | 600 × 600 | Live track map that draws its own geometry (see below). |
@@ -75,10 +75,34 @@ either way.
 `Ctrl+Shift+E` unlocks the widgets to drag and resize. Press it again and they
 become click-through, so they can never swallow a click meant for the sim.
 
+### League profiles
+
+Everything that changes between one series and another — the name and colours
+on every graphic, where the roster is read from, and the season calendar — is
+saved as a **league profile** in the **Leagues** tab.
+
+Pick a league, pick a round, and the app applies all of it at once: the accent
+colour on every overlay, the league name in the session bar, the roster pulled
+fresh from GitHub, and the round and circuit on screen. Overlays already open
+follow along without being reloaded, so this works mid-broadcast.
+
+A broadcaster who runs three different series keeps three profiles and never
+retypes a roster URL. Editing the live league applies immediately, which is
+what you want when a track changes at five to eight.
+
+Profiles live in `data/leagues.json` next to the executable, so they survive an
+app update and can be copied to a co-commentator's machine.
+
 ### Driver-submitted profiles
 
-iRacing gives you a name, a number and a team. It gives you nothing a broadcast
-actually wants.
+iRacing gives you a name, a number and a team. It gives you nothing else a
+broadcast wants.
+
+**Nobody has to sign up for the timing to work.** Names, numbers, teams, car,
+class, iRating and licence all come from the sim, so a driver who never filled
+in the form still appears correctly on the tower, the standings board and the
+timing screen. Signing up only adds the headshot, country, hometown, bio,
+sponsor and socials that the driver card uses.
 
 Send your drivers `http://<your-pc>:8099/register`. They enter their iRacing
 customer ID once and add a headshot, country, pronouns, hometown, a one-line
@@ -214,6 +238,7 @@ server/                   the engine
   engine.py               timing, gaps, sectors, fuel, stints
   webserver.py            HTTP + WebSocket, stdlib only
   roster.py               driver profiles, GitHub sync
+  leagues.py              saved league profiles and season calendars
   control.py              camera / replay / pit control
   diagnostics.py          the self-check
   trackmap.py             self-building track geometry
@@ -221,7 +246,7 @@ server/                   the engine
 web/                      every overlay and page
 hud-app/                  Electron shell for the in-game HUD
 config/pitwall.json       league branding and roster settings
-data/                     roster, uploaded images, cached track maps
+data/                     roster, league profiles, uploaded images, cached track maps
 docs/                     setup guides and the overlay contract
 .github/workflows/        build the app, publish the site, process sign-ups
 scripts/                  the .exe build and the sign-up parser

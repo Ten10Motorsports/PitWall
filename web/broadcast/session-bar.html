@@ -66,7 +66,18 @@
     min-width: 0;
     white-space: nowrap;
   }
-  .blk.track { flex: 0 1 auto; }
+  /* Shrinkable blocks have to clip. Without overflow hidden a long circuit
+     or league name keeps its full width visually and prints straight over
+     the block beside it, which looks like a rendering fault on air. */
+  /* These never shrink. If they did, the bar would always "fit" by squeezing
+     every name down to an ellipsis, and the block-dropping below would never
+     get a chance to run. They only clip at a hard cap, for a pathologically
+     long circuit name. */
+  .blk.track, .blk.round, .blk.league { flex: 0 0 auto; max-width: 30%; overflow: hidden; }
+  .blk.track > *, .blk.round > *, .blk.league > * {
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .blk.dropped { display: none; }
   .blk:last-child { border-right: 0; }
 
   .lbl {
@@ -159,7 +170,10 @@
 
   PW.applyChrome();
 
-  var DEFAULT_ITEMS = ['league', 'track', 'session', 'flag', 'laps',
+  /* "round" is in the default set on purpose: it renders nothing at all
+     unless a league profile with a calendar is active, so a bar that has
+     never been configured looks exactly as it always did. */
+  var DEFAULT_ITEMS = ['league', 'round', 'track', 'session', 'flag', 'laps',
                        'fastest', 'weather', 'cautions', 'sof'];
 
   var OPT = {
@@ -199,6 +213,16 @@
       if (logo) h += '<img src="' + esc(logo) + '" alt="">';
       if (name) h += '<span class="lname">' + esc(name) + '</span>';
       return { cls: 'league', html: h };
+    },
+
+    round: function () {
+      var e = PW.event;
+      if (!e || !e.name) return null;                  // no league round set
+      var h = esc(e.name);
+      if (e.round && String(e.name).toLowerCase().indexOf('round') < 0) {
+        h = 'R' + e.round + ' <span class="sub">' + h + '</span>';
+      }
+      return { cls: 'round', html: lbl('Round') + val(h) };
     },
 
     track: function () {
@@ -329,11 +353,37 @@
         if (node.className !== cls) node.className = cls;
         if (node._html !== i.html) { node.innerHTML = i.html; node._html = i.html; }
       });
+
+    fitBar();
   }
+
+  /* Least important first. A broadcast bar that has run out of room should
+     lose the strength of field before it loses the flag, so the order here
+     is what a director would drop, not the order the blocks are built in. */
+  var DROP_ORDER = ['sof', 'cautions', 'weather', 'fastest', 'league', 'round', 'track'];
+
+  function fitBar() {
+    var blocks = Array.prototype.slice.call(bar.children);
+    blocks.forEach(function (b) { b.classList.remove('dropped'); });
+    if (bar.scrollWidth <= bar.clientWidth) return;
+
+    for (var i = 0; i < DROP_ORDER.length; i++) {
+      var victim = null;
+      for (var j = 0; j < blocks.length; j++) {
+        if (blocks[j].classList.contains(DROP_ORDER[i])) { victim = blocks[j]; break; }
+      }
+      if (!victim || victim.classList.contains('dropped')) continue;
+      victim.classList.add('dropped');
+      if (bar.scrollWidth <= bar.clientWidth) return;
+    }
+  }
+
+  window.addEventListener('resize', fitBar);
 
   PW.on('meta', render);
   PW.on('tick', render);
   PW.on('league', render);
+  PW.on('event', render);
   PW.start({ sub: ['meta', 'tick'], rate: 5, name: 'session-bar' });
 })();
 </script>

@@ -1,0 +1,1313 @@
+<title>PitWall Broadcast Handbook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Public+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root {
+  --paper:      #f7f5f3;
+  --surface:    #ffffff;
+  --surface-2:  #efece8;
+  --ink:        #1b1917;
+  --ink-2:      #4a4541;
+  --ink-3:      #7d7772;
+  --rule:       #ded8d2;
+  --rule-2:     #c9c2ba;
+
+  --accent:     #d13b2e;
+  --accent-ink: #9c2a20;
+  --accent-wash:#fbeae8;
+
+  --info:       #0e6b7d;
+  --info-wash:  #e2f0f2;
+  --warn:       #8a5a06;
+  --warn-wash:  #fbf0da;
+  --go:         #226b45;
+  --go-wash:    #e2f1e8;
+
+  --code-bg:    #1e1c1a;
+  --code-ink:   #e9e4de;
+
+  --shadow: 0 1px 2px rgba(27,25,23,.05), 0 8px 24px -12px rgba(27,25,23,.18);
+
+  --display: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
+  --body: 'Public Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:#17161a; --surface:#1e1d22; --surface-2:#26252b;
+    --ink:#f1eeea; --ink-2:#c0bab3; --ink-3:#8d867f;
+    --rule:#34323a; --rule-2:#46434c;
+    --accent:#f2604f; --accent-ink:#ff8878; --accent-wash:#33201d;
+    --info:#4ec2d6; --info-wash:#173034;
+    --warn:#e0a83f; --warn-wash:#33290f;
+    --go:#57c68c; --go-wash:#16301f;
+    --code-bg:#100f12; --code-ink:#e9e4de;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"] {
+  --paper:#17161a; --surface:#1e1d22; --surface-2:#26252b;
+  --ink:#f1eeea; --ink-2:#c0bab3; --ink-3:#8d867f;
+  --rule:#34323a; --rule-2:#46434c;
+  --accent:#f2604f; --accent-ink:#ff8878; --accent-wash:#33201d;
+  --info:#4ec2d6; --info-wash:#173034;
+  --warn:#e0a83f; --warn-wash:#33290f;
+  --go:#57c68c; --go-wash:#16301f;
+  --code-bg:#100f12; --code-ink:#e9e4de;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 16.5px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+
+.shell {
+  display: grid;
+  grid-template-columns: 262px minmax(0, 1fr);
+  gap: 48px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 28px 120px;
+}
+
+.masthead {
+  grid-column: 1 / -1;
+  border-bottom: 3px solid var(--ink);
+  padding: 40px 0 22px;
+  margin-bottom: 40px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.mark { display: flex; align-items: center; gap: 12px; }
+.mark .bars { display: flex; flex-direction: column; gap: 3px; }
+.mark .bars i { display: block; height: 4px; background: var(--ink-3); border-radius: 1px; }
+.mark .bars i:first-child { background: var(--accent); width: 30px; }
+.mark .bars i:nth-child(2) { width: 22px; }
+.mark .bars i:nth-child(3) { width: 26px; }
+.mark h1 { font-family: var(--display); font-weight: 700; font-size: 30px; letter-spacing: -.02em; margin: 0; line-height: 1; }
+.mark p { margin: 4px 0 0; font-size: 12px; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+.masthead .meta { font-size: 13px; color: var(--ink-3); text-align: right; line-height: 1.5; }
+.masthead .meta strong { color: var(--ink-2); font-weight: 600; }
+
+/* ------------------------------------------------------------------- toc */
+
+.toc { position: sticky; top: 24px; align-self: start; font-size: 13.5px; max-height: calc(100vh - 48px); overflow-y: auto; }
+.toc h2 {
+  font-family: var(--display); font-size: 10.5px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--accent); margin: 0 0 10px; font-weight: 600;
+}
+.toc h2 + ol { margin-bottom: 20px; }
+.toc h2.later { color: var(--ink-3); border-top: 1px solid var(--rule); padding-top: 15px; }
+.toc ol { list-style: none; margin: 0; padding: 0; }
+.toc a {
+  display: grid; grid-template-columns: 26px 1fr; gap: 4px;
+  padding: 5px 0 5px 10px; margin-left: -12px;
+  color: var(--ink-2); text-decoration: none; border-left: 2px solid transparent;
+}
+.toc a .n { font-family: var(--mono); font-size: 11px; color: var(--ink-3); padding-top: 2px; }
+.toc a:hover { color: var(--accent); border-left-color: var(--accent); }
+.toc .plain a { grid-template-columns: 1fr; }
+
+/* ------------------------------------------------------------------ main */
+
+main { max-width: 74ch; }
+
+.lede { font-size: 19px; line-height: 1.55; color: var(--ink-2); margin: 0 0 16px; }
+.lede strong { color: var(--ink); font-weight: 600; }
+
+.partbar {
+  margin: 54px 0 30px;
+  padding: 16px 20px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-left: 5px solid var(--accent);
+  border-radius: 0 6px 6px 0;
+}
+.partbar .k { font-family: var(--display); font-size: 10.5px; font-weight: 600; letter-spacing: .15em; text-transform: uppercase; color: var(--accent); }
+.partbar h2 { font-family: var(--display); font-size: 24px; font-weight: 700; letter-spacing: -.015em; margin: 3px 0 4px; }
+.partbar p { margin: 0; font-size: 14.5px; color: var(--ink-3); }
+.partbar:first-of-type { margin-top: 34px; }
+
+h2.step {
+  font-family: var(--display); font-size: 25px; font-weight: 700;
+  letter-spacing: -.015em; line-height: 1.15; text-wrap: balance;
+  margin: 0 0 6px; display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: baseline;
+}
+h2.step .n {
+  font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--accent);
+  letter-spacing: 0; background: var(--accent-wash); border-radius: 3px; padding: 3px 7px; align-self: center;
+}
+section.step { padding: 34px 0 6px; border-top: 1px solid var(--rule); margin-top: 34px; }
+section.step.first { border-top: none; margin-top: 0; padding-top: 0; }
+.sub { color: var(--ink-3); font-size: 14px; margin: 0 0 18px; padding-left: 42px; }
+
+h3 { font-family: var(--display); font-size: 16.5px; font-weight: 600; letter-spacing: -.005em; margin: 30px 0 8px; }
+p { margin: 0 0 14px; }
+a { color: var(--info); text-underline-offset: 2px; }
+a:hover { color: var(--accent); }
+ul, ol.rich { padding-left: 22px; margin: 0 0 16px; }
+li { margin-bottom: 7px; }
+li::marker { color: var(--ink-3); }
+strong { font-weight: 600; }
+
+kbd {
+  font-family: var(--mono); font-size: 12.5px; background: var(--surface-2);
+  border: 1px solid var(--rule-2); border-bottom-width: 2px; border-radius: 4px;
+  padding: 1px 6px; white-space: nowrap;
+}
+code:not(pre code) {
+  font-family: var(--mono); font-size: .88em; background: var(--surface-2);
+  border: 1px solid var(--rule); border-radius: 3px; padding: 1px 5px; word-break: break-word;
+}
+
+.cmd { position: relative; background: var(--code-bg); border-radius: 6px; margin: 0 0 18px; overflow: hidden; }
+.cmd pre { margin: 0; padding: 14px 56px 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.65; color: var(--code-ink); }
+.cmd .lbl { position: absolute; top: 0; left: 16px; font-family: var(--display); font-size: 9.5px; letter-spacing: .13em; text-transform: uppercase; color: #8d867f; background: var(--code-bg); padding: 3px 0 0; }
+.cmd.titled pre { padding-top: 26px; }
+.cmd button {
+  position: absolute; top: 8px; right: 8px; font-family: var(--body); font-size: 11px;
+  font-weight: 600; letter-spacing: .04em; color: #b9b2ab; background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.14); border-radius: 4px; padding: 4px 8px; cursor: pointer;
+}
+.cmd button:hover { color: #fff; background: rgba(255,255,255,.15); }
+.cmd button.done { color: #7fd8a5; border-color: rgba(127,216,165,.45); }
+
+.note { border-left: 3px solid var(--rule-2); background: var(--surface); border-radius: 0 5px 5px 0; padding: 14px 18px; margin: 0 0 18px; font-size: 15px; }
+.note p:last-child { margin-bottom: 0; }
+.note .tag { display: block; font-family: var(--display); font-size: 10.5px; font-weight: 600; letter-spacing: .13em; text-transform: uppercase; margin-bottom: 5px; }
+.note.why  { border-color: var(--info);   background: var(--info-wash); }
+.note.why .tag  { color: var(--info); }
+.note.warn { border-color: var(--warn);   background: var(--warn-wash); }
+.note.warn .tag { color: var(--warn); }
+.note.stop { border-color: var(--accent); background: var(--accent-wash); }
+.note.stop .tag { color: var(--accent-ink); }
+.note.ok   { border-color: var(--go);     background: var(--go-wash); }
+.note.ok .tag   { color: var(--go); }
+
+.tablewrap { overflow-x: auto; margin: 0 0 20px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 460px; }
+th { font-family: var(--display); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); text-align: left; padding: 0 14px 7px 0; border-bottom: 1.5px solid var(--rule-2); font-weight: 600; white-space: nowrap; }
+td { padding: 9px 14px 9px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+td:last-child, th:last-child { padding-right: 0; }
+td code { white-space: nowrap; }
+.num { font-variant-numeric: tabular-nums; font-family: var(--mono); font-size: 13px; white-space: nowrap; }
+
+table.roles td:first-child { font-weight: 600; white-space: nowrap; }
+table.roles .none { color: var(--go); font-weight: 600; }
+table.roles .one { color: var(--warn); font-weight: 600; }
+
+.checklist { list-style: none; padding: 0; margin: 0 0 8px; }
+.checklist li { display: flex; gap: 11px; align-items: baseline; padding: 9px 12px; border-bottom: 1px solid var(--rule); margin: 0; border-radius: 3px; }
+.checklist li:hover { background: var(--surface); }
+.checklist input { margin: 0; accent-color: var(--accent); width: 15px; height: 15px; flex: none; position: relative; top: 2px; }
+.checklist label { cursor: pointer; }
+.checklist input:checked + label { color: var(--ink-3); text-decoration: line-through; text-decoration-color: var(--rule-2); }
+.checklist .when { font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); border: 1px solid var(--rule-2); border-radius: 3px; padding: 1px 5px; flex: none; align-self: center; min-width: 62px; text-align: center; }
+.resetline { display: flex; justify-content: flex-end; }
+.resetline button { font: inherit; font-size: 12px; background: none; border: none; color: var(--ink-3); cursor: pointer; padding: 6px 0; text-decoration: underline; text-underline-offset: 3px; }
+.resetline button:hover { color: var(--accent); }
+
+.flow { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 20px; margin: 0 0 20px; overflow-x: auto; }
+.flow svg { display: block; min-width: 480px; width: 100%; height: auto; }
+
+.endnote { margin-top: 56px; padding-top: 22px; border-top: 3px solid var(--ink); font-size: 14px; color: var(--ink-3); }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+@media (max-width: 900px) {
+  .shell { grid-template-columns: 1fr; gap: 0; padding: 0 20px 80px; }
+  .toc { position: static; max-height: none; margin-bottom: 36px; border-bottom: 1px solid var(--rule); padding-bottom: 20px; }
+  main { max-width: none; }
+  .sub { padding-left: 0; }
+  h2.step { grid-template-columns: 1fr; gap: 6px; }
+  h2.step .n { justify-self: start; }
+}
+@media (prefers-reduced-motion: reduce) { * { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+/* --- click-by-click additions ------------------------------------------ */
+.youarehere{background:var(--go-wash);border:1px solid rgba(34,107,69,.30);
+  border-left:5px solid var(--go);border-radius:0 6px 6px 0;padding:15px 20px;margin:0 0 30px}
+.youarehere .k{font-family:var(--display);font-size:10.5px;font-weight:600;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--go);margin-bottom:4px}
+.youarehere p{margin:0;font-size:15px;color:var(--ink-2)}
+.youarehere strong{color:var(--ink)}
+
+ol.clicks{counter-reset:c;list-style:none;padding:0;margin:0 0 18px}
+ol.clicks>li{counter-increment:c;position:relative;padding:0 0 0 34px;margin-bottom:11px}
+ol.clicks>li::before{content:counter(c);position:absolute;left:0;top:1px;width:23px;height:23px;
+  border-radius:50%;background:var(--surface-2);border:1px solid var(--rule-2);color:var(--ink-2);
+  font-family:var(--mono);font-size:11.5px;font-weight:600;display:grid;place-items:center}
+
+.ui{font-weight:600;background:var(--surface-2);border:1px solid var(--rule-2);
+  border-radius:4px;padding:1px 7px;white-space:nowrap;font-size:.94em}
+.expect{display:block;margin-top:7px;font-size:14px;color:var(--go);font-style:italic}
+.expect::before{content:"\2192\00a0";font-style:normal}
+
+h2.step .n{color:#fff;background:var(--accent);padding:4px 8px;border-radius:4px}
+.sub{padding-left:52px}
+.toc a.done{color:var(--ink-3)}
+.toc a.done .n{color:var(--go)}
+.toc a{grid-template-columns:30px 1fr}
+table.roles td:first-child{font-weight:600;white-space:nowrap}
+table.roles .none{color:var(--go);font-weight:600}
+table.roles .one{color:var(--warn);font-weight:600}
+@media (max-width:900px){.sub{padding-left:0}}
+</style>
+<style>
+/* --- broadcast handbook additions ------------------------------------- */
+.scope{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--rule);
+  border-radius:6px;overflow:hidden;margin:0 0 26px;background:var(--surface)}
+.scope>div{padding:15px 18px}
+.scope>div+div{border-left:1px solid var(--rule)}
+.scope .k{font-family:var(--display);font-size:10.5px;font-weight:600;letter-spacing:.14em;
+  text-transform:uppercase;margin-bottom:7px}
+.scope .yes .k{color:var(--go)}
+.scope .no .k{color:var(--ink-3)}
+.scope ul{margin:0;padding-left:17px;font-size:14.5px}
+.scope li{margin-bottom:4px}
+.scope .no li{color:var(--ink-3)}
+@media (max-width:640px){.scope{grid-template-columns:1fr}.scope>div+div{border-left:none;border-top:1px solid var(--rule)}}
+
+/* the frame diagram: a 16:9 stage with each source drawn where it lands */
+.frame{position:relative;aspect-ratio:16/9;max-width:100%;background:var(--code-bg);
+  border:1px solid var(--rule-2);border-radius:5px;overflow:hidden;margin:0 0 8px;
+  font-family:var(--mono);font-size:10px;color:#cfc9c2}
+.frame span{position:absolute;border:1px dashed rgba(255,255,255,.34);border-radius:2px;
+  display:grid;place-items:center;text-align:center;line-height:1.35;padding:2px}
+.frame .s-bar   {left:0;top:0;width:100%;height:11.1%;background:rgba(209,59,46,.24);border-color:rgba(242,96,79,.6)}
+.frame .s-tower {right:0;top:11.1%;bottom:0;width:23.9%;background:rgba(14,107,125,.24);border-color:rgba(78,194,214,.6)}
+.frame .s-map   {left:1.6%;top:14.5%;width:31.2%;aspect-ratio:1;background:rgba(34,107,69,.22);border-color:rgba(87,198,140,.55)}
+.frame .s-card  {left:1.6%;bottom:5%;width:44%;height:23%;background:rgba(138,90,6,.26);border-color:rgba(224,168,63,.6)}
+.frame .s-battle{right:26.5%;bottom:5%;width:26%;height:17%;background:rgba(120,90,160,.26);border-color:rgba(178,150,214,.6)}
+.framecap{font-size:13px;color:var(--ink-3);margin:0 0 22px}
+
+.zlist{list-style:none;padding:0;margin:0 0 20px;font-size:14.5px}
+.zlist li{display:grid;grid-template-columns:26px 1fr;gap:10px;padding:7px 0;
+  border-bottom:1px solid var(--rule);margin:0}
+.zlist li:last-child{border-bottom:none}
+.zlist .z{font-family:var(--mono);font-size:11px;color:var(--ink-3);
+  border:1px solid var(--rule-2);border-radius:3px;text-align:center;height:19px;
+  display:grid;place-items:center;align-self:center}
+.zlist li:first-child .z{color:var(--accent);border-color:var(--accent)}
+
+table.src td:first-child{font-weight:600;white-space:nowrap}
+table.src .px{font-family:var(--mono);font-size:12.5px;white-space:nowrap;color:var(--ink-2)}
+table.opt td:first-child{font-family:var(--mono);font-size:12.5px;white-space:nowrap;font-weight:600}
+table.opt td:nth-child(2){font-family:var(--mono);font-size:12px;color:var(--ink-3);white-space:nowrap}
+
+.urlrow{display:flex;gap:9px;align-items:baseline;padding:9px 0;border-bottom:1px solid var(--rule);
+  font-size:14px;flex-wrap:wrap}
+.urlrow:last-of-type{border-bottom:none}
+/* --- overflow containment --------------------------------------------- *
+ * The grid track was sizing to min-content, so one long URL in a .cmd and
+ * one nowrap table cell were together dragging the whole page 483px wider
+ * than a phone screen. Scroll containers only stop contributing their
+ * content width once they are allowed to shrink, hence min-width:0.       */
+.shell{grid-template-columns:262px minmax(0,1fr)}
+@media (max-width:900px){.shell{grid-template-columns:minmax(0,1fr)}}
+.masthead,.toc,main,section.step,.tablewrap,.cmd,.cmd pre,.urlrow{min-width:0}
+.urlrow code{min-width:0;overflow-wrap:anywhere}
+@media (max-width:560px){
+  /* A long OBS button name in a nowrap chip is wider than a phone screen. */
+  .ui{white-space:normal}
+  .frame{font-size:8px}
+  .frame .s-tower{width:30%}
+  .urlrow b{min-width:0}
+}
+
+.toc a.on{color:var(--ink);border-left-color:var(--accent);font-weight:600}
+.toc a.on .n{color:var(--accent)}
+
+.urlrow b{font-weight:600;min-width:132px}
+.urlrow code{flex:1;min-width:230px}
+
+/* ======================================================================= *
+ * PRINT / PDF
+ *
+ * The screen layout is a sticky contents rail beside a 74ch column, which
+ * is wrong on paper in three ways: the rail cannot stick, the code blocks
+ * scroll sideways into nothing, and the wide tables get guillotined at the
+ * page edge. So print gets a real contents page, wrapped code, and tables
+ * that reflow instead of overflowing. Colour is forced on: the callouts
+ * carry meaning (red is stop, green is confirm) and a greyscale render of
+ * them is a worse document, not a cheaper one.
+ * ======================================================================= */
+@media print {
+  /* Always print the light palette, whatever the screen was set to. */
+  :root, :root[data-theme="dark"], :root:not([data-theme="light"]) {
+    --paper:#ffffff; --surface:#ffffff; --surface-2:#f2efec;
+    --ink:#141210; --ink-2:#3d3835; --ink-3:#6b645e;
+    --rule:#d8d2cb; --rule-2:#b8b0a8;
+    --accent:#c0342a; --accent-ink:#8f241c; --accent-wash:#fbeae8;
+    --info:#0c5f70; --info-wash:#e6f1f3;
+    --warn:#7d5205; --warn-wash:#fbf2de;
+    --go:#1d6040; --go-wash:#e6f2ea;
+    --code-bg:#1c1a18; --code-ink:#f0ebe5;
+    --shadow:none;
+  }
+  *, *::before, *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  @page { size: A4; margin: 15mm 14mm 16mm; }
+
+  html, body { background:#fff; font-size: 10.4pt; line-height: 1.5; }
+
+  /* One column, no sticky anything. */
+  .shell { display:block; max-width:none; margin:0; padding:0; }
+  main { max-width:none; }
+
+  .masthead { padding-top:0; margin-bottom:26px; break-after: avoid; }
+  .mark h1 { font-size: 26pt; }
+
+  /* The contents rail becomes a contents page. */
+  .toc {
+    position: static; max-height:none; overflow:visible;
+    columns: 2; column-gap: 26px; font-size: 9.5pt;
+    border-bottom:none; padding:0; margin:0 0 4px;
+    break-after: page;
+  }
+  .toc h2 { break-after: avoid; break-inside: avoid; }
+  .toc ol { break-inside: avoid; }
+  .toc a { border-left:none; margin-left:0; padding-left:0; grid-template-columns:24px 1fr; }
+  .toc a.on { font-weight:400; color: var(--ink-2); }
+  .toc a.on .n { color: var(--ink-3); }
+
+  /* Each numbered step starts a fresh page. It is a procedure: a step split
+     across a page turn is how someone misses a click. */
+  .partbar { break-before: page; break-inside: avoid; margin: 0 0 22px; }
+  .partbar:first-of-type { break-before: avoid; }
+  section.step { break-before: page; border-top:none; margin-top:0; padding-top:0; }
+  section.step.first, .partbar + section.step { break-before: avoid; }
+  h2.step { break-after: avoid; }
+  .sub { break-after: avoid; }
+  h3 { break-after: avoid; }
+
+  /* Keep meaningful blocks whole. */
+  .note, .cmd, .scope, .frame, .zlist, .urlrow, ol.clicks > li { break-inside: avoid; }
+  table { break-inside: auto; }
+  tr, th, td { break-inside: avoid; }
+  thead { display: table-header-group; }
+
+  /* Code has to wrap on paper. There is no sideways on a sheet of A4. */
+  .cmd { overflow: visible; }
+  .cmd button { display: none; }
+  .cmd pre {
+    white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word;
+    overflow: visible; padding: 12px 14px; font-size: 9pt;
+  }
+  .cmd.titled pre { padding-top: 22px; }
+
+  /* Tables reflow rather than run off the edge. */
+  .tablewrap { overflow: visible; }
+  table { min-width: 0 !important; font-size: 9.4pt; }
+  td code, .num, th { white-space: normal; }
+  table.src td:first-child, table.opt td:first-child { white-space: normal; }
+  .ui { white-space: normal; }
+
+  /* The run sheet is meant to be ticked with a pen. */
+  .checklist li { break-inside: avoid; padding: 7px 4px; }
+  .checklist input { -webkit-appearance:none; appearance:none;
+    width:12px; height:12px; border:1.2px solid var(--ink-2); border-radius:2px; background:#fff; }
+  .resetline { display:none; }
+
+  /* Print the destination of a link that is not already spelled out. */
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-family: var(--mono); font-size: 8pt; color: var(--ink-3);
+    overflow-wrap: anywhere;
+  }
+  a { color: var(--ink); text-decoration: underline; }
+
+  .endnote { break-inside: avoid; }
+}
+</style>
+<div class="shell">
+
+<header class="masthead">
+  <div class="mark">
+    <div class="bars"><i></i><i></i><i></i></div>
+    <div>
+      <h1>Broadcast Handbook</h1>
+      <p>PitWall &middot; stream graphics</p>
+    </div>
+  </div>
+  <div class="meta">
+    For whoever runs the stream<br>
+    <strong>About 30 minutes, once.</strong> Then five minutes a race night.
+  </div>
+</header>
+
+<nav class="toc">
+  <h2>Part 1 &middot; The app</h2>
+  <ol>
+    <li><a href="#s1"><span class="n">1</span><span>Download it</span></a></li>
+    <li><a href="#s2"><span class="n">2</span><span>Put it in a folder</span></a></li>
+    <li><a href="#s3"><span class="n">3</span><span>First run</span></a></li>
+    <li><a href="#s4"><span class="n">4</span><span>Rehearse with the demo</span></a></li>
+  </ol>
+  <h2>Part 2 &middot; The roster</h2>
+  <ol>
+    <li><a href="#s5"><span class="n">5</span><span>Point it at the league</span></a></li>
+    <li><a href="#s6"><span class="n">6</span><span>Pull the drivers in</span></a></li>
+    <li><a href="#s6b"><span class="n">6b</span><span>Save it as a league</span></a></li>
+  </ol>
+  <h2>Part 3 &middot; The OBS scene</h2>
+  <ol>
+    <li><a href="#s7"><span class="n">7</span><span>Add the six sources</span></a></li>
+    <li><a href="#s8"><span class="n">8</span><span>Lay out the frame</span></a></li>
+    <li><a href="#s9"><span class="n">9</span><span>Build the scenes</span></a></li>
+    <li><a href="#s10"><span class="n">10</span><span>Tune the tower</span></a></li>
+  </ol>
+  <h2>Part 4 &middot; Race night</h2>
+  <ol>
+    <li><a href="#s11"><span class="n">11</span><span>The run sheet</span></a></li>
+    <li><a href="#s12"><span class="n">12</span><span>When a graphic breaks</span></a></li>
+  </ol>
+  <h2 class="later">Reference</h2>
+  <ol>
+    <li><a href="#ref-src"><span class="n">&sect;</span><span>Every source URL</span></a></li>
+    <li><a href="#ref-opt"><span class="n">&sect;</span><span>Every URL option</span></a></li>
+    <li><a href="#ref-lan"><span class="n">&sect;</span><span>OBS on a second PC</span></a></li>
+  </ol>
+</nav>
+
+<main>
+
+<p class="lede">This is the whole job of putting live timing graphics on a race
+stream. <strong>One program on the streaming PC, six browser sources in OBS,
+and a roster that fills itself in.</strong> Nothing to install, nothing to
+compile, no Python.</p>
+
+<div class="scope">
+  <div class="yes">
+    <div class="k">This handbook covers</div>
+    <ul>
+      <li>Timing tower, session bar, driver cards</li>
+      <li>Battle box, track map, standings board</li>
+      <li>Driver photos, bios and socials on screen</li>
+      <li>Camera and replay control for directing</li>
+    </ul>
+  </div>
+  <div class="no">
+    <div class="k">Deliberately not covered</div>
+    <ul>
+      <li>The in-car HUD widgets</li>
+      <li>Per-driver telemetry overlays</li>
+      <li>Anything a driver installs</li>
+    </ul>
+  </div>
+</div>
+
+<div class="note why">
+  <span class="tag">The one requirement</span>
+  <p>The program reads live timing straight out of iRacing, so <strong>it has to
+  run on a Windows PC that is in the session</strong>, spectating or driving.
+  For a broadcast that is almost always the streaming PC itself, with the
+  operator joined as a spectator. If OBS lives on a different machine, that
+  still works over the local network: see <a href="#ref-lan">OBS on a second
+  PC</a> at the end.</p>
+</div>
+
+<div class="note ok">
+  <span class="tag">Good news about fullscreen</span>
+  <p>iRacing can stay in <strong>exclusive fullscreen</strong>. OBS draws browser
+  sources itself rather than over the game window, so the display mode does not
+  matter for a broadcast. (Windowed mode is only needed for the in-car HUD, which
+  this handbook does not use.)</p>
+</div>
+
+<!-- ================================================================ PART 1 -->
+<div class="partbar">
+  <div class="k">Part 1</div>
+  <h2>The app</h2>
+  <p>On the PC that will run OBS. About ten minutes, once.</p>
+</div>
+
+<section class="step first" id="s1">
+  <h2 class="step"><span class="n">1</span>Download it</h2>
+  <p class="sub">One file. No installer.</p>
+
+  <ol class="clicks">
+    <li>Open this page:
+      <div class="cmd" style="margin-top:8px"><button>Copy</button><pre>https://github.com/Ten10Motorsports/PitWall/releases/latest</pre></div>
+    </li>
+    <li>Scroll to the <span class="ui">Assets</span> section near the bottom.</li>
+    <li>Click <span class="ui">PitWall.exe</span> to download it.
+      <span class="expect">A roughly 9 MB file lands in your Downloads folder.</span>
+    </li>
+  </ol>
+
+  <div class="note warn">
+    <span class="tag">If the browser objects</span>
+    <p>Chrome and Edge distrust any .exe that has not been downloaded thousands
+    of times, which a league tool never will be. Click the <span class="ui">&hellip;</span>
+    next to the blocked download and choose <span class="ui">Keep</span>. In Edge
+    it may take two steps: <span class="ui">Keep</span>, then
+    <span class="ui">Keep anyway</span>.</p>
+  </div>
+</section>
+
+<section class="step" id="s2">
+  <h2 class="step"><span class="n">2</span>Put it in a folder</h2>
+  <p class="sub">Not in Downloads. It writes files next to itself.</p>
+
+  <ol class="clicks">
+    <li>Open <span class="ui">File Explorer</span> and go to your <span class="ui">C:</span> drive.</li>
+    <li>Right-click empty space, choose <span class="ui">New</span> then <span class="ui">Folder</span>, and name it <code>PitWall</code>.</li>
+    <li>Drag <code>PitWall.exe</code> from Downloads into <code>C:\PitWall</code>.
+      <span class="expect">C:\PitWall contains exactly one file.</span>
+    </li>
+  </ol>
+
+  <div class="note why">
+    <span class="tag">Why it matters</span>
+    <p>The program creates a <code>data</code> folder beside itself for the
+    roster, driver photos and cached track maps. Leave it in Downloads and those
+    end up scattered among your downloads, and a future version overwrites the
+    wrong thing. Put it in its own folder once and every later update is just
+    dropping in a newer .exe.</p>
+  </div>
+</section>
+
+<section class="step" id="s3">
+  <h2 class="step"><span class="n">3</span>First run</h2>
+  <p class="sub">Windows will interrupt you exactly once.</p>
+
+  <ol class="clicks">
+    <li>Double-click <code>PitWall.exe</code>.</li>
+    <li>A blue box appears saying <span class="ui">Windows protected your PC</span>.
+      Click the small grey <span class="ui">More info</span> link.</li>
+    <li>Click <span class="ui">Run anyway</span>.
+      <span class="expect">A black window opens and your browser opens the control panel.</span>
+    </li>
+  </ol>
+
+  <div class="note stop">
+    <span class="tag">Leave the black window open</span>
+    <p>That window <em>is</em> the program. Minimise it, never close it. Closing
+    it takes every graphic off your stream instantly. Windows only shows the blue
+    warning on the first run of each new version.</p>
+  </div>
+
+  <p>The control panel that opened is where everything is configured. Six tabs
+  across the top:</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Tab</th><th>What you use it for</th></tr></thead>
+      <tbody>
+        <tr><td><b>Status</b></td><td>Whether it is connected, what session, and the addresses to use from other devices.</td></tr>
+        <tr><td><b>Diagnostics</b></td><td>Tells you <em>why</em> something is not working. Read this first when a graphic is blank.</td></tr>
+        <tr><td><b>Overlays</b></td><td>Every OBS source with its URL, its exact size and a live preview.</td></tr>
+        <tr><td><b>Roster</b></td><td>Driver profiles. Pull them from the league repo.</td></tr>
+        <tr><td><b>League</b></td><td>Colours and branding, plus where the roster is read from.</td></tr>
+        <tr><td><b>Sim control</b></td><td>Camera cuts and replay scrubbing, for directing.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="step" id="s4">
+  <h2 class="step"><span class="n">4</span>Rehearse with the demo</h2>
+  <p class="sub">Build your entire scene with iRacing closed.</p>
+
+  <p>The program can run a synthetic 24-car race at Spa with pit stops, a safety
+  car and a chequered flag. Every graphic behaves exactly as it will on race
+  night. This is how you should do all of the OBS work below.</p>
+
+  <ol class="clicks">
+    <li>Close the program if it is running (close the black window).</li>
+    <li>Open <span class="ui">File Explorer</span> to <code>C:\PitWall</code>.</li>
+    <li>Click into the address bar at the top, type <code>cmd</code> and press <kbd>Enter</kbd>.
+      <span class="expect">A black window opens, already pointed at C:\PitWall.</span>
+    </li>
+    <li>Paste this in (right-click pastes in a command window) and press <kbd>Enter</kbd>:
+      <div class="cmd" style="margin-top:8px"><button>Copy</button><pre>PitWall.exe --demo --demo-roster --speed 14</pre></div>
+    </li>
+  </ol>
+
+  <div class="note warn">
+    <span class="tag">Those are double hyphens</span>
+    <p>The font on this page draws <code>--</code> as one long dash. It is really
+    two hyphens, three times. Use the <span class="ui">Copy</span> button and
+    paste, rather than typing it.</p>
+  </div>
+
+  <p>A full race now takes about five minutes. Run it again whenever you want
+  another one. <code>--demo-roster</code> fills in fake driver photos and bios so
+  you can see what the driver card will actually look like.</p>
+</section>
+<!-- ================================================================ PART 2 -->
+<div class="partbar">
+  <div class="k">Part 2</div>
+  <h2>The roster</h2>
+  <p>Driver photos, bios, teams and socials, pulled from the league. Two minutes, once.</p>
+</div>
+
+<section class="step" id="s5">
+  <h2 class="step"><span class="n">5</span>Point it at the league</h2>
+  <p class="sub">One URL, pasted once.</p>
+
+  <p>iRacing gives a broadcast a name, a number and a team. It gives you nothing
+  else. Everything a viewer actually wants on screen, the headshot, the country,
+  the hometown, the sponsor, the socials, comes from drivers filling in a sign-up
+  form. That collected roster lives in the league repository and this is how the
+  app reads it.</p>
+
+  <ol class="clicks">
+    <li>In the control panel, click the <span class="ui">League</span> tab.</li>
+    <li>Scroll down to <span class="ui">Roster storage</span>.</li>
+    <li>Open the <span class="ui">Mode</span> dropdown and choose the <span class="ui">url</span> option, the one described as a read-only pull from any URL.</li>
+    <li>In the <span class="ui">URL (url mode only)</span> box, paste this:
+      <div class="cmd" style="margin-top:8px"><button>Copy</button><pre>https://raw.githubusercontent.com/Ten10Motorsports/PitWall/main/roster.json</pre></div>
+    </li>
+    <li>Click <span class="ui">Save storage settings</span>.
+      <span class="expect">A confirmation line appears under the button.</span>
+    </li>
+  </ol>
+
+  <div class="note why">
+    <span class="tag">Read-only on purpose</span>
+    <p><em>url</em> mode pulls the roster down and never writes back. That is what
+    you want on a broadcast machine: you cannot accidentally overwrite the
+    league's roster mid-race, and you need no access token to set it up. Drivers
+    manage their own entries through the sign-up form.</p>
+  </div>
+</section>
+
+<section class="step" id="s6">
+  <h2 class="step"><span class="n">6</span>Pull the drivers in</h2>
+  <p class="sub">One button. Press it again before every race.</p>
+
+  <ol class="clicks">
+    <li>Click the <span class="ui">Roster</span> tab.</li>
+    <li>Scroll to <span class="ui">GitHub sync</span> and click <span class="ui">Pull from GitHub</span>.
+      <span class="expect">The driver list fills in and the count next to the Roster tab updates.</span>
+    </li>
+  </ol>
+
+  <p>Drivers are matched to cars by <strong>iRacing customer ID</strong>, not by
+  name. That means an entry survives a name change, and in a team race the card
+  follows whoever is actually in the car at the time.</p>
+
+  <div class="note stop">
+    <span class="tag">Add this to your pre-race routine</span>
+    <p>The roster does not refresh itself. Anyone who signed up since you last
+    pressed <span class="ui">Pull from GitHub</span> will show as a bare name and
+    number with no photo. <strong>Press it once, every race night, before you go
+    live.</strong> It takes a second and it is on the run sheet in step 11.</p>
+  </div>
+
+  <div class="note ok">
+    <span class="tag">Nobody has to sign up for the timing to work</span>
+    <p>This is the question every league asks and the answer is a firm no.
+    <strong>Names, car numbers, teams, car, class, iRating and licence all come
+    from iRacing itself</strong>, not from the roster. A driver who never touched
+    the sign-up form still appears correctly on the timing tower, the standings
+    board and the timing screen, in the right position with the right gaps.</p>
+    <p>Signing up adds one thing: the driver card. The headshot, country,
+    hometown, one-line bio, sponsor and socials only exist because a driver typed
+    them in. No sign-up means no card for that driver, and nothing else changes.</p>
+  </div>
+
+  <p>So an entry list showing zero drivers is not a fault, and it is not
+  something to fix before a race. It only means no photos yet.</p>
+</section>
+
+<section class="step" id="s6b">
+  <h2 class="step"><span class="n">6b</span>Save it as a league</h2>
+  <p class="sub">Do this once and race night becomes two clicks.</p>
+
+  <p>Steps 5 and 6 pointed the app at one roster. A <strong>league profile</strong>
+  saves that, plus the colours and the season calendar, under a name. Then
+  choosing a league applies all of it at once, and a broadcaster who covers three
+  different series never retypes a roster URL again.</p>
+
+  <ol class="clicks">
+    <li>Click the <span class="ui">Leagues</span> tab.</li>
+    <li>Click <span class="ui">New league</span>.</li>
+    <li>Type the league name, and set the <span class="ui">Accent colour</span>
+      to the league's colour. It becomes the highlight on every graphic.</li>
+    <li>Paste the roster URL from step 5 into <span class="ui">Roster URL</span>.</li>
+    <li>Under <span class="ui">Season calendar</span>, click
+      <span class="ui">Add a round</span> for each race. Fill in the date and the
+      circuit. Only the circuit is required.</li>
+    <li>Click <span class="ui">Save league</span>.
+      <span class="expect">The league appears as a card at the top of the tab.</span>
+    </li>
+  </ol>
+
+  <div class="note ok">
+    <span class="tag">What race night looks like now</span>
+    <p>Open the app, open the <span class="ui">Leagues</span> tab, click
+    <span class="ui">Go live</span> on the right league. That one click sets the
+    colours on every graphic, pulls the roster fresh from GitHub, and puts the
+    round and circuit on the session bar. The card already reads
+    <b>Next up</b> with tonight's round, worked out from the dates in the
+    calendar, so there is nothing to choose.</p>
+  </div>
+
+  <h3>Changing a track at five to eight</h3>
+  <p>Click <span class="ui">Edit</span> on the league that is on air, change the
+  circuit, and click <span class="ui">Save league</span>. It applies
+  immediately. Overlays that are already open in OBS follow along without being
+  reloaded, so this is safe to do while you are live.</p>
+
+  <p>The same is true of the accent colour and the league name. Anything you can
+  edit here changes on screen within a second, with no scene switch and no
+  browser source refresh.</p>
+
+  <div class="note why">
+    <span class="tag">Where profiles are kept</span>
+    <p>In <code>data\leagues.json</code>, next to <code>PitWall.exe</code>.
+    Dropping in a newer version of the app keeps them. Copying that one file to
+    another machine gives the co-commentator every league already set up.</p>
+  </div>
+</section>
+
+<!-- ================================================================ PART 3 -->
+<div class="partbar">
+  <div class="k">Part 3</div>
+  <h2>The OBS scene</h2>
+  <p>Six browser sources, laid out once and saved. About fifteen minutes.</p>
+</div>
+
+<section class="step" id="s7">
+  <h2 class="step"><span class="n">7</span>Add the six sources</h2>
+  <p class="sub">Same six clicks each time, with a different name, URL and size.</p>
+
+  <p>Start the demo race from step 4 first, so you can see what you are placing.
+  Then, in OBS, for each row of the table below:</p>
+
+  <ol class="clicks">
+    <li>In the <span class="ui">Sources</span> panel, click <span class="ui">+</span>.</li>
+    <li>Choose <span class="ui">Browser</span>.</li>
+    <li>Type the name from the table, click <span class="ui">OK</span>.</li>
+    <li>Clear the <span class="ui">URL</span> box and paste the URL from the table.</li>
+    <li>Set <span class="ui">Width</span> and <span class="ui">Height</span> to the size from the table.</li>
+    <li><strong>Untick <span class="ui">Shutdown source when not visible</span>.</strong></li>
+    <li><strong>Untick <span class="ui">Refresh browser when scene becomes active</span>.</strong></li>
+    <li>Click <span class="ui">OK</span>.
+      <span class="expect">The graphic appears in the preview with live demo data on it.</span>
+    </li>
+  </ol>
+
+  <div class="note stop">
+    <span class="tag">Those two tickboxes are the whole ballgame</span>
+    <p>Leave either one ticked and the source reloads every time you cut to that
+    scene. It reconnects, re-downloads the session, and rebuilds its history from
+    nothing, so for several seconds the tower shows dashes, the track map is
+    blank and the fastest lap is missing. Untick both and the sources stay
+    connected all race, whether they are on screen or not.</p>
+  </div>
+
+  <div class="tablewrap">
+    <table class="src">
+      <thead><tr><th>Name it</th><th>URL</th><th>Size</th></tr></thead>
+      <tbody>
+        <tr><td>Timing tower</td><td><code>http://localhost:8099/broadcast/tower.html</code></td><td class="px">460 &times; 1080</td></tr>
+        <tr><td>Session bar</td><td><code>http://localhost:8099/broadcast/session-bar.html</code></td><td class="px">1920 &times; 120</td></tr>
+        <tr><td>Driver card</td><td><code>http://localhost:8099/broadcast/driver-card.html?auto=1&amp;hold=8</code></td><td class="px">1920 &times; 1080</td></tr>
+        <tr><td>Battle box</td><td><code>http://localhost:8099/broadcast/battle.html</code></td><td class="px">1920 &times; 1080</td></tr>
+        <tr><td>Track map</td><td><code>http://localhost:8099/broadcast/trackmap.html</code></td><td class="px">600 &times; 600</td></tr>
+        <tr><td>Standings board</td><td><code>http://localhost:8099/broadcast/standings.html</code></td><td class="px">1920 &times; 1080</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note why">
+    <span class="tag">Why some are full frame</span>
+    <p>The driver card, the battle box and the standings board are 1920 &times; 1080
+    because they position themselves <em>inside</em> the frame. Give them the full
+    canvas and leave them at position 0,0 with no scaling. Do not crop them to
+    the visible graphic, you will cut off the animation as it slides in.</p>
+    <p>The tower and the track map are sized to their content, so those you place
+    yourself.</p>
+  </div>
+
+  <div class="note ok">
+    <span class="tag">Shortcut</span>
+    <p>The <span class="ui">Overlays</span> tab of the control panel lists all six
+    with a <span class="ui">Copy</span> button next to each URL and a live preview
+    on a fake video background. Faster than retyping from this table.</p>
+  </div>
+</section>
+
+<section class="step" id="s8">
+  <h2 class="step"><span class="n">8</span>Lay out the frame</h2>
+  <p class="sub">A layout that does not collide with itself.</p>
+
+  <p>This arrangement is the one to copy. It keeps the tower clear of the driver
+  card, keeps the battle box out of the tower, and leaves the centre of frame,
+  where the racing is, uncluttered.</p>
+
+  <div class="frame" role="img" aria-label="A 1920 by 1080 frame. The session bar spans the full width along the top. The timing tower runs down the entire right edge. The track map sits in the upper left. The driver card occupies the lower left. The battle box sits at lower right, just inside the tower.">
+    <span class="s-bar">Session bar &middot; full width, top</span>
+    <span class="s-tower">Timing<br>tower<br><br>right edge</span>
+    <span class="s-map">Track map</span>
+    <span class="s-card">Driver card &middot; lower left</span>
+    <span class="s-battle">Battle box</span>
+  </div>
+  <p class="framecap">Standings board is not shown: it is a full-frame takeover
+  used on its own scene, not alongside the racing.</p>
+
+  <h3>Exact positions</h3>
+  <p>Select a source and use <span class="ui">Edit</span> then
+  <span class="ui">Transform</span> then <span class="ui">Edit Transform</span> to
+  type these in rather than dragging.</p>
+
+  <div class="tablewrap">
+    <table class="src">
+      <thead><tr><th>Source</th><th>Position</th><th>Note</th></tr></thead>
+      <tbody>
+        <tr><td>Session bar</td><td class="px">0, 0</td><td>Spans the top.</td></tr>
+        <tr><td>Timing tower</td><td class="px">1460, 0</td><td>Flush to the right edge, full height.</td></tr>
+        <tr><td>Track map</td><td class="px">30, 150</td><td>Below the session bar, top left.</td></tr>
+        <tr><td>Driver card</td><td class="px">0, 0</td><td>Full frame. Do not move or scale.</td></tr>
+        <tr><td>Battle box</td><td class="px">0, 0</td><td>Full frame. Do not move or scale.</td></tr>
+        <tr><td>Standings board</td><td class="px">0, 0</td><td>Full frame, own scene.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Stacking order</h3>
+  <p>In the OBS <span class="ui">Sources</span> list, top of the list draws on top.
+  Drag them into this order:</p>
+
+  <ol class="zlist">
+    <li><span class="z">1</span><span><b>Driver card</b> &nbsp;above everything, it is the focus when it is up</span></li>
+    <li><span class="z">2</span><span><b>Battle box</b></span></li>
+    <li><span class="z">3</span><span><b>Session bar</b></span></li>
+    <li><span class="z">4</span><span><b>Timing tower</b></span></li>
+    <li><span class="z">5</span><span><b>Track map</b></span></li>
+    <li><span class="z">6</span><span><b>Game capture</b> &nbsp;the sim itself, at the bottom</span></li>
+  </ol>
+</section>
+<section class="step" id="s9">
+  <h2 class="step"><span class="n">9</span>Build the scenes</h2>
+  <p class="sub">Four scenes cover a whole race.</p>
+
+  <p>Build the layout above once, then right-click the scene and choose
+  <span class="ui">Duplicate</span> for the rest, deleting what each does not
+  need. Sources are shared, so all four stay connected the whole time.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Scene</th><th>What is in it</th><th>When you cut to it</th></tr></thead>
+      <tbody>
+        <tr><td><b>Pre-race</b></td><td>Standings board, session bar</td><td>Grid walk, entry list, the wait before green.</td></tr>
+        <tr><td><b>Race</b></td><td>The full layout from step 8</td><td>Your home scene. Ninety per cent of the show.</td></tr>
+        <tr><td><b>Clean</b></td><td>Game capture and session bar only</td><td>A big pass, a crash, anything you want unobstructed.</td></tr>
+        <tr><td><b>Results</b></td><td>Standings board, session bar</td><td>Chequered flag, podium, sign-off.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note why">
+    <span class="tag">Why a Clean scene earns its place</span>
+    <p>The moment worth watching is usually the moment your tower is covering.
+    A one-key cut to a bare frame and back is the difference between a stream that
+    feels directed and one that feels cluttered. Bind it to a hotkey in
+    <span class="ui">Settings</span> then <span class="ui">Hotkeys</span>.</p>
+  </div>
+
+  <h3>The driver card, and why it is set to auto</h3>
+  <p>The URL in step 7 ends with <code>?auto=1&amp;hold=8</code>. That means:
+  whenever the camera cuts to a different car, the card for that driver slides in
+  by itself, holds for eight seconds, and slides out. You never touch it.</p>
+  <p>If you would rather drive it manually, drop <code>?auto=1&amp;hold=8</code>
+  from the URL and toggle the source's eye icon instead. The card then shows
+  whichever car the camera is on, permanently, until you hide it.</p>
+
+  <h3>Directing from the control panel</h3>
+  <p>The <span class="ui">Sim control</span> tab cuts cameras and scrubs the replay
+  without alt-tabbing into iRacing. <span class="ui">Most exciting</span> jumps to
+  the closest fight on track, and <span class="ui">Last incident</span> is how you
+  find the thing you just missed. Replay transport has previous and next incident,
+  slow motion, and a <span class="ui">Jump to live</span> button.</p>
+</section>
+
+<section class="step" id="s10">
+  <h2 class="step"><span class="n">10</span>Tune the tower</h2>
+  <p class="sub">The main graphic. Configured entirely by its URL.</p>
+
+  <p>There is no settings dialog. Every option is a piece of the URL, which means
+  a scene collection carries its own look and you can have two towers configured
+  differently in the same show.</p>
+
+  <ol class="clicks">
+    <li>In the control panel, open the <span class="ui">Overlays</span> tab.</li>
+    <li>Scroll to <span class="ui">Timing tower option builder</span>.</li>
+    <li>Change the options. The <span class="ui">Live preview</span> below updates as you go.</li>
+    <li>Click <span class="ui">Copy URL</span>.</li>
+    <li>In OBS, double-click your <span class="ui">Timing tower</span> source and paste it over the URL.
+      <span class="expect">The tower redraws in the new configuration.</span>
+    </li>
+  </ol>
+
+  <h3>The settings that matter most</h3>
+  <div class="tablewrap">
+    <table class="opt">
+      <thead><tr><th>Option</th><th>Values</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>rows</td><td>a number</td><td>How many cars fit. 16 to 20 for a 1080 frame. Leave it off to show the whole field.</td></tr>
+        <tr><td>col</td><td>gap, int, last, best, delta</td><td>The main column. <code>gap</code> is to the leader, <code>int</code> is to the car ahead.</td></tr>
+        <tr><td>col2</td><td>same</td><td>A second column. <code>col=int&amp;col2=gap</code> is the broadcast standard.</td></tr>
+        <tr><td>group</td><td>class</td><td>Splits multiclass fields into class blocks. Essential for GT and prototype races, pointless for a one-make series.</td></tr>
+        <tr><td>focus</td><td>1</td><td>Scrolls the tower to keep the car the camera is on visible. Recommended.</td></tr>
+        <tr><td>names</td><td>short, surname, full, first</td><td>How names are printed.</td></tr>
+        <tr><td>scale</td><td>0.8 to 1.4</td><td>Overall size. Use this rather than scaling the source in OBS, which blurs the text.</td></tr>
+        <tr><td>accent</td><td>a hex colour</td><td>Your league colour. Write <code>#</code> as <code>%23</code>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>A good starting point for a multiclass league race:</p>
+  <div class="cmd"><button>Copy</button><pre>http://localhost:8099/broadcast/tower.html?rows=18&col=int&col2=gap&group=class&focus=1&names=surname</pre></div>
+
+  <div class="note stop">
+    <span class="tag">Never scale a browser source in OBS</span>
+    <p>Dragging a source's corner resamples an already rendered image and the text
+    goes soft, which on a timing tower is the difference between readable and not.
+    Set the source to its real size and use <code>scale</code> in the URL instead,
+    which re-renders the text at the new size.</p>
+  </div>
+
+  <h3>Gaps under caution</h3>
+  <p>When the field is bunched behind a safety car, the gaps between cars mean
+  nothing. Rather than print numbers that are wrong, the tower shows a dash until
+  the race goes green again. That is deliberate, not a fault.</p>
+</section>
+
+<!-- ================================================================ PART 4 -->
+<div class="partbar">
+  <div class="k">Part 4</div>
+  <h2>Race night</h2>
+  <p>Everything above is done once. This is the five minutes you repeat.</p>
+</div>
+
+<section class="step" id="s11">
+  <h2 class="step"><span class="n">11</span>The run sheet</h2>
+  <p class="sub">Ticks are saved in this browser, so you can reuse it every week.</p>
+
+  <ul class="checklist" id="checks">
+    <li><span class="when">-20 min</span><input type="checkbox" id="b1"><label for="b1">Start <code>PitWall.exe</code>. Leave the black window open, minimised.</label></li>
+    <li><span class="when">-20 min</span><input type="checkbox" id="b2"><label for="b2">Join the iRacing session as a spectator.</label></li>
+    <li><span class="when">-15 min</span><input type="checkbox" id="b3"><label for="b3">Control panel, <b>Roster</b> tab, <b>Pull from GitHub</b>. Check the driver count looks right.</label></li>
+    <li><span class="when">-15 min</span><input type="checkbox" id="b4"><label for="b4">Control panel, <b>Status</b> tab. It should name the track and the session.</label></li>
+    <li><span class="when">-10 min</span><input type="checkbox" id="b5"><label for="b5">Open OBS. Every source should already show live data with no reload.</label></li>
+    <li><span class="when">-10 min</span><input type="checkbox" id="b6"><label for="b6">Cut through all four scenes once and look at each one.</label></li>
+    <li><span class="when">-5 min</span><input type="checkbox" id="b7"><label for="b7">Check the driver card by cutting the camera between two cars.</label></li>
+    <li><span class="when">-5 min</span><input type="checkbox" id="b8"><label for="b8">Track map has drawn the circuit. If it is blank, it needs one clean lap first.</label></li>
+    <li><span class="when">go</span><input type="checkbox" id="b9"><label for="b9">Start streaming on the <b>Pre-race</b> scene.</label></li>
+    <li><span class="when">after</span><input type="checkbox" id="b10"><label for="b10">Cut to <b>Results</b> at the chequered flag, then close the black window.</label></li>
+  </ul>
+  <div class="resetline"><button id="resetchecks" type="button">Clear all ticks</button></div>
+
+  <div class="note why">
+    <span class="tag">The track map takes a lap</span>
+    <p>Nothing ships hand-drawn track art, which is why no circuit is ever
+    missing. The map is reconstructed from the position data the sim publishes,
+    so it draws itself during the first clean lap anyone completes and is then
+    cached forever for that track. On a track the machine has raced before it
+    appears instantly.</p>
+  </div>
+</section>
+
+<section class="step" id="s12">
+  <h2 class="step"><span class="n">12</span>When a graphic breaks</h2>
+  <p class="sub">Read Diagnostics before you touch anything else.</p>
+
+  <p>The <span class="ui">Diagnostics</span> tab checks the actual causes and names
+  the one that is biting you, rather than leaving you guessing. Open it first,
+  every time.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>What you see</th><th>What it is</th><th>Fix</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>Every source blank in OBS</b></td>
+          <td>The program is not running.</td>
+          <td>Check the black window still exists. Start <code>PitWall.exe</code> again, then right-click each source and choose <span class="ui">Refresh</span>.</td>
+        </tr>
+        <tr>
+          <td><b>Graphics load but show no cars</b></td>
+          <td>Connected to the app, but the app is not seeing the sim.</td>
+          <td>Open <span class="ui">Diagnostics</span>. Usually iRacing is not in a session yet, or <code>irsdkEnableMem</code> is off in the sim's <code>app.ini</code>, which Diagnostics will say in plain words.</td>
+        </tr>
+        <tr>
+          <td><b>Drivers have no photos</b></td>
+          <td>The roster has not been pulled since they signed up.</td>
+          <td><span class="ui">Roster</span> tab, <span class="ui">Pull from GitHub</span>. Graphics update live, no OBS restart.</td>
+        </tr>
+        <tr>
+          <td><b>A source goes blank on a scene cut</b></td>
+          <td>One of the two tickboxes in step 7 is still ticked.</td>
+          <td>Double-click the source and untick <span class="ui">Shutdown source when not visible</span> and <span class="ui">Refresh browser when scene becomes active</span>.</td>
+        </tr>
+        <tr>
+          <td><b>Back markers freeze or jump</b></td>
+          <td>The sim is not sending position data for the whole field.</td>
+          <td>On the iRacing website, set <b>Max Cars to 63</b> and your connection to 1 Mbit or faster. This affects every timing tool, not just this one.</td>
+        </tr>
+        <tr>
+          <td><b>Text looks soft</b></td>
+          <td>The source has been scaled in OBS.</td>
+          <td>Reset the transform to 100% and use <code>scale</code> in the URL instead.</td>
+        </tr>
+        <tr>
+          <td><b>Gaps show dashes</b></td>
+          <td>Working as intended, under caution.</td>
+          <td>Nothing. They return at green.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note ok">
+    <span class="tag">The safe reset</span>
+    <p>Close the black window, double-click <code>PitWall.exe</code> again, then in
+    OBS right-click each source and choose <span class="ui">Refresh</span>. Takes
+    about fifteen seconds and fixes almost everything. Your scenes, sizes and URLs
+    are stored by OBS and are not affected.</p>
+  </div>
+</section>
+<!-- ============================================================= REFERENCE -->
+<div class="partbar">
+  <div class="k">Reference</div>
+  <h2>Everything else</h2>
+  <p>Look these up when you need them. You do not need to read this part.</p>
+</div>
+
+<section class="step" id="ref-src">
+  <h2 class="step"><span class="n">&sect;</span>Every source URL</h2>
+  <p class="sub">All served by the app on port 8099.</p>
+
+  <div class="urlrow"><b>Control panel</b><code>http://localhost:8099/control</code></div>
+  <div class="urlrow"><b>Timing tower</b><code>http://localhost:8099/broadcast/tower.html</code></div>
+  <div class="urlrow"><b>Session bar</b><code>http://localhost:8099/broadcast/session-bar.html</code></div>
+  <div class="urlrow"><b>Driver card</b><code>http://localhost:8099/broadcast/driver-card.html</code></div>
+  <div class="urlrow"><b>Battle box</b><code>http://localhost:8099/broadcast/battle.html</code></div>
+  <div class="urlrow"><b>Track map</b><code>http://localhost:8099/broadcast/trackmap.html</code></div>
+  <div class="urlrow"><b>Standings board</b><code>http://localhost:8099/broadcast/standings.html</code></div>
+  <div class="urlrow"><b>Timing screen</b><code>http://localhost:8099/timing</code></div>
+
+  <h3>The timing screen</h3>
+  <p>Not an OBS source. It is a full timing monitor with sortable columns, sector
+  times coloured purple and green, lap history and lap charts. Open it on a second
+  monitor, a laptop or a tablet. This is the screen a co-commentator or a race
+  director should have in front of them. On another device on the same network,
+  use the address shown on the <span class="ui">Status</span> tab instead of
+  <code>localhost</code>.</p>
+</section>
+
+<section class="step" id="ref-opt">
+  <h2 class="step"><span class="n">&sect;</span>Every URL option</h2>
+  <p class="sub">Append with <code>?</code> for the first, <code>&amp;</code> for each one after.</p>
+
+  <h3>Works on every graphic</h3>
+  <div class="tablewrap">
+    <table class="opt">
+      <thead><tr><th>Option</th><th>Values</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>scale</td><td>0.5 to 2</td><td>Renders larger or smaller at full sharpness.</td></tr>
+        <tr><td>accent</td><td>hex, %23 for #</td><td>Primary league colour.</td></tr>
+        <tr><td>opacity</td><td>0 to 1</td><td>Overall transparency.</td></tr>
+        <tr><td>bg</td><td>hex</td><td>Solid background instead of transparent.</td></tr>
+        <tr><td>names</td><td>short, surname, full, first</td><td>Name format.</td></tr>
+        <tr><td>car</td><td>a car number</td><td>Locks the graphic to one car instead of following the camera.</td></tr>
+        <tr><td>server</td><td>a URL</td><td>Points the page at a different machine. See below.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Timing tower</h3>
+  <div class="tablewrap">
+    <table class="opt">
+      <thead><tr><th>Option</th><th>Values</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>rows</td><td>a number</td><td>Cars shown.</td></tr>
+        <tr><td>col</td><td>gap, int, last, best, delta</td><td>Main data column.</td></tr>
+        <tr><td>col2</td><td>same</td><td>Second data column.</td></tr>
+        <tr><td>group</td><td>class</td><td>Multiclass blocks.</td></tr>
+        <tr><td>class</td><td>a class name</td><td>Show only that class.</td></tr>
+        <tr><td>focus</td><td>1</td><td>Follow the camera car.</td></tr>
+        <tr><td>top</td><td>a number</td><td>Pin the top N positions while the rest scrolls.</td></tr>
+        <tr><td>header</td><td>0</td><td>Hide the column headings.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Driver card</h3>
+  <div class="tablewrap">
+    <table class="opt">
+      <thead><tr><th>Option</th><th>Values</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>auto</td><td>1</td><td>Appear by itself on every camera cut.</td></tr>
+        <tr><td>hold</td><td>seconds</td><td>How long it stays up in auto mode. Default 8.</td></tr>
+        <tr><td>pos</td><td>bl, br, tl, tr</td><td>Corner of the frame.</td></tr>
+        <tr><td>compact</td><td>1</td><td>Smaller card, no bio.</td></tr>
+        <tr><td>socials</td><td>0</td><td>Hide social handles.</td></tr>
+        <tr><td>stats</td><td>pos,last,best,gap,stops,inc</td><td>Which figures to print, in order.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Battle box</h3>
+  <div class="tablewrap">
+    <table class="opt">
+      <thead><tr><th>Option</th><th>Values</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>pick</td><td>closest, lead, class</td><td>Which fight to show.</td></tr>
+        <tr><td>max</td><td>seconds</td><td>Only show a fight closer than this. Default 2.0.</td></tr>
+        <tr><td>stack</td><td>1 to 6</td><td>Show several battles at once.</td></tr>
+        <tr><td>pos</td><td>bl, br, tl, tr</td><td>Corner of the frame.</td></tr>
+        <tr><td>hist</td><td>seconds</td><td>Window for the closing or opening trend.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Standings board, track map, session bar</h3>
+  <div class="tablewrap">
+    <table class="opt">
+      <thead><tr><th>Option</th><th>Values</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>title</td><td>text</td><td>Standings: heading, such as <code>Race Result</code>.</td></tr>
+        <tr><td>cols</td><td>1 or 2</td><td>Standings: split a big field into two columns.</td></tr>
+        <tr><td>show</td><td>pos,num,flag,name,team,best,gap,stops,inc</td><td>Standings: columns, in order.</td></tr>
+        <tr><td>podium</td><td>0</td><td>Standings: turn off podium highlighting.</td></tr>
+        <tr><td>labels</td><td>num, name, none</td><td>Track map: what is printed on each car dot.</td></tr>
+        <tr><td>trail</td><td>1</td><td>Track map: draw a short trail behind each car.</td></tr>
+        <tr><td>sectors</td><td>0</td><td>Track map: hide sector markers.</td></tr>
+        <tr><td>align</td><td>left, center, right</td><td>Session bar: alignment.</td></tr>
+        <tr><td>logo</td><td>an image URL</td><td>Session bar: your league logo.</td></tr>
+        <tr><td>items</td><td>comma list</td><td>Session bar: which blocks appear.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="step" id="ref-lan">
+  <h2 class="step"><span class="n">&sect;</span>OBS on a second PC</h2>
+  <p class="sub">Only if the sim and the stream are on different machines.</p>
+
+  <p>The program has to run on the machine that is in the iRacing session. If OBS
+  is on a different machine on the same network, run the program on the sim PC and
+  point OBS at it across the network.</p>
+
+  <ol class="clicks">
+    <li>On the <b>sim PC</b>, start <code>PitWall.exe</code> as usual.</li>
+    <li>Open the control panel and click the <span class="ui">Status</span> tab.</li>
+    <li>Under <span class="ui">Open on this machine or another device</span>, copy the address that starts with <code>http://192.168.</code> or similar.
+      <span class="expect">Something like http://192.168.1.20:8099</span>
+    </li>
+    <li>On the <b>OBS PC</b>, use that address in place of <code>http://localhost:8099</code> in every source URL.</li>
+  </ol>
+
+  <div class="cmd titled"><span class="lbl">Example</span><button>Copy</button><pre>http://192.168.1.20:8099/broadcast/tower.html?rows=18&col=int&col2=gap</pre></div>
+
+  <div class="note warn">
+    <span class="tag">Two things that will bite</span>
+    <p><b>The address can change.</b> Home routers hand out addresses that move
+    when a machine reboots. If every source goes blank one week for no reason,
+    re-read the <span class="ui">Status</span> tab. Giving the sim PC a fixed
+    address in your router settings makes the problem go away permanently.</p>
+    <p><b>Windows Firewall asks once.</b> The first time the program starts,
+    Windows may ask whether to allow it on the network. Tick
+    <span class="ui">Private networks</span> and allow it. Refuse, and no other
+    device on your network can reach it.</p>
+  </div>
+
+  <div class="note why">
+    <span class="tag">Both machines, same network</span>
+    <p>This works over a LAN, not over the internet. A commentator in another
+    city cannot reach it this way. If you need that, the working answer is a
+    tunnel from the sim PC, Cloudflare Tunnel or Tailscale, both free, both
+    giving you a URL that reaches the app from anywhere.</p>
+  </div>
+</section>
+
+<div class="endnote">
+  <p>Everything on this page is configured through the control panel at
+  <code>http://localhost:8099/control</code> and through URLs. Nothing is stored
+  in a database, nothing phones home, and the sim is only ever read from, never
+  written to.</p>
+</div>
+
+</main>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  document.querySelectorAll('.cmd button').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var pre = btn.parentElement.querySelector('pre');
+      if (!pre) return;
+      var text = pre.textContent;
+      function done() {
+        btn.textContent = 'Copied'; btn.classList.add('done');
+        setTimeout(function () { btn.textContent = 'Copy'; btn.classList.remove('done'); }, 1600);
+      }
+      function fallback() {
+        var ta = document.createElement('textarea');
+        ta.value = text; ta.style.cssText = 'position:fixed;opacity:0';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); done(); } catch (e) { btn.textContent = 'Select it'; }
+        ta.remove();
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, fallback);
+      } else { fallback(); }
+    });
+  });
+
+  var KEY = 'pitwall.broadcast.runsheet.v1';
+  var boxes = Array.prototype.slice.call(document.querySelectorAll('#checks input'));
+  function read() { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { return {}; } }
+  function write(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {} }
+  var saved = read();
+  boxes.forEach(function (b) {
+    if (saved[b.id]) b.checked = true;
+    b.addEventListener('change', function () {
+      var s = read();
+      if (b.checked) { s[b.id] = 1; } else { delete s[b.id]; }
+      write(s);
+    });
+  });
+  var rc = document.getElementById('resetchecks');
+  if (rc) rc.addEventListener('click', function () {
+    boxes.forEach(function (b) { b.checked = false; });
+    write({});
+  });
+
+  /* Highlight the section currently on screen in the contents rail. */
+  var links = {};
+  document.querySelectorAll('.toc a').forEach(function (a) { links[a.getAttribute('href').slice(1)] = a; });
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        var a = links[e.target.id];
+        if (a) a.classList.toggle('on', e.isIntersecting);
+      });
+    }, { rootMargin: '-10% 0px -70% 0px' });
+    document.querySelectorAll('section.step').forEach(function (s) { io.observe(s); });
+  }
+}());
+</script>
