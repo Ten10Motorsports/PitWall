@@ -45,15 +45,11 @@ def main() -> int:
         "--console",
         # Everything the app serves has to travel with it.
         "--add-data", f"web{SEP}web",
-        # Nothing here needs these, and leaving them out keeps the binary small
-        # and the startup fast.
+        # Only exclude what is provably unused. "email" and "xml" look like
+        # safe wins but are not: urllib.request and http.server both import
+        # email, so dropping it builds a binary that crashes on startup with
+        # ModuleNotFoundError. A few megabytes are not worth that.
         "--exclude-module", "tkinter",
-        "--exclude-module", "unittest",
-        "--exclude-module", "pydoc",
-        "--exclude-module", "doctest",
-        "--exclude-module", "email",
-        "--exclude-module", "xml",
-        "--exclude-module", "pdb",
         "--noconfirm",
         "--clean",
         os.path.join("server", "main.py"),
