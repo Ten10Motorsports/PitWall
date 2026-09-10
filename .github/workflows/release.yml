@@ -1,0 +1,112 @@
+# Builds PitWall.exe on GitHub's Windows runners and attaches it to a release.
+#
+# The point: nobody in your league installs Python, unzips anything, or ticks
+# a PATH checkbox. They download one file and double-click it.
+#
+# To cut a release:  git tag v1.0.0 && git push --tags
+# Or run this workflow by hand from the Actions tab.
+
+name: Build Windows app
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # PitWall itself has no dependencies. PyInstaller is only needed to
+      # produce the .exe, and only here on the build machine.
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pip pyinstaller
+
+      - name: Build
+        run: python scripts/build_exe.py
+
+      - name: Smoke test the build
+        shell: pwsh
+        run: |
+          # Start the app in demo mode and prove it actually serves before we
+          # ship it. A release that does not start is worse than no release.
+          $p = Start-Process -FilePath "dist\PitWall.exe" `
+               -ArgumentList "--demo","--no-browser","--port","8123" `
+               -PassThru -WindowStyle Hidden
+          Start-Sleep -Seconds 12
+          try {
+            $r = Invoke-WebRequest -Uri "http://127.0.0.1:8123/api/status" -UseBasicParsing -TimeoutSec 15
+            if ($r.StatusCode -ne 200) { throw "status endpoint returned $($r.StatusCode)" }
+            $j = $r.Content | ConvertFrom-Json
+            if (-not $j.connected) { throw "demo feed did not connect" }
+            Write-Host "OK - served $($j.ticks) ticks"
+
+            foreach ($path in @('/control','/timing','/register','/broadcast/tower.html','/hud/relative.html')) {
+              $pr = Invoke-WebRequest -Uri "http://127.0.0.1:8123$path" -UseBasicParsing -TimeoutSec 10
+              if ($pr.StatusCode -ne 200) { throw "$path returned $($pr.StatusCode)" }
+              Write-Host "OK - $path"
+            }
+          } finally {
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path package | Out-Null
+          Copy-Item dist\PitWall.exe package\
+          Copy-Item README.md package\
+          Copy-Item docs\setup-guide.html package\ -ErrorAction SilentlyContinue
+          Copy-Item docs\preview.html package\ -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path package\config | Out-Null
+          Copy-Item config\pitwall.example.json package\config\
+          # A PowerShell here-string cannot be indented, and YAML block
+          # scalars require indentation, so build the file from an array.
+          @(
+            'PitWall',
+            '',
+            '1. Double-click PitWall.exe',
+            '2. Your browser opens the control panel',
+            '',
+            'That is the whole install. No Python, no setup.',
+            '',
+            'To look around without iRacing running, open a command prompt here and run:',
+            '    PitWall.exe --demo --demo-roster',
+            '',
+            'setup-guide.html  - full setup walkthrough, open it in a browser',
+            'preview.html      - see every graphic working, no sim needed'
+          ) | Set-Content -Path package\START-HERE.txt -Encoding UTF8
+          Compress-Archive -Path package\* -DestinationPath PitWall-windows.zip -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PitWall-windows
+          path: PitWall-windows.zip
+          retention-days: 90
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            PitWall-windows.zip
+            dist/PitWall.exe
+          generate_release_notes: true
+          body: |
+            ## Install
+
+            Download **PitWall.exe**, put it in a folder, double-click it.
+
+            No Python. No setup. Nothing else to install.
+
+            Only one person in a league needs this — whoever is spectating or
+            driving in the session. Everyone else opens a web page.
