@@ -1,0 +1,136 @@
+name: Driver sign-up
+description: Register for the broadcast. Fills in your driver card, timing screen entry and country flag.
+title: "Driver sign-up: "
+labels: ["driver-signup"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Fill this in once. It takes two minutes and you never have to do it again —
+        submitting again with the same customer ID just updates your entry.
+
+        Everything except the first two fields is optional, but the more you add,
+        the better your driver card looks on the broadcast.
+
+  - type: input
+    id: iracingId
+    attributes:
+      label: iRacing customer ID
+      description: >
+        The number on the iRacing website under Account → My Account → Customer ID.
+        Numbers only. This is what links you to your car on track, so please get it right —
+        it is not your display name and not your car number.
+      placeholder: "123456"
+    validations:
+      required: true
+
+  - type: input
+    id: displayName
+    attributes:
+      label: Name to show on screen
+      placeholder: "Alex Fenwick"
+    validations:
+      required: true
+
+  - type: input
+    id: carNumber
+    attributes:
+      label: Car number
+      placeholder: "32"
+
+  - type: input
+    id: team
+    attributes:
+      label: Team
+      placeholder: "Corvid Performance"
+
+  - type: input
+    id: country
+    attributes:
+      label: Country
+      description: Two-letter code, for your flag. GB, US, DE, FR, NL, AU, BR, JP and so on.
+      placeholder: "GB"
+
+  - type: textarea
+    id: headshot
+    attributes:
+      label: Headshot
+      description: >
+        Drag an image straight into this box and GitHub will upload it, or paste a link
+        to one. Square works best. Anything roughly head-and-shoulders is fine.
+
+  - type: input
+    id: pronouns
+    attributes:
+      label: Pronouns
+      placeholder: "they/them"
+
+  - type: input
+    id: hometown
+    attributes:
+      label: Where you are from
+      placeholder: "Example City"
+
+  - type: textarea
+    id: bio
+    attributes:
+      label: One line about you
+      description: What commentary might say when the camera cuts to you. Keep it to a sentence or two.
+      placeholder: "Third season in the league. Two poles this year, still cannot get out of the last chicane cleanly."
+
+  - type: input
+    id: twitch
+    attributes:
+      label: Twitch
+      placeholder: "yourchannel"
+
+  - type: input
+    id: youtube
+    attributes:
+      label: YouTube
+      placeholder: "yourchannel"
+
+  - type: input
+    id: instagram
+    attributes:
+      label: Instagram
+      placeholder: "yourhandle"
+
+  - type: input
+    id: x
+    attributes:
+      label: X
+      placeholder: "yourhandle"
+
+  - type: input
+    id: discord
+    attributes:
+      label: Discord
+      placeholder: "yourname"
+
+  - type: input
+    id: sponsor
+    attributes:
+      label: Sponsor
+      description: Name of a sponsor to credit on your card, if you have one.
+
+  - type: textarea
+    id: sponsorLogo
+    attributes:
+      label: Sponsor logo
+      description: Drag an image in, or paste a link. A transparent PNG looks best.
+
+  - type: input
+    id: accentColor
+    attributes:
+      label: Accent colour
+      description: Hex colour for your card, for example #12b8ff. Leave blank to use your class colour.
+      placeholder: "#12b8ff"
+
+  - type: checkboxes
+    id: consent
+    attributes:
+      label: Confirm
+      options:
+        - label: I am happy for this to be shown on the league broadcast and timing screens.
+          required: true
