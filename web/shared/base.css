@@ -1,0 +1,260 @@
+/*
+ * PitWall - shared styling.
+ *
+ * Two audiences with opposite needs:
+ *   - Broadcast graphics sit on a transparent background over video. They need
+ *     weight, contrast and legibility at 1080p on a phone.
+ *   - The timing page and control panel are read close-up on a monitor. They
+ *     need density.
+ *
+ * Everything is driven by custom properties so a league can reskin the whole
+ * system by changing --accent, or by passing ?accent= on the browser source URL.
+ */
+
+:root {
+  --font: 'Inter', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', 'Cascadia Mono', ui-monospace, 'SF Mono', Consolas, monospace;
+
+  --accent: #e8443a;
+  --secondary: #12b8ff;
+  --scale: 1;
+  --panel-opacity: 0.92;
+
+  --bg: #0b0d10;
+  --panel: 12, 15, 19;
+  --panel-2: 22, 27, 34;
+  --line: rgba(255, 255, 255, 0.10);
+  --line-strong: rgba(255, 255, 255, 0.20);
+
+  --text: #f2f5f8;
+  --text-dim: #9aa6b4;
+  --text-faint: #5f6b7a;
+
+  --green: #35d07f;
+  --yellow: #ffcc33;
+  --red: #ff4d4d;
+  --blue: #3b82f6;
+  --white-flag: #f2f5f8;
+  --purple: #b06cff;
+  --pb: #35d07f;
+
+  --row-h: 30px;
+  --radius: 4px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Browser sources and HUD windows must be transparent. Pages that want a
+   background add class="solid" to <body>. */
+body.overlay {
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+}
+
+body.solid {
+  background: var(--bg);
+  min-height: 100vh;
+}
+
+.scale-root {
+  transform: scale(var(--scale));
+  transform-origin: top left;
+}
+
+/* --------------------------------------------------------------- primitives */
+
+.panel {
+  background: rgba(var(--panel), var(--panel-opacity));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  backdrop-filter: blur(6px);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1, 'zero' 1;
+  font-family: var(--mono);
+}
+
+.dim { color: var(--text-dim); }
+.faint { color: var(--text-faint); }
+.right { text-align: right; }
+.center { text-align: center; }
+.nowrap { white-space: nowrap; }
+.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hide { display: none !important; }
+
+/* ------------------------------------------------------------- car identity */
+
+.car-num {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  border-radius: 3px;
+  padding: 0 5px;
+  min-width: 34px;
+  display: inline-block;
+  color: #0b0d10;
+  background: var(--text);
+}
+
+.class-bar {
+  width: 4px;
+  align-self: stretch;
+  border-radius: 2px;
+  background: var(--text-faint);
+  flex: 0 0 4px;
+}
+
+.class-chip {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: #05070a;
+  text-transform: uppercase;
+}
+
+/* ------------------------------------------------------------------- states */
+
+.st-pit   { color: var(--yellow); }
+.st-stall { color: var(--yellow); font-weight: 700; }
+.st-off   { color: var(--red); }
+.st-out   { opacity: 0.45; }
+
+.row.is-pit   { background: rgba(255, 204, 51, 0.10); }
+.row.is-stall { background: rgba(255, 204, 51, 0.18); }
+.row.is-focus { background: rgba(255, 255, 255, 0.13); box-shadow: inset 2px 0 0 var(--accent); }
+.row.is-player { box-shadow: inset 3px 0 0 var(--secondary); }
+.row.is-out   { opacity: 0.4; }
+
+.fastest { color: var(--purple) !important; }
+.pb      { color: var(--pb); }
+
+/* -------------------------------------------------------------------- flags */
+
+.flag-green     { background: var(--green); color: #04120a; }
+.flag-yellow    { background: var(--yellow); color: #191204; }
+.flag-red       { background: var(--red); color: #fff; }
+.flag-white     { background: var(--white-flag); color: #0b0d10; }
+.flag-checkered {
+  background: repeating-conic-gradient(#fff 0% 25%, #111 0% 50%) 0 0 / 12px 12px;
+  color: #fff;
+  text-shadow: 0 0 3px #000;
+}
+.flag-none      { background: rgba(255,255,255,0.12); color: var(--text-dim); }
+
+@keyframes pw-flash { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
+.flashing { animation: pw-flash 1s ease-in-out infinite; }
+
+/* ---------------------------------------------------------- connection pill */
+
+#pw-status {
+  position: fixed;
+  right: 8px;
+  bottom: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--red);
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: 999;
+  pointer-events: none;
+}
+#pw-status.down { opacity: 1; background: var(--red); }
+.pw-debug #pw-status { opacity: 1; }
+.pw-debug #pw-status.up { background: var(--green); }
+
+.waiting {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+.waiting .card {
+  background: rgba(var(--panel), 0.94);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 14px 20px;
+  text-align: center;
+  max-width: 420px;
+}
+
+/* -------------------------------------------------------- forms and buttons */
+
+button, .btn {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: rgb(var(--panel-2));
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+button:hover, .btn:hover { background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.32); }
+button:active { transform: translateY(1px); }
+button.primary { background: var(--accent); border-color: transparent; color: #fff; font-weight: 600; }
+button.primary:hover { filter: brightness(1.1); background: var(--accent); }
+button.ghost { background: transparent; }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button.danger { border-color: rgba(255,77,77,0.5); color: var(--red); }
+
+input, select, textarea {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: rgba(0,0,0,0.35);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  width: 100%;
+}
+input:focus, select, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 5px; }
+textarea { resize: vertical; min-height: 72px; }
+
+.field { margin-bottom: 14px; }
+.hint { font-size: 11px; color: var(--text-faint); margin-top: 4px; line-height: 1.45; }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+@media (max-width: 680px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+/* ------------------------------------------------------------------ status */
+
+.badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 3px;
+  letter-spacing: 0.03em;
+}
+.badge.ok   { background: rgba(53,208,127,0.18); color: var(--green); }
+.badge.warn { background: rgba(255,204,51,0.18); color: var(--yellow); }
+.badge.fail { background: rgba(255,77,77,0.18); color: var(--red); }
+.badge.info { background: rgba(59,130,246,0.18); color: var(--blue); }
+
+/* ------------------------------------------------------------------ motion */
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

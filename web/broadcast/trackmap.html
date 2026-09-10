@@ -1,0 +1,349 @@
+<!doctype html>
+<!--
+  PitWall — Track Map
+  ---------------------------------------------------------------------------
+  Live track map. Designed at 600 x 600, transparent background, scales to any
+  square-ish browser source.
+
+  The outline comes from GET /api/trackmap, which PitWall builds itself from
+  GPS as soon as anybody drives a lap. While no map exists yet the page shows
+  nothing but a small "building track map…" note with the progress from
+  /api/status.
+
+  Query string options
+    labels=num|pos|none   what to print in each dot (default num)
+    size=N                dot radius, in units of the 600-unit design
+                          (default 11)
+    trail=1               draw a short fading trail behind the focus car
+    sectors=0             hide the sector boundary ticks
+    class=SHORT           only draw one class, e.g. ?class=GT3
+    names=…               (unused here, kept for URL consistency)
+    car=N                 force the focus car to car index N (pitwall.js)
+    scale=1.2 / accent=%23ff8800 / opacity=0.8   (PW.applyChrome)
+    server=URL            point at a PitWall on another machine (pitwall.js)
+
+  Dot colour is the class colour. Cars on pit road are drawn hollow and dim.
+  The focus car (broadcast camera, else the player) gets an accent ring.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PitWall — Track Map</title>
+<link rel="stylesheet" href="../shared/base.css">
+<style>
+  #root { width: 100%; height: 100vh; }
+  svg { display: block; width: 100%; height: 100%; overflow: visible; }
+  svg.hide { display: none; }
+
+  .track-shadow { fill: none; stroke: rgba(0, 0, 0, 0.65); stroke-width: 9; stroke-linejoin: round; }
+  .track-line   { fill: none; stroke: rgba(255, 255, 255, 0.42); stroke-width: 3; stroke-linejoin: round; }
+  .tick         { stroke: rgba(255, 255, 255, 0.45); stroke-width: 1.8; }
+  .tick.sf      { stroke: #ffffff; stroke-width: 3.4; }
+  .tick-shadow  { stroke: rgba(0, 0, 0, 0.55); stroke-width: 4.4; }
+
+  .car { transition: transform 0.12s linear; }
+  .car .dot { stroke: rgba(0, 0, 0, 0.75); stroke-width: 1.2; }
+  .car .lb {
+    font-family: var(--mono);
+    font-weight: 700;
+    text-anchor: middle;
+    dominant-baseline: central;
+    pointer-events: none;
+  }
+  .car.pit { opacity: 0.68; }
+  .car.pit .dot { fill: rgba(0, 0, 0, 0.55) !important; stroke-width: 2.6; }
+  .car.out { display: none; }
+  .ring { fill: none; stroke: var(--accent); stroke-width: 2.4; }
+  .trail { fill: none; stroke-linecap: round; stroke-opacity: 0.45; }
+
+  .note {
+    position: fixed;
+    left: 8px;
+    top: 8px;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    background: rgba(var(--panel), var(--panel-opacity));
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 5px 9px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .note.hide { display: none; }
+  .note .bar { width: 64px; height: 3px; background: rgba(255,255,255,0.14); border-radius: 2px; overflow: hidden; }
+  .note .bar i { display: block; height: 100%; background: var(--accent); width: 0; transition: width 0.4s linear; }
+  .note .pc { font-family: var(--mono); color: var(--text); }
+</style>
+</head>
+<body class="overlay">
+  <div id="pw-status"></div>
+  <div id="root" class="scale-root">
+    <svg id="map" class="hide" viewBox="0 0 600 600" preserveAspectRatio="xMidYMid meet">
+      <path id="shadow" class="track-shadow"></path>
+      <path id="line" class="track-line"></path>
+      <g id="ticks"></g>
+      <g id="trail"></g>
+      <g id="cars"></g>
+    </svg>
+  </div>
+  <div id="note" class="note hide">
+    <span>Building track map…</span>
+    <span class="bar"><i id="noteBar"></i></span>
+    <span class="pc" id="notePc"></span>
+  </div>
+
+<script src="../shared/pitwall.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  PW.applyChrome();
+
+  var OPT = {
+    labels:  (function (v) { return (v === 'pos' || v === 'none') ? v : 'num'; })(PW.opt('labels', 'num')),
+    size:    Math.max(3, PW.optNum('size', 11)),
+    trail:   PW.optBool('trail', false),
+    sectors: PW.optBool('sectors', true),
+    klass:   PW.opt('class', '')
+  };
+
+  var SVG = 'http://www.w3.org/2000/svg';
+  var VB = 600, PAD = 26;
+
+  var elMap = document.getElementById('map');
+  var elShadow = document.getElementById('shadow');
+  var elLine = document.getElementById('line');
+  var elTicks = document.getElementById('ticks');
+  var elTrail = document.getElementById('trail');
+  var elCars = document.getElementById('cars');
+  var elNote = document.getElementById('note');
+  var elNoteBar = document.getElementById('noteBar');
+  var elNotePc = document.getElementById('notePc');
+
+  var map = null;          // {pts: [[x,y]...] in viewBox units, bins}
+  var mapTrackId = null;
+  var fetching = false;
+  var trail = [];          // recent focus-car positions
+  var trailIdx = null;
+
+  /* ------------------------------------------------------------- the map */
+
+  function fitPoints(raw) {
+    // Points arrive normalised, but a synthetic/demo outline can run slightly
+    // outside 0..1, so always fit the real bounding box into the view box.
+    var minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity;
+    raw.forEach(function (p) {
+      if (p[0] < minx) minx = p[0];
+      if (p[0] > maxx) maxx = p[0];
+      if (p[1] < miny) miny = p[1];
+      if (p[1] > maxy) maxy = p[1];
+    });
+    var w = Math.max(1e-6, maxx - minx), h = Math.max(1e-6, maxy - miny);
+    var span = VB - PAD * 2;
+    var k = Math.min(span / w, span / h);
+    var ox = (VB - w * k) / 2 - minx * k;
+    var oy = (VB - h * k) / 2 - miny * k;
+    return raw.map(function (p) { return [p[0] * k + ox, p[1] * k + oy]; });
+  }
+
+  function loadMap() {
+    if (fetching) return;
+    fetching = true;
+    PW.api('/api/trackmap').then(function (d) {
+      fetching = false;
+      if (!d || !d.points || d.points.length < 8) { showNote(); return; }
+      map = { pts: fitPoints(d.points), bins: d.bins || d.points.length, name: d.name };
+      mapTrackId = PW.meta && PW.meta.track ? PW.meta.track.id : null;
+      drawTrack();
+      elNote.classList.add('hide');
+      render();
+    }).catch(function () {
+      fetching = false;
+      map = null;
+      elMap.classList.add('hide');
+      showNote();
+    });
+  }
+
+  function showNote() {
+    if (!PW.meta) return;                       // nothing at all before we connect
+    elNote.classList.remove('hide');
+    PW.api('/api/status').then(function (s) {
+      var pr = ((s || {}).trackmap || {}).progress;
+      var pct = Math.round(Math.max(0, Math.min(1, pr == null ? 0 : pr)) * 100);
+      elNoteBar.style.width = pct + '%';
+      elNotePc.textContent = pct + '%';
+    }).catch(function () {});
+  }
+
+  function pathFor(pts) {
+    var d = 'M' + pts[0][0].toFixed(1) + ' ' + pts[0][1].toFixed(1);
+    for (var i = 1; i < pts.length; i++) d += 'L' + pts[i][0].toFixed(1) + ' ' + pts[i][1].toFixed(1);
+    return d + 'Z';
+  }
+
+  function at(pct) {
+    if (!map) return null;
+    var n = map.pts.length;
+    var x = ((pct % 1) + 1) % 1 * n;
+    var i0 = Math.floor(x) % n;
+    var i1 = (i0 + 1) % n;
+    var f = x - Math.floor(x);
+    var a = map.pts[i0], b = map.pts[i1];
+    return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+  }
+
+  function tangent(pct) {
+    var n = map.pts.length;
+    var a = at(pct - 1.5 / n), b = at(pct + 1.5 / n);
+    var dx = b[0] - a[0], dy = b[1] - a[1];
+    var len = Math.sqrt(dx * dx + dy * dy) || 1;
+    return [dx / len, dy / len];
+  }
+
+  function drawTrack() {
+    if (!map) return;
+    var d = pathFor(map.pts);
+    elShadow.setAttribute('d', d);
+    elLine.setAttribute('d', d);
+
+    // sector boundaries + start/finish
+    var marks = [];
+    marks.push({ pct: 0, sf: true });
+    if (OPT.sectors) {
+      ((PW.meta && PW.meta.sectors) || []).forEach(function (p) {
+        if (p > 0.0005) marks.push({ pct: p, sf: false });
+      });
+    }
+    elTicks.innerHTML = '';
+    marks.forEach(function (m) {
+      var p = at(m.pct), t = tangent(m.pct);
+      var len = m.sf ? 11 : 7;
+      var nx = -t[1] * len, ny = t[0] * len;
+      var x1 = p[0] - nx, y1 = p[1] - ny, x2 = p[0] + nx, y2 = p[1] + ny;
+      elTicks.appendChild(line(x1, y1, x2, y2, 'tick tick-shadow'));
+      elTicks.appendChild(line(x1, y1, x2, y2, 'tick' + (m.sf ? ' sf' : '')));
+    });
+    elMap.classList.remove('hide');
+  }
+
+  function line(x1, y1, x2, y2, cls) {
+    var l = document.createElementNS(SVG, 'line');
+    l.setAttribute('x1', x1.toFixed(1));
+    l.setAttribute('y1', y1.toFixed(1));
+    l.setAttribute('x2', x2.toFixed(1));
+    l.setAttribute('y2', y2.toFixed(1));
+    l.setAttribute('class', cls);
+    return l;
+  }
+
+  /* ---------------------------------------------------------------- cars */
+
+  function makeCar() {
+    var g = document.createElementNS(SVG, 'g');
+    g.setAttribute('class', 'car');
+    var ring = document.createElementNS(SVG, 'circle');
+    ring.setAttribute('class', 'ring');
+    var dot = document.createElementNS(SVG, 'circle');
+    dot.setAttribute('class', 'dot');
+    var lb = document.createElementNS(SVG, 'text');
+    lb.setAttribute('class', 'lb');
+    g.appendChild(ring);
+    g.appendChild(dot);
+    g.appendChild(lb);
+    return g;
+  }
+
+  function updateCar(g, c, focusIdx) {
+    var d = PW.driver(c.i) || {};
+    var p = at(c.pct == null ? 0 : c.pct);
+    if (!p) return;
+    var r = OPT.size;
+    var pit = c.st === 'pit' || c.st === 'stall';
+    var colour = d.classColor || '#cccccc';
+
+    g.style.transform = 'translate(' + p[0].toFixed(1) + 'px,' + p[1].toFixed(1) + 'px)';
+
+    var ring = g.children[0], dot = g.children[1], lb = g.children[2];
+    var isFocus = focusIdx != null && c.i === focusIdx;
+    ring.setAttribute('r', (r + 3.4).toFixed(1));
+    ring.style.display = isFocus ? '' : 'none';
+    dot.setAttribute('r', r.toFixed(1));
+    dot.setAttribute('fill', colour);
+    dot.setAttribute('stroke', pit ? colour : 'rgba(0,0,0,0.75)');
+
+    var txt = OPT.labels === 'none' ? ''
+      : (OPT.labels === 'pos' ? (c.p > 0 ? String(c.p) : '') : (d.num != null ? String(d.num) : ''));
+    if (lb.textContent !== txt) lb.textContent = txt;
+    lb.setAttribute('font-size', (r * (txt.length >= 3 ? 0.86 : 1.12)).toFixed(1));
+    lb.setAttribute('fill', pit ? colour : '#05070a');
+
+    var cls = 'car' + (pit ? ' pit' : '') + (c.st === 'out' ? ' out' : '');
+    if (g.getAttribute('class') !== cls) g.setAttribute('class', cls);
+  }
+
+  function drawTrail(focusIdx) {
+    elTrail.innerHTML = '';
+    if (!OPT.trail || focusIdx == null) { trail = []; return; }
+    var c = PW.carByIdx(focusIdx);
+    if (!c || c.pct == null) return;
+    var d = PW.driver(focusIdx) || {};
+    var p = at(c.pct);
+    if (trailIdx !== focusIdx) { trail = []; trailIdx = focusIdx; }
+    var lastP = trail[trail.length - 1];
+    var far = lastP && (Math.abs(lastP[0] - p[0]) + Math.abs(lastP[1] - p[1])) > 60;
+    if (far) trail = [];                        // crossed the line, or camera cut
+    if (!lastP || Math.abs(lastP[0] - p[0]) + Math.abs(lastP[1] - p[1]) > 3) trail.push(p);
+    while (trail.length > 20) trail.shift();
+    if (trail.length < 2) return;
+    for (var i = 1; i < trail.length; i++) {
+      var a = trail[i - 1], b = trail[i];
+      var f = i / trail.length;
+      var seg = line(a[0], a[1], b[0], b[1], 'trail');
+      seg.setAttribute('stroke', d.classColor || '#ffffff');
+      seg.setAttribute('stroke-width', (OPT.size * (0.2 + 0.55 * f)).toFixed(2));
+      seg.setAttribute('stroke-opacity', (0.08 + 0.6 * f).toFixed(2));
+      elTrail.appendChild(seg);
+    }
+  }
+
+  /* -------------------------------------------------------------- render */
+
+  function render() {
+    if (!PW.meta || !PW.tick) { elMap.classList.add('hide'); elNote.classList.add('hide'); return; }
+    if (!map) { elMap.classList.add('hide'); return; }
+
+    var focusIdx = PW.focusIdx();
+    var cars = PW.cars().filter(function (c) {
+      if (c.pct == null || (c.p <= 0 && c.lp <= 0)) return false;
+      if (!OPT.klass) return true;
+      var d = PW.driver(c.i);
+      return d && String(d.classShort).toLowerCase() === OPT.klass.toLowerCase();
+    });
+    // draw the focus car last so it sits on top
+    cars.sort(function (a, b) {
+      return (a.i === focusIdx ? 1 : 0) - (b.i === focusIdx ? 1 : 0);
+    });
+
+    drawTrail(focusIdx);
+    PW.reconcile(elCars, cars,
+      function (c) { return c.i; },
+      makeCar,
+      function (g, c) { updateCar(g, c, focusIdx); });
+    elMap.classList.remove('hide');
+  }
+
+  PW.on('meta', function () {
+    var id = PW.meta && PW.meta.track ? PW.meta.track.id : null;
+    if (!map || id !== mapTrackId) loadMap();
+    else drawTrack();
+  });
+  PW.on('tick', render);
+  setInterval(function () { if (!map) loadMap(); }, 5000);
+  PW.start({ sub: ['meta', 'tick'], rate: 15, name: 'trackmap' });
+})();
+</script>
+</body>
+</html>

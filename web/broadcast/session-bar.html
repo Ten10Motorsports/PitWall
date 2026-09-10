@@ -1,0 +1,341 @@
+<!doctype html>
+<!--
+  PitWall — Session Bar
+  ---------------------------------------------------------------------------
+  A horizontal strip for the top or bottom of the stream. Designed at
+  1920 x 120; it scales to whatever the browser source is (type sizes follow
+  the source height) and reflows down to much narrower widths.
+
+  Query string options
+    align=left|center   where the blocks sit in the strip (default left)
+    items=a,b,c         which blocks appear, and in what order. Any of:
+                          league  league name / logo (hidden if not configured)
+                          track   track name + configuration
+                          session session name and state
+                          flag    the big flag / state indicator
+                          laps    laps completed / total, or the time remaining
+                          fastest fastest lap of the session (driver + time)
+                          weather air / track temperature, wetness, rain
+                          cautions number of cautions so far
+                          sof     strength of field
+                        default: league,track,session,flag,laps,fastest,
+                                 weather,cautions,sof
+    compact=1           short version: labels hidden, tighter blocks
+    logo=URL            image URL override for the league logo
+    names=full|short|surname|abbrev   name style for the fastest-lap driver
+    scale=1.2 / accent=%23ff8800 / opacity=0.8   (PW.applyChrome)
+    server=URL          point at a PitWall on another machine (pitwall.js)
+
+  The flag block is a full-height colour block using the .flag-* classes from
+  base.css. It flashes while the flag is red, and for the first 10 seconds of
+  a caution.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PitWall — Session Bar</title>
+<link rel="stylesheet" href="../shared/base.css">
+<style>
+  html { font-size: clamp(9px, calc(100vh / 7.5), 26px); }
+  body.overlay { display: block; }
+
+  #root { width: 100%; height: 100vh; }
+
+  .bar {
+    display: flex;
+    align-items: stretch;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    background: rgba(var(--panel), var(--panel-opacity));
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    backdrop-filter: blur(6px);
+  }
+  .bar.center { justify-content: center; }
+  .bar.empty { display: none; }
+
+  .blk {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.15rem;
+    padding: 0 1.05rem;
+    border-right: 1px solid var(--line);
+    flex: 0 0 auto;          /* only the track name gives way when space is tight */
+    min-width: 0;
+    white-space: nowrap;
+  }
+  .blk.track { flex: 0 1 auto; }
+  .blk:last-child { border-right: 0; }
+
+  .lbl {
+    font-size: 0.62rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    line-height: 1;
+  }
+  .val {
+    font-size: 1.35rem;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: 0.005em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .val .sub {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    margin-left: 0.45rem;
+    letter-spacing: 0.02em;
+  }
+  .val .unit { font-size: 0.8rem; font-weight: 600; color: var(--text-dim); margin-left: 0.32rem; }
+  .val .sep { color: var(--text-faint); margin: 0 0.35rem; font-weight: 500; }
+
+  /* league ---------------------------------------------------------- */
+  .blk.league { flex-direction: row; align-items: center; gap: 0.7rem; padding-left: 1.2rem; }
+  .blk.league img { height: 3.2rem; max-width: 12rem; object-fit: contain; display: block; }
+  .blk.league .lname {
+    font-size: 1.25rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /* flag ------------------------------------------------------------ */
+  .blk.flagblk {
+    padding: 0;
+    border-right: 0;
+    align-items: center;
+    justify-content: center;
+    min-width: 11rem;
+    gap: 0.1rem;
+  }
+  .blk.flagblk .fname {
+    font-size: 1.5rem;
+    font-weight: 900;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    padding-left: 0.2em;
+  }
+  .blk.flagblk .fsub {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    opacity: 0.72;
+  }
+
+  /* fastest lap ------------------------------------------------------ */
+  .blk.fastest .val { color: var(--purple); }
+  .blk.fastest .who { color: var(--text); font-weight: 700; }
+
+  .wx { display: flex; align-items: baseline; gap: 0.75rem; }
+  .wx .wet { color: var(--text-dim); font-weight: 600; font-size: 1rem; }
+  .wx .wet.wet-on { color: var(--secondary); }
+
+  /* compact ---------------------------------------------------------- */
+  .compact .lbl { display: none; }
+  .compact .blk { padding: 0 0.8rem; }
+  .compact .val { font-size: 1.15rem; }
+  .compact .blk.flagblk { min-width: 8rem; }
+  .compact .blk.flagblk .fname { font-size: 1.2rem; letter-spacing: 0.14em; }
+  .compact .blk.flagblk .fsub { display: none; }
+  .compact .blk.league img { height: 2.4rem; }
+</style>
+</head>
+<body class="overlay">
+  <div id="pw-status"></div>
+  <div id="root" class="scale-root">
+    <div id="bar" class="bar empty"></div>
+  </div>
+
+<script src="../shared/pitwall.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  PW.applyChrome();
+
+  var DEFAULT_ITEMS = ['league', 'track', 'session', 'flag', 'laps',
+                       'fastest', 'weather', 'cautions', 'sof'];
+
+  var OPT = {
+    align:   PW.opt('align', 'left') === 'center' ? 'center' : 'left',
+    items:   PW.optList('items', DEFAULT_ITEMS),
+    compact: PW.optBool('compact', false),
+    logo:    PW.opt('logo', '')
+  };
+
+  var bar = document.getElementById('bar');
+  var cautionSince = null;
+  var wasCaution = false;
+
+  var FLAGNAME = {
+    green: 'GREEN', yellow: 'YELLOW', red: 'RED', white: 'WHITE',
+    checkered: 'CHEQUERED', blue: 'BLUE', black: 'BLACK', none: 'TRACK'
+  };
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (ch) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch];
+    });
+  }
+  function lbl(t) { return '<div class="lbl">' + esc(t) + '</div>'; }
+  function val(html) { return '<div class="val">' + html + '</div>'; }
+
+  /* ------------------------------------------------------------- blocks */
+
+  var BLOCKS = {
+
+    league: function () {
+      var lg = PW.league || {};
+      var logo = OPT.logo || lg.logo || '';
+      var name = lg.name || '';
+      if (!logo && !name) return null;                 // nothing configured
+      var h = '';
+      if (logo) h += '<img src="' + esc(logo) + '" alt="">';
+      if (name) h += '<span class="lname">' + esc(name) + '</span>';
+      return { cls: 'league', html: h };
+    },
+
+    track: function () {
+      var t = (PW.meta && PW.meta.track) || {};
+      if (!t.name) return null;
+      var h = esc(t.name);
+      if (t.config) h += '<span class="sub">' + esc(t.config) + '</span>';
+      return { cls: 'track', html: lbl('Circuit') + val(h) };
+    },
+
+    session: function (s) {
+      var name = s.name || s.type || '';
+      if (!name) return null;
+      var h = esc(name);
+      if (s.state && s.state !== 'Racing') h += '<span class="sub">' + esc(s.state) + '</span>';
+      return { cls: 'session', html: lbl('Session') + val(h) };
+    },
+
+    flag: function (s) {
+      var caution = !!s.caution;
+      var flag = caution ? 'yellow' : (s.flag || 'none');
+      var name = caution ? 'CAUTION' : (FLAGNAME[flag] || String(flag).toUpperCase());
+      var sub = caution ? 'Full course' : (s.state || '');
+      var flash = flag === 'red' ||
+                  (caution && cautionSince != null && (Date.now() - cautionSince) < 10000);
+      return {
+        cls: 'flagblk flag-' + flag + (flash ? ' flashing' : ''),
+        html: '<div class="fname">' + esc(name) + '</div>' +
+              (sub ? '<div class="fsub">' + esc(sub) + '</div>' : '')
+      };
+    },
+
+    laps: function (s) {
+      var h, label;
+      if (s.lapsTotal) {
+        label = 'Lap';
+        var done = Math.min(s.lapsTotal, Math.max(0, s.raceLaps || 0));
+        h = '<span class="num">' + done + '</span><span class="sep">/</span>' +
+            '<span class="num">' + s.lapsTotal + '</span>';
+      } else if (s.timeRemain != null) {
+        label = 'Remaining';
+        h = '<span class="num">' + PW.fmtClock(s.timeRemain) + '</span>';
+      } else if (s.lapsRemain != null) {
+        label = 'To go';
+        h = '<span class="num">' + s.lapsRemain + '</span><span class="unit">laps</span>';
+      } else if (s.time != null) {
+        label = 'Elapsed';
+        h = '<span class="num">' + PW.fmtClock(s.time) + '</span>';
+      } else {
+        return null;
+      }
+      return { cls: 'laps', html: lbl(label) + val(h) };
+    },
+
+    fastest: function (s, t) {
+      var f = t.fastest || {};
+      if (!f.time) return null;
+      var who = (f.idx != null && PW.driver(f.idx)) ? PW.displayName(f.idx) : (f.name || '');
+      return {
+        cls: 'fastest',
+        html: lbl('Fastest lap') +
+              val('<span class="who">' + esc(who) + '</span><span class="sep">·</span>' +
+                  '<span class="num">' + PW.fmtLap(f.time) + '</span>')
+      };
+    },
+
+    weather: function (s) {
+      if (s.airTemp == null && s.trackTemp == null) return null;
+      var wet = s.trackWetness || '';
+      var rain = (s.precip != null && s.precip > 0)
+        ? '<span class="wet wet-on num">' + Math.round(s.precip * 100) + '% rain</span>' : '';
+      var h = '<div class="wx">' +
+        '<span><span class="num">' + fmtTemp(s.airTemp) + '</span><span class="unit">air</span></span>' +
+        '<span><span class="num">' + fmtTemp(s.trackTemp) + '</span><span class="unit">track</span></span>' +
+        (wet && !rain ? '<span class="wet' + (wet.toLowerCase() === 'dry' ? '' : ' wet-on') + '">' +
+                        esc(wet) + '</span>' : '') + rain +
+        '</div>';
+      return { cls: 'weather', html: lbl('Weather') + val(h) };
+    },
+
+    cautions: function (s) {
+      if (s.cautions == null) return null;
+      return {
+        cls: 'cautions',
+        html: lbl('Cautions') + val('<span class="num">' + s.cautions + '</span>' +
+              (s.cautionLaps ? '<span class="unit">(' + s.cautionLaps + ' laps)</span>' : ''))
+      };
+    },
+
+    sof: function () {
+      var sof = PW.meta && PW.meta.sof;
+      if (!sof) return null;
+      return { cls: 'sof', html: lbl('Strength of field') + val('<span class="num">' + sof + '</span>') };
+    }
+  };
+
+  function fmtTemp(v) {
+    return v == null ? '–' : (Math.round(v * 10) / 10).toFixed(1) + '°';
+  }
+
+  /* ------------------------------------------------------------- render */
+
+  function render() {
+    if (!PW.meta || !PW.tick) { bar.classList.add('empty'); return; }
+    var s = PW.tick.session || {};
+
+    if (s.caution && !wasCaution) cautionSince = Date.now();
+    if (!s.caution) cautionSince = null;
+    wasCaution = !!s.caution;
+
+    var items = [];
+    OPT.items.forEach(function (name) {
+      var fn = BLOCKS[name];
+      if (!fn) return;
+      var b = fn(s, PW.tick);
+      if (b) items.push({ key: name, cls: b.cls, html: b.html });
+    });
+
+    bar.classList.toggle('empty', items.length === 0);
+    bar.classList.toggle('center', OPT.align === 'center');
+    document.body.classList.toggle('compact', OPT.compact);
+
+    PW.reconcile(bar, items,
+      function (i) { return i.key; },
+      function () { return PW.el('div', 'blk'); },
+      function (node, i) {
+        var cls = 'blk ' + i.cls;
+        if (node.className !== cls) node.className = cls;
+        if (node._html !== i.html) { node.innerHTML = i.html; node._html = i.html; }
+      });
+  }
+
+  PW.on('meta', render);
+  PW.on('tick', render);
+  PW.on('league', render);
+  PW.start({ sub: ['meta', 'tick'], rate: 5, name: 'session-bar' });
+})();
+</script>
+</body>
+</html>

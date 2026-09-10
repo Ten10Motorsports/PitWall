@@ -1,0 +1,293 @@
+<!doctype html>
+<!--
+  PitWall — Delta (in-car HUD)
+  ---------------------------------------------------------------------------
+  Live lap delta: how far up or down you are on the reference lap, right now.
+  A wide bar with a hard zero in the middle fills LEFT and GREEN when you are
+  up on the reference and RIGHT and RED when you are down, so the direction is
+  readable out of the corner of an eye without reading the number.
+
+  Under it, the last completed lap broken into sectors: each block is that
+  sector against your personal best for it, so you can see where the lap was
+  won or lost rather than only that it was.
+
+  The three delta channels iRacing publishes are all available:
+    ref=session   `player.delta`        against the session's best lap (default)
+    ref=best      `player.deltaBest`    against your own best lap
+    ref=optimal   `player.deltaOptimal` against your theoretical best
+  When the sim marks the delta invalid (out lap, off track, no reference yet)
+  the bar empties and the number becomes a dash rather than a stale value.
+
+  Recommended window: 320 x 112.
+
+  Query string options
+    ref=best|optimal|session   which delta to display (default session)
+    bar=0        numbers only, no bar
+    range=N      seconds at full scale either side of zero (default 2)
+    sectors=0    hide the sector blocks
+    w=PX         widget width (default 320)
+    car=N        force the sector comparison onto car index N
+    scale=1.2    overall scale            (PW.applyChrome)
+    opacity=0.8  panel opacity            (PW.applyChrome)
+    server=URL   point at a PitWall on another machine (pitwall.js)
+
+  Colour is information only: green up on the reference, red down, purple for
+  a sector that just set your personal best.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PitWall — Delta</title>
+<link rel="stylesheet" href="../shared/base.css">
+<style>
+  #root { width: var(--w, 320px); }
+  #wrap { display: none; padding: 6px 8px 7px; }
+  body.ready #wrap { display: block; }
+
+  .top {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 5px;
+  }
+  .top .ref {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    color: var(--text-faint);
+    text-transform: uppercase;
+  }
+  .top .big {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 34px;
+    font-weight: 800;
+    line-height: 0.95;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  .big.up   { color: var(--green); }
+  .big.down { color: var(--red); }
+  .big.none { color: var(--text-faint); }
+
+  .bar {
+    position: relative;
+    height: 14px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.07);
+    overflow: hidden;
+    margin-bottom: 6px;
+  }
+  .bar.hide { display: none; }
+  .bar .fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 0;
+    background: var(--green);
+    transition: width 0.08s linear, left 0.08s linear;
+  }
+  .bar .fill.down { background: var(--red); }
+  .bar .zero {
+    position: absolute;
+    left: 50%;
+    top: -1px;
+    bottom: -1px;
+    width: 2px;
+    margin-left: -1px;
+    background: var(--text);
+  }
+  .bar .tick {
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    width: 1px;
+    background: rgba(255, 255, 255, 0.16);
+  }
+
+  .secs { display: flex; gap: 3px; margin-bottom: 6px; }
+  .secs.hide { display: none; }
+  .secs .s {
+    flex: 1 1 0;
+    height: 18px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.07);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 5px;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-faint);
+  }
+  .secs .s .d {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 10.5px;
+    font-weight: 700;
+  }
+  .secs .s.up   { background: rgba(53, 208, 127, 0.22); color: var(--green); }
+  .secs .s.down { background: rgba(255, 77, 77, 0.20); color: var(--red); }
+  .secs .s.pb   { background: rgba(176, 108, 255, 0.26); color: var(--purple); }
+
+  .laps {
+    display: flex;
+    gap: 10px;
+    font-size: 10px;
+    color: var(--text-faint);
+  }
+  .laps span { display: flex; gap: 4px; align-items: baseline; }
+  .laps b {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .laps .cur b { color: var(--text); }
+</style>
+</head>
+<body class="overlay">
+  <div id="pw-status"></div>
+  <div id="root" class="scale-root">
+    <div id="wrap" class="panel">
+      <div class="top">
+        <span class="ref" id="reflbl">VS SESSION BEST</span>
+        <span class="big num" id="big">–.––</span>
+      </div>
+      <div class="bar" id="bar">
+        <div class="tick" id="t1"></div>
+        <div class="tick" id="t2"></div>
+        <div class="fill" id="fill"></div>
+        <div class="zero"></div>
+      </div>
+      <div class="secs" id="secs"></div>
+      <div class="laps">
+        <span class="cur">CUR <b class="num" id="l-cur">–</b></span>
+        <span>LAST <b class="num" id="l-last">–</b></span>
+        <span>BEST <b class="num" id="l-best">–</b></span>
+      </div>
+    </div>
+  </div>
+
+<script src="../shared/pitwall.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  PW.applyChrome();
+
+  var REFS = { session: 'delta', best: 'deltaBest', optimal: 'deltaOptimal' };
+  var LABELS = {
+    session: 'VS SESSION BEST', best: 'VS YOUR BEST', optimal: 'VS OPTIMAL'
+  };
+
+  var OPT = {
+    ref:     REFS[PW.opt('ref', 'session')] ? PW.opt('ref', 'session') : 'session',
+    bar:     PW.optBool('bar', true),
+    sectors: PW.optBool('sectors', true),
+    range:   Math.max(0.1, PW.optNum('range', 2)),
+    width:   PW.optNum('w', 320)
+  };
+  document.getElementById('root').style.setProperty('--w', OPT.width + 'px');
+
+  var el = {};
+  ['reflbl', 'big', 'bar', 'fill', 't1', 't2', 'secs', 'l-cur', 'l-last', 'l-best']
+    .forEach(function (id) { el[id] = document.getElementById(id); });
+
+  el.reflbl.textContent = LABELS[OPT.ref];
+  if (!OPT.bar) el.bar.classList.add('hide');
+  if (!OPT.sectors) el.secs.classList.add('hide');
+
+  // Half-scale marks so the bar has a sense of magnitude without a scale.
+  el.t1.style.left = '25%';
+  el.t2.style.left = '75%';
+
+  function setText(node, t) {
+    t = (t == null || t === '') ? '–' : String(t);
+    if (node.textContent !== t) node.textContent = t;
+  }
+
+  var secN = 0;
+
+  function buildSecs(n) {
+    var h = '';
+    for (var i = 1; i <= n; i++) {
+      h += '<div class="s"><span>S' + i + '</span><span class="d"></span></div>';
+    }
+    el.secs.innerHTML = h;
+    secN = n;
+  }
+
+  function renderSecs(c) {
+    var sec = (c && c.sec) || [];
+    var pb = (c && c.pbsec) || [];
+    var n = (PW.meta.sectors || []).length || sec.length;
+    if (!n) { el.secs.classList.add('hide'); return; }
+    if (n !== secN) buildSecs(n);
+    if (OPT.sectors) el.secs.classList.remove('hide');
+
+    for (var i = 0; i < n; i++) {
+      var node = el.secs.children[i];
+      var v = sec[i], b = pb[i];
+      var cls = 's', txt = '';
+      if (v != null && v > 0 && b != null && b > 0) {
+        var d = v - b;
+        // secb marks the sector that actually set the personal best.
+        if (c.secb && c.secb[i] && (c.lc || 0) > 1) { cls = 's pb'; txt = PW.fmtLap(v, 2); }
+        else if (d <= 0.0005) { cls = 's up'; txt = PW.fmtDelta(d, 2); }
+        else { cls = 's down'; txt = PW.fmtDelta(d, 2); }
+      } else if (v != null && v > 0) {
+        txt = PW.fmtLap(v, 2);
+      } else {
+        txt = '–';
+      }
+      if (node.className !== cls) node.className = cls;
+      setText(node.children[1], txt);
+    }
+  }
+
+  function render() {
+    var t = PW.tick;
+    if (!t || !PW.meta || !t.player) { document.body.classList.remove('ready'); return; }
+    var p = t.player;
+    document.body.classList.add('ready');
+
+    var raw = p[REFS[OPT.ref]];
+    // deltaOK covers the session-best channel; the sim zeroes the others when
+    // there is no reference lap yet, which is not a real "dead heat".
+    var ok = (raw != null) && (OPT.ref !== 'session' || p.deltaOK !== false) &&
+             (p.lapBest > 0 || OPT.ref === 'session');
+
+    if (!ok) {
+      setText(el.big, '–.––');
+      el.big.className = 'big num none';
+      el.fill.style.width = '0%';
+      el.fill.style.left = '50%';
+    } else {
+      setText(el.big, PW.fmtDelta(raw, 2));
+      el.big.className = 'big num ' + (raw < -0.0005 ? 'up' : (raw > 0.0005 ? 'down' : ''));
+      var f = Math.max(-1, Math.min(1, raw / OPT.range));
+      var half = Math.abs(f) * 50;
+      var down = f > 0;
+      el.fill.style.width = half + '%';
+      el.fill.style.left = down ? '50%' : (50 - half) + '%';
+      if (el.fill.classList.contains('down') !== down) el.fill.classList.toggle('down', down);
+    }
+
+    setText(el['l-cur'], PW.fmtLap(p.lapCurrent, 1));
+    setText(el['l-last'], PW.fmtLap(p.lapLast));
+    setText(el['l-best'], PW.fmtLap(p.lapBest));
+
+    var idx = PW.focusIdx();
+    renderSecs(idx == null ? null : PW.carByIdx(idx));
+  }
+
+  PW.on('meta', render);
+  PW.on('tick', render);
+  PW.start({ sub: ['meta', 'tick'], rate: 20, name: 'delta' });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PitWall — Driver Card</title>
+<link rel="stylesheet" href="../shared/base.css">
+<!--
+  Driver card — 1920x1080 transparent overlay, one driver, anchored in a corner.
+
+  The "who is this" graphic. iRacing gives a name and a number; everything that
+  makes this look like a broadcast (headshot, flag, team, pronouns, hometown,
+  bio, sponsor, socials, accent colour) is driver-submitted profile data and is
+  optional, so every element degrades on its own.
+
+  Options (query string)
+    car=<idx>      force a specific car index. Default: follows the broadcast
+                   camera via PW.focusIdx(), falling back to the player's car.
+    pos=bl|br|tl|tr  corner to anchor to.                      default bl
+    auto=1         show the card for `hold` seconds whenever the camera cuts to
+                   a new car, then hide. Default 0 = always visible.
+    hold=<sec>     how long the card stays up in auto mode.    default 8
+    compact=1      slimmer card: smaller headshot, no bio.     default 0
+    stats=<list>   which live stats appear, comma separated, in order.
+                   Keys: pos last best gap int lap stops inc delta ir lic
+                   default: pos,last,best,gap,stops,inc
+    names=full|short|surname|abbrev   name style (PW.displayName). default full
+    socials=0      hide the socials line.                      default 1
+    scale=1.2      whole-graphic scale.        accent=%23ff0   opacity=0.9
+    bg=1           opaque background, for checking the layout outside OBS.
+    debug=1        show the connection pill.
+    server=http://host:port   when the page is not served by PitWall itself.
+-->
+<style>
+  #stage { position: absolute; width: 1920px; height: 1080px; top: 0; left: 0; }
+
+  #card {
+    position: absolute;
+    width: 700px;
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    background: rgba(var(--panel), var(--panel-opacity));
+    border: 1px solid var(--line);
+    border-left: none;
+    border-radius: 6px;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 18px 46px rgba(0, 0, 0, 0.55);
+    overflow: hidden;
+    opacity: 0;
+    will-change: transform, opacity;
+    transition: opacity 340ms ease, transform 420ms cubic-bezier(0.16, 0.84, 0.3, 1);
+  }
+  #card.compact { width: 600px; }
+
+  /* corners + slide direction ------------------------------------------- */
+  #card.bl { left: 72px;  bottom: 74px; transform: translate3d(-46px, 0, 0); }
+  #card.tl { left: 72px;  top: 64px;    transform: translate3d(-46px, 0, 0); }
+  #card.br { right: 72px; bottom: 74px; transform: translate3d(46px, 0, 0); }
+  #card.tr { right: 72px; top: 64px;    transform: translate3d(46px, 0, 0); }
+  #card.in { opacity: 1; transform: translate3d(0, 0, 0); }
+  /* right-anchored cards get the accent stripe on their outer edge */
+  #card.br, #card.tr { flex-direction: row-reverse; border-left: 1px solid var(--line); border-right: none; }
+
+  .stripe { flex: 0 0 6px; background: var(--edge); }
+
+  .body { flex: 1 1 auto; display: flex; padding: 16px 18px 15px 16px; gap: 16px; min-width: 0; }
+
+  /* headshot ------------------------------------------------------------- */
+  .shot {
+    flex: 0 0 auto;
+    width: 132px; height: 132px;
+    border-radius: 8px;
+    position: relative;
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: inset 0 0 0 2px var(--edge);
+    overflow: hidden;
+  }
+  .compact .shot { width: 96px; height: 96px; }
+  .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .shot .initials {
+    width: 100%; height: 100%;
+    display: grid; place-items: center;
+    font-weight: 800;
+    font-size: 46px;
+    letter-spacing: 0.02em;
+    color: var(--ink);
+    background: var(--edge);
+  }
+  .compact .shot .initials { font-size: 34px; }
+
+  /* identity ------------------------------------------------------------- */
+  .main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+
+  .idrow { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .plate {
+    font-family: var(--mono);
+    font-weight: 800;
+    font-size: 22px;
+    line-height: 1;
+    padding: 6px 8px 5px;
+    border-radius: 4px;
+    min-width: 46px;
+    text-align: center;
+    letter-spacing: -0.02em;
+  }
+  .compact .plate { font-size: 19px; min-width: 40px; padding: 5px 7px 4px; }
+  .name {
+    font-size: 34px;
+    font-weight: 800;
+    letter-spacing: -0.015em;
+    line-height: 1.02;
+    text-transform: uppercase;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .compact .name { font-size: 28px; }
+  .pit-badge {
+    font-size: 10px; font-weight: 800; letter-spacing: 0.1em;
+    padding: 3px 6px; border-radius: 3px;
+    background: var(--yellow); color: #191204;
+  }
+
+  .subrow {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 7px; font-size: 15px; color: var(--text);
+    min-width: 0;
+  }
+  .subrow .flag { font-size: 17px; line-height: 1; }
+  .subrow .team { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .subrow .cls {
+    font-size: 10px; font-weight: 800; letter-spacing: 0.08em;
+    padding: 2px 5px; border-radius: 3px; text-transform: uppercase;
+  }
+  .meta2 {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--text-dim);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .meta2 .sep { color: var(--text-faint); margin: 0 5px; }
+
+  /* stats ---------------------------------------------------------------- */
+  .stats {
+    display: flex;
+    margin-top: 12px;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    padding: 8px 0 7px;
+    gap: 2px;
+  }
+  /* min-width:max-content keeps a lap time from being squeezed into its
+     neighbour when a card carries six stats. */
+  .stat { flex: 1 1 auto; min-width: max-content; padding-right: 12px; }
+  .stat + .stat { border-left: 1px solid rgba(255,255,255,0.07); padding-left: 11px; }
+  .stat .k {
+    font-size: 9px; font-weight: 700; letter-spacing: 0.12em;
+    color: var(--text-faint); text-transform: uppercase;
+  }
+  .stat .v {
+    font-size: 17px; font-weight: 700; line-height: 1.18; margin-top: 2px;
+    white-space: nowrap;
+  }
+  .stat .v.sm { font-size: 13px; letter-spacing: 0.08em; color: var(--text-dim); font-weight: 800; }
+  .stat .s { font-size: 10px; color: var(--text-dim); line-height: 1.1; }
+  .compact .stat .v { font-size: 15px; }
+
+  /* footer --------------------------------------------------------------- */
+  .foot { margin-top: 9px; display: flex; flex-direction: column; gap: 6px; }
+  .lic { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .lic .chip {
+    font-family: var(--mono); font-weight: 700; font-size: 11px;
+    padding: 2px 6px; border-radius: 3px;
+    background: rgba(255,255,255,0.08);
+    box-shadow: inset 0 0 0 1px var(--lic-col);
+    color: var(--lic-col);
+  }
+  .lic .ir { color: var(--text-dim); }
+  .lic .ir b { color: var(--text); font-family: var(--mono); font-weight: 700; }
+
+  .bio {
+    font-size: 13px; line-height: 1.35; color: var(--text-dim);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .socials { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px; color: var(--text-dim); }
+  .socials .s-i { display: inline-flex; gap: 5px; align-items: baseline; }
+  .socials .s-k { font-size: 9px; font-weight: 800; letter-spacing: 0.1em; color: var(--text-faint); }
+
+  /* sponsor -------------------------------------------------------------- */
+  .sponsor {
+    position: absolute;
+    top: 14px; right: 16px;
+    max-height: 30px; max-width: 130px;
+    opacity: 0.95;
+    object-fit: contain;
+  }
+  #card.br .sponsor, #card.tr .sponsor { right: 16px; }
+  .has-sponsor .name { padding-right: 140px; }
+</style>
+</head>
+<body class="overlay">
+  <div id="pw-status"></div>
+  <div id="root" class="scale-root">
+    <div id="stage"></div>
+  </div>
+
+<script src="../shared/pitwall.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  PW.applyChrome();
+
+  var POS      = (function (p) { return /^(bl|br|tl|tr)$/.test(p) ? p : 'bl'; })(PW.opt('pos', 'bl'));
+  var AUTO     = PW.optBool('auto', false);
+  var HOLD     = PW.optNum('hold', 8) * 1000;
+  var COMPACT  = PW.optBool('compact', false);
+  var STATS    = PW.optList('stats', ['pos', 'last', 'best', 'gap', 'stops', 'inc']);
+  var SOCIALS  = PW.optBool('socials', true);
+  var NAMES    = PW.opt('names', 'full');
+
+  var stage = document.getElementById('stage');
+
+  /* ---------------------------------------------------------- image guard */
+  /* Never show a broken image: an URL is only used once it has decoded. */
+  var imgState = {};                     // url -> 'ok' | 'bad' | 'loading'
+  function imgOK(url) {
+    if (!url) return false;
+    var st = imgState[url];
+    if (st === 'ok') return true;
+    if (st === undefined) {
+      imgState[url] = 'loading';
+      var probe = new Image();
+      probe.onload = function () { imgState[url] = 'ok'; render(); };
+      probe.onerror = function () { imgState[url] = 'bad'; };
+      probe.src = url;
+    }
+    return false;
+  }
+  function abs(url) {
+    if (!url) return '';
+    if (/^(https?:|data:)/i.test(url)) return url;
+    return PW.serverBase() + (url.charAt(0) === '/' ? '' : '/') + url;
+  }
+
+  /* ------------------------------------------------------------- helpers */
+  function ink(hex) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ''));
+    if (!m) return '#05070a';
+    var n = parseInt(m[1], 16);
+    var l = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+    return l > 0.6 ? '#05070a' : '#ffffff';
+  }
+  function initialsOf(d) {
+    if (d.initials) return d.initials.slice(0, 3);
+    var n = ((d.profile && d.profile.displayName) || d.name || '').trim().split(/\s+/);
+    if (!n[0]) return '?';
+    return (n[0].charAt(0) + (n.length > 1 ? n[n.length - 1].charAt(0) : '')).toUpperCase();
+  }
+  function handle(v) {
+    if (!v) return '';
+    var s = String(v).trim();
+    s = s.replace(/^https?:\/\/[^/]+\//i, '').replace(/\/+$/, '');
+    s = s.split('/').pop().split('?')[0];
+    return s ? '@' + s.replace(/^@/, '') : '';
+  }
+  function countryOf(d, p) {
+    var c = (p && p.country) || d.club || '';
+    return /^[A-Za-z]{2}$/.test(c) ? c.toUpperCase() : '';
+  }
+
+  /* ---------------------------------------------------------- build once */
+  var card = document.createElement('div');
+  card.id = 'card';
+  card.className = POS + (COMPACT ? ' compact' : '');
+  card.innerHTML =
+    '<div class="stripe"></div>' +
+    '<div class="body">' +
+      '<div class="shot" data-shot></div>' +
+      '<div class="main">' +
+        '<div class="idrow">' +
+          '<span class="plate num" data-plate></span>' +
+          '<span class="name" data-name></span>' +
+          '<span class="pit-badge hide" data-pit>PIT</span>' +
+        '</div>' +
+        '<div class="subrow">' +
+          '<span class="flag" data-flag></span>' +
+          '<span class="team" data-team></span>' +
+          '<span class="cls hide" data-cls></span>' +
+        '</div>' +
+        '<div class="meta2 hide" data-meta2></div>' +
+        '<div class="stats" data-stats></div>' +
+        '<div class="foot">' +
+          '<div class="lic" data-lic></div>' +
+          '<div class="bio hide" data-bio></div>' +
+          '<div class="socials hide" data-socials></div>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<img class="sponsor hide" data-sponsor alt="">';
+  stage.appendChild(card);
+
+  var $ = function (k) { return card.querySelector('[data-' + k + ']'); };
+  var elShot = $('shot'), elPlate = $('plate'), elName = $('name'), elPit = $('pit'),
+      elFlag = $('flag'), elTeam = $('team'), elCls = $('cls'), elMeta2 = $('meta2'),
+      elStats = $('stats'), elLic = $('lic'), elBio = $('bio'), elSoc = $('socials'),
+      elSponsor = $('sponsor');
+
+  /* One cell per requested stat, created once so values never reflow. */
+  var cells = {};
+  STATS.forEach(function (key) {
+    var cell = document.createElement('div');
+    cell.className = 'stat';
+    cell.innerHTML = '<div class="k"></div><div class="v num"></div><div class="s"></div>';
+    elStats.appendChild(cell);
+    cells[key] = { el: cell, k: cell.children[0], v: cell.children[1], s: cell.children[2] };
+  });
+
+  /* --------------------------------------------------------- stat values */
+  var STAT_DEFS = {
+    pos:   function (c, d, mc) {
+             return { k: 'POS', v: c.p ? 'P' + c.p : '—',
+                      s: mc && c.cp ? (d.classShort || 'CLASS') + ' P' + c.cp : '' };
+           },
+    last:  function (c) { return { k: 'LAST', v: PW.fmtLap(c.last) || '—' }; },
+    best:  function (c) { return { k: 'BEST', v: PW.fmtLap(c.best) || '—', purple: !!c.fast }; },
+    gap:   function (c) {
+             if (c.p === 1) return { k: 'GAP', v: 'LEADER', small: true };
+             var g = PW.fmtGap(c.gl, c.ld);
+             return { k: 'GAP', v: g || '—' };
+           },
+    int:   function (c) { return { k: 'INT', v: PW.fmtGap(c.iv, c.ld) || '—' }; },
+    lap:   function (c) { return { k: 'LAP', v: c.lap ? String(c.lap) : '—' }; },
+    stops: function (c) { return { k: 'STOPS', v: c.stops === null || c.stops === undefined ? '—' : String(c.stops) }; },
+    inc:   function (c) { return { k: 'INC', v: c.inc === null || c.inc === undefined ? '—' : String(c.inc) + 'x' }; },
+    delta: function (c) { return { k: 'DELTA', v: PW.fmtDelta(c.delta) || '—' }; },
+    ir:    function (c, d) { return { k: 'iRATING', v: d.irating ? String(d.irating) : '—' }; },
+    lic:   function (c, d) { return { k: 'LICENCE', v: d.license || '—' }; }
+  };
+
+  /* ----------------------------------------------------------- rendering */
+  var shown = false, hideTimer = null, lastAutoIdx = null;
+
+  function show(on) {
+    if (shown === on) return;
+    shown = on;
+    card.classList.toggle('in', on);
+  }
+
+  function render() {
+    var idx = PW.focusIdx();
+    var d = idx === null || idx === undefined ? null : PW.driver(idx);
+    var c = idx === null || idx === undefined ? null : PW.carByIdx(idx);
+
+    if (!PW.meta || !PW.tick || !d || !c) { show(false); return; }
+
+    /* auto mode: a cut to a new car brings the card up for `hold` seconds */
+    if (AUTO) {
+      if (idx !== lastAutoIdx) {
+        lastAutoIdx = idx;
+        clearTimeout(hideTimer);
+        show(true);
+        hideTimer = setTimeout(function () { show(false); }, HOLD);
+      }
+    } else {
+      show(true);
+    }
+
+    var p = d.profile || {};
+    var cls = PW.classOf(idx);
+    var classColor = d.classColor || cls && cls.color || '#8894a4';
+    var edge = p.accentColor || classColor;
+
+    card.style.setProperty('--edge', edge);
+    card.style.setProperty('--ink', ink(edge));
+    card.style.setProperty('--lic-col', d.licColor || 'var(--text-dim)');
+
+    /* headshot ---------------------------------------------------------- */
+    var shot = abs(p.headshot);
+    if (shot && imgOK(shot)) {
+      if (elShot.dataset.src !== shot) {
+        elShot.dataset.src = shot;
+        elShot.innerHTML = '';
+        var img = new Image();
+        img.src = shot;
+        img.alt = '';
+        elShot.appendChild(img);
+      }
+    } else {
+      var ini = initialsOf(d);
+      if (elShot.dataset.src !== 'ini:' + ini) {
+        elShot.dataset.src = 'ini:' + ini;
+        elShot.innerHTML = '<div class="initials"></div>';
+        elShot.firstChild.textContent = ini;
+      }
+    }
+
+    /* identity ---------------------------------------------------------- */
+    elPlate.textContent = d.num || '—';
+    elPlate.style.background = classColor;
+    elPlate.style.color = ink(classColor);
+
+    elName.textContent = PW.displayName(idx, NAMES) || d.name || '';
+    elPit.classList.toggle('hide', !(c.st === 'pit' || c.st === 'stall'));
+
+    var cc = countryOf(d, p);
+    elFlag.textContent = cc ? PW.flag(cc) : '';
+    elFlag.classList.toggle('hide', !cc);
+
+    var team = p.team || d.team || '';
+    elTeam.textContent = team;
+    elTeam.classList.toggle('hide', !team);
+
+    if (PW.multiclass() && d.classShort) {
+      elCls.textContent = d.classShort;
+      elCls.style.background = classColor;
+      elCls.style.color = ink(classColor);
+      elCls.classList.remove('hide');
+    } else {
+      elCls.classList.add('hide');
+    }
+
+    var bits = [];
+    if (p.pronouns) bits.push(p.pronouns);
+    if (p.hometown) bits.push(p.hometown);
+    if (bits.length) {
+      elMeta2.innerHTML = '';
+      bits.forEach(function (b, i) {
+        if (i) elMeta2.appendChild(PW.el('span', 'sep', '·'));
+        elMeta2.appendChild(PW.el('span', null, b));
+      });
+      elMeta2.classList.remove('hide');
+    } else {
+      elMeta2.classList.add('hide');
+    }
+
+    /* live stats -------------------------------------------------------- */
+    var mc = PW.multiclass();
+    STATS.forEach(function (key) {
+      var cell = cells[key];
+      var def = STAT_DEFS[key];
+      if (!def) { cell.el.classList.add('hide'); return; }
+      var out = def(c, d, mc) || {};
+      cell.k.textContent = out.k;
+      cell.v.textContent = out.v;
+      cell.v.classList.toggle('fastest', !!out.purple);
+      cell.v.classList.toggle('sm', !!out.small);
+      cell.s.textContent = out.s || '';
+    });
+
+    /* licence + iRating ------------------------------------------------- */
+    elLic.innerHTML = '';
+    if (d.license) {
+      elLic.appendChild(PW.el('span', 'chip', d.license));
+    }
+    if (d.irating) {
+      var ir = PW.el('span', 'ir');
+      ir.appendChild(document.createTextNode('iR '));
+      ir.appendChild(PW.el('b', 'num', String(d.irating)));
+      elLic.appendChild(ir);
+    }
+    elLic.classList.toggle('hide', !elLic.children.length);
+
+    /* bio --------------------------------------------------------------- */
+    var bio = COMPACT ? '' : (p.bio || '');
+    elBio.textContent = bio;
+    elBio.classList.toggle('hide', !bio);
+
+    /* socials ----------------------------------------------------------- */
+    var socs = [['TWITCH', p.twitch], ['X', p.x], ['IG', p.instagram], ['YT', p.youtube]]
+      .map(function (s) { return [s[0], handle(s[1])]; })
+      .filter(function (s) { return !!s[1]; });
+    if (SOCIALS && socs.length) {
+      elSoc.innerHTML = '';
+      socs.forEach(function (s) {
+        var w = PW.el('span', 's-i');
+        w.appendChild(PW.el('span', 's-k', s[0]));
+        w.appendChild(PW.el('span', null, s[1]));
+        elSoc.appendChild(w);
+      });
+      elSoc.classList.remove('hide');
+    } else {
+      elSoc.classList.add('hide');
+    }
+
+    /* sponsor logo ------------------------------------------------------ */
+    var logo = abs(p.sponsorLogo);
+    if (logo && imgOK(logo)) {
+      if (elSponsor.getAttribute('src') !== logo) elSponsor.src = logo;
+      elSponsor.classList.remove('hide');
+      card.classList.add('has-sponsor');
+    } else {
+      elSponsor.classList.add('hide');
+      card.classList.remove('has-sponsor');
+    }
+  }
+
+  PW.on('meta', render);
+  PW.on('tick', render);
+  PW.on('close', function () { show(false); });
+  PW.start({ sub: ['meta', 'tick'], rate: 10 });
+})();
+</script>
+</body>
+</html>

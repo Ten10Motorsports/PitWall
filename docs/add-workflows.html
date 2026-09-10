@@ -1,0 +1,882 @@
+<title>Fix the Repository Upload</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --paper:#f7f5f3;--surface:#fff;--surface-2:#efece8;
+  --ink:#1b1917;--ink-2:#4a4541;--ink-3:#7d7772;
+  --rule:#ded8d2;--rule-2:#c9c2ba;
+  --accent:#d13b2e;--accent-ink:#9c2a20;--accent-wash:#fbeae8;
+  --info:#0e6b7d;--info-wash:#e2f0f2;
+  --warn:#8a5a06;--warn-wash:#fbf0da;
+  --go:#226b45;--go-wash:#e2f1e8;
+  --code-bg:#1e1c1a;--code-ink:#e9e4de;
+  --display:'Archivo','Helvetica Neue',Arial,sans-serif;
+  --body:'Public Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,Consolas,monospace;
+  --shadow:0 1px 2px rgba(27,25,23,.05),0 8px 24px -12px rgba(27,25,23,.18);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#17161a;--surface:#1e1d22;--surface-2:#26252b;
+  --ink:#f1eeea;--ink-2:#c0bab3;--ink-3:#8d867f;
+  --rule:#34323a;--rule-2:#46434c;
+  --accent:#f2604f;--accent-ink:#ff8878;--accent-wash:#33201d;
+  --info:#4ec2d6;--info-wash:#173034;
+  --warn:#e0a83f;--warn-wash:#33290f;
+  --go:#57c68c;--go-wash:#16301f;
+  --code-bg:#100f12;--code-ink:#e9e4de;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -14px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --paper:#17161a;--surface:#1e1d22;--surface-2:#26252b;
+  --ink:#f1eeea;--ink-2:#c0bab3;--ink-3:#8d867f;
+  --rule:#34323a;--rule-2:#46434c;
+  --accent:#f2604f;--accent-ink:#ff8878;--accent-wash:#33201d;
+  --info:#4ec2d6;--info-wash:#173034;
+  --warn:#e0a83f;--warn-wash:#33290f;
+  --go:#57c68c;--go-wash:#16301f;
+  --code-bg:#100f12;--code-ink:#e9e4de;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -14px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:920px;margin:0 auto;padding:0 26px 110px}
+header{border-bottom:3px solid var(--ink);padding:40px 0 20px;margin-bottom:26px}
+header .k{font-family:var(--display);font-size:11px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--accent)}
+header h1{font-family:var(--display);font-size:31px;font-weight:700;letter-spacing:-.02em;margin:5px 0 0;line-height:1.1}
+.lede{font-size:18px;color:var(--ink-2);margin:0 0 18px;max-width:66ch}
+.lede strong{color:var(--ink);font-weight:600}
+
+.note{border-left:3px solid var(--rule-2);background:var(--surface);border-radius:0 5px 5px 0;padding:14px 18px;margin:0 0 18px;font-size:15px}
+.note p{margin:0 0 10px}.note p:last-child{margin:0}
+.note ul{margin:0 0 10px;padding-left:20px}.note li{margin-bottom:4px}
+.note .tag{display:block;font-family:var(--display);font-size:10.5px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;margin-bottom:5px}
+.note.why{border-color:var(--info);background:var(--info-wash)}.note.why .tag{color:var(--info)}
+.note.warn{border-color:var(--warn);background:var(--warn-wash)}.note.warn .tag{color:var(--warn)}
+.note.stop{border-color:var(--accent);background:var(--accent-wash)}.note.stop .tag{color:var(--accent-ink)}
+.note.ok{border-color:var(--go);background:var(--go-wash)}.note.ok .tag{color:var(--go)}
+
+.stepbar{margin:44px 0 20px;padding:14px 18px;background:var(--surface);border:1px solid var(--rule);border-left:5px solid var(--accent);border-radius:0 6px 6px 0}
+.stepbar .k{font-family:var(--display);font-size:10.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--accent)}
+.stepbar h2{font-family:var(--display);font-size:22px;font-weight:700;letter-spacing:-.015em;margin:3px 0 3px}
+.stepbar p{margin:0;font-size:14.5px;color:var(--ink-3)}
+
+h3{font-family:var(--display);font-size:17px;font-weight:600;margin:28px 0 8px;letter-spacing:-.005em}
+ol.rich,ul.rich{padding-left:22px;margin:0 0 18px}
+ol.rich li,ul.rich li{margin-bottom:9px}
+li::marker{color:var(--ink-3)}
+p{margin:0 0 14px}
+a{color:var(--info);text-underline-offset:2px}
+a:hover{color:var(--accent)}
+strong{font-weight:600}
+code:not(pre code){font-family:var(--mono);font-size:.87em;background:var(--surface-2);border:1px solid var(--rule);border-radius:3px;padding:1px 5px;word-break:break-word}
+
+.cmd{position:relative;background:var(--code-bg);border-radius:6px;margin:0 0 16px;overflow:hidden}
+.cmd pre{margin:0;padding:28px 96px 14px 16px;overflow-x:auto;max-height:340px;overflow-y:auto;font-family:var(--mono);font-size:12.5px;line-height:1.6;color:var(--code-ink);white-space:pre}
+.cmd .lbl{position:absolute;top:0;left:16px;font-family:var(--display);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:#8d867f;background:var(--code-bg);padding:5px 0 0;z-index:2}
+.cmd button{position:absolute;top:7px;right:8px;z-index:3;font-family:var(--body);font-size:11.5px;font-weight:600;color:#cfc8c1;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.20);border-radius:4px;padding:5px 10px;cursor:pointer}
+.cmd button:hover{color:#fff;background:rgba(255,255,255,.2)}
+.cmd button.done{color:#7fd8a5;border-color:rgba(127,216,165,.5)}
+.cmd.plain pre{padding-top:14px;max-height:none}
+.cmd.tree pre{padding:16px;max-height:none;color:#cfc8c1}
+.cmd.tree pre b{color:#fff;font-weight:600}
+.cmd.tree pre i{color:#8d867f;font-style:normal}
+
+.bad{background:var(--accent-wash);border:1px solid rgba(209,59,46,.35);border-radius:6px;padding:14px 18px;margin:0 0 18px;font-family:var(--mono);font-size:13px;line-height:1.9;color:var(--accent-ink)}
+.bad .x{opacity:.75}
+
+.file{background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:18px 20px 6px;margin:0 0 20px;box-shadow:var(--shadow)}
+.file.is-done{opacity:.62}
+.file.is-done .fnum{background:var(--go);border-color:var(--go)}
+.fhead{display:flex;align-items:flex-start;gap:14px;margin-bottom:14px}
+.fnum{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-family:var(--mono);font-size:13px;font-weight:600;color:#fff;background:var(--accent);border:1px solid var(--accent)}
+.fmeta{flex:1;min-width:0}
+.fmeta h3{font-family:var(--display);font-size:18px;font-weight:700;margin:2px 0 2px;letter-spacing:-.01em}
+.fmeta p{margin:0;font-size:14px;color:var(--ink-3)}
+.doneline{flex:none;display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-3);cursor:pointer;user-select:none;white-space:nowrap;padding-top:4px}
+.doneline input{accent-color:var(--go);width:15px;height:15px;margin:0}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px}
+.rk{font-family:var(--display);font-size:9.5px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3)}
+.path{font-family:var(--mono);font-size:13px;background:var(--surface-2);border:1px solid var(--rule-2);border-radius:4px;padding:4px 9px;word-break:break-all}
+button.mini{font-family:var(--body);font-size:11.5px;font-weight:600;color:var(--ink-2);background:transparent;border:1px solid var(--rule-2);border-radius:4px;padding:4px 9px;cursor:pointer}
+button.mini:hover{color:var(--ink);border-color:var(--ink-3)}
+button.mini.done{color:var(--go);border-color:var(--go)}
+.hidden{position:absolute;left:-9999px}
+
+.progress{position:sticky;bottom:0;background:var(--paper);border-top:1px solid var(--rule);padding:12px 0 14px;margin-top:6px;font-size:14px;color:var(--ink-3);display:flex;align-items:center;gap:12px}
+.bar{flex:1;height:7px;border-radius:4px;background:var(--surface-2);overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--go);transition:width .3s;border-radius:4px}
+.progress .cnt{font-family:var(--mono);font-size:13px;color:var(--ink-2)}
+
+footer{margin-top:44px;padding-top:20px;border-top:3px solid var(--ink);font-size:13.5px;color:var(--ink-3)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+@media (prefers-reduced-motion:reduce){*{transition-duration:.01ms!important}}
+@media (max-width:640px){.fhead{flex-wrap:wrap}.doneline{width:100%;padding-top:0}}
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="k">PitWall &middot; Repair</div>
+  <h1>Fix the repository upload</h1>
+</header>
+
+<p class="lede">The upload put <strong>every file loose in the repository root with no folders</strong>. PitWall cannot run like that, and no amount of patching individual files will fix it. The repair is quick, but it means starting the upload again with a method that keeps folders intact.</p>
+
+<div class="note stop">
+  <span class="tag">How to tell this happened to you</span>
+  <p>Your file list contains numbered duplicates:</p>
+  <div class="bad">
+    index (1).html<span class="x">   ← web/control/index.html</span><br>
+    index (2).html<span class="x">   ← web/timing/index.html</span><br>
+    index (3).html<span class="x">   ← web/register/index.html</span><br>
+    index (4).html<span class="x">   ← web/hud/index.html</span><br>
+    README (7).md<span class="x">    ← docs/screenshots/README.md</span><br>
+    standings (5).html<span class="x">← one of the two standings pages</span>
+  </div>
+  <p>PitWall has five different files called <code>index.html</code> and two called <code>standings.html</code>, each in its own folder. Strip the folders away and they collide, so the browser renamed them. Every one of those numbered files is now in the wrong place under the wrong name.</p>
+</div>
+
+<div class="note why">
+  <span class="tag">Why it happened, and why it is not your fault</span>
+  <p>Dragging files into GitHub's web uploader flattens them unless you drag the <em>folders</em> themselves. Selecting everything inside a folder and dragging that selection loses the structure completely.</p>
+  <p>It also silently skipped <code>.github</code> entirely, because folders starting with a dot are hidden in Windows Explorer.</p>
+  <p>Nothing is damaged. The zip on your computer is intact and correct.</p>
+</div>
+
+<!-- ============================================================ STEP 1 -->
+<div class="stepbar">
+  <div class="k">Step 1</div>
+  <h2>Clear out the mess</h2>
+  <p>Deleting eighty files one at a time through the website is miserable. Do not do that.</p>
+</div>
+
+<p>The quickest clean slate is to <strong>delete the repository and make a new one</strong>. There is nothing worth keeping in it yet &mdash; no history, no issues, no releases.</p>
+
+<ol class="rich">
+  <li>Repository <strong>Settings</strong> &rarr; scroll to the very bottom &rarr; <strong>Danger Zone</strong> &rarr; <strong>Delete this repository</strong>.</li>
+  <li>Create a new one with the same name. <strong>Do not</strong> tick "Add a README file" &mdash; start it completely empty.</li>
+</ol>
+
+<div class="note warn">
+  <span class="tag">If you would rather keep the repository</span>
+  <p>Then use the GitHub Desktop or Git route in step 2. Both will delete the stray files for you as part of the push, so you do not have to click through them.</p>
+</div>
+
+<!-- ============================================================ STEP 2 -->
+<div class="stepbar">
+  <div class="k">Step 2</div>
+  <h2>Upload it again, with folders intact</h2>
+  <p>Four routes. The first is the one to pick.</p>
+</div>
+
+<h3>Route A &mdash; run the included script <span style="color:var(--go);font-size:13px;font-family:var(--body);font-weight:600">&nbsp;fewest steps</span></h3>
+
+<p>The PitWall download contains <code>setup-github.bat</code>. It pushes this folder to GitHub exactly as it sits &mdash; folders, hidden files and all &mdash; so none of the flattening can happen.</p>
+
+<ol class="rich">
+  <li>Create the empty repository on GitHub and copy its address from the green <strong>Code</strong> button. It ends in <code>.git</code>.</li>
+  <li>Open the extracted PitWall folder and <strong>double-click <code>setup-github.bat</code></strong>.</li>
+  <li>Paste the address when it asks, type <code>y</code>, and wait.</li>
+</ol>
+
+<p>It checks it is in the right folder, warns you if <code>.github</code> is missing before it starts, and prints what to do next when it finishes.</p>
+
+<div class="note warn">
+  <span class="tag">It needs Git, and will tell you if you do not have it</span>
+  <p>If Git is missing the script stops and gives you the one-line command to install it. Paste that into a Command Prompt, then run the script again:</p>
+</div>
+
+<div class="cmd plain"><button data-copy="wingetgit">Copy</button><pre id="wingetgit">winget install --id Git.Git -e</pre></div>
+
+<p>On macOS or Linux, use <code>setup-github.sh</code> in the same folder instead.</p>
+
+<h3>Route B &mdash; GitHub Desktop</h3>
+
+<p>Free, no command line, and it handles folders and hidden files correctly. Ten minutes once, then every future update is two clicks.</p>
+
+<ol class="rich">
+  <li>Install <a href="https://desktop.github.com">GitHub Desktop</a> and sign in.</li>
+  <li><strong>File &rarr; Clone repository</strong>, pick your empty repository, and note the folder it clones into.</li>
+  <li>Extract the PitWall zip. Open the extracted <code>pitwall</code> folder so you can see <code>server</code>, <code>web</code>, <code>run.bat</code> and the rest.</li>
+  <li><strong>Select all of it and copy it into the cloned folder.</strong> If anything from the old upload is in there, delete it first.</li>
+  <li>Back in GitHub Desktop you will see a long list of changes. Type a summary such as <em>PitWall</em>, click <strong>Commit to main</strong>, then <strong>Push origin</strong>.</li>
+</ol>
+
+<div class="note ok">
+  <span class="tag">This route handles .github for you</span>
+  <p>GitHub Desktop does not hide dot-folders, so the automation goes up with everything else and you can skip step 4 entirely.</p>
+</div>
+
+<h3>Route C &mdash; Git command line, by hand</h3>
+
+<p>If you already have Git, this is the fastest path. Run it inside the extracted <code>pitwall</code> folder:</p>
+
+<div class="cmd plain"><button data-copy="gitfix">Copy</button><pre id="gitfix">git init
+git add -A
+git commit -m "PitWall"
+git branch -M main
+git remote add origin https://github.com/YOUR-ORG/YOUR-REPO.git
+git push -u origin main --force</pre></div>
+
+<p>Replace the URL with your own. The <code>--force</code> overwrites whatever is up there, which is exactly what you want here.</p>
+
+<h3>Route D &mdash; the website, done correctly</h3>
+
+<p>It does work, as long as you drag <strong>folders</strong> rather than their contents.</p>
+
+<ol class="rich">
+  <li>In the empty repository, click <strong>uploading an existing file</strong>.</li>
+  <li>Open the extracted <code>pitwall</code> folder in Explorer.</li>
+  <li><strong>Select the folders</strong> &mdash; <code>config</code>, <code>docs</code>, <code>hud-app</code>, <code>scripts</code>, <code>server</code>, <code>site</code>, <code>web</code> &mdash; plus the loose files, and drag them in as one go. Do not open the folders and drag what is inside them.</li>
+  <li>Commit.</li>
+</ol>
+
+<div class="note warn">
+  <span class="tag">This route will still miss the automation</span>
+  <p>The <code>.github</code> folder is hidden and the web uploader skips it. If you take route D you must also do <strong>step 4</strong> below.</p>
+</div>
+
+<!-- ============================================================ STEP 3 -->
+<div class="stepbar">
+  <div class="k">Step 3</div>
+  <h2>Check it looks right</h2>
+  <p>Thirty seconds, and it saves you finding out later.</p>
+</div>
+
+<p>Open the <strong>Code</strong> tab. The root should show <strong>folders</strong>, not a wall of loose files:</p>
+
+<div class="cmd tree"><pre>PitWall/
+├── <b>.github/</b>          ← the automation. Hidden by the leading dot.
+│   ├── ISSUE_TEMPLATE/
+│   └── workflows/
+├── config/
+├── docs/
+├── hud-app/
+├── scripts/
+├── <b>server/</b>           ← the engine. Python needs this folder to exist.
+├── site/
+├── <b>web/</b>              ← every overlay and page
+│   ├── broadcast/
+│   ├── control/
+│   ├── hud/
+│   ├── register/
+│   ├── shared/
+│   └── timing/
+├── .gitignore
+├── README.md
+├── roster.json
+├── run-demo.bat
+├── run.bat
+└── run.sh</pre></div>
+
+<ul class="rich">
+  <li>You should see about <strong>eight folders and five loose files</strong>. No <code>.py</code> files at the root. No <code>.html</code> files at the root.</li>
+  <li><strong>Nothing with a number in brackets.</strong> If <code>index (1).html</code> is still there, the upload flattened again.</li>
+  <li>Click into <code>server</code> &mdash; it should hold <code>main.py</code>, <code>engine.py</code>, <code>irsdk.py</code> and friends.</li>
+  <li>Click into <code>web</code> &mdash; it should hold <code>broadcast</code>, <code>control</code>, <code>hud</code>, <code>register</code>, <code>shared</code>, <code>timing</code>.</li>
+</ul>
+
+<div class="note why">
+  <span class="tag">On not seeing .github</span>
+  <p>GitHub does show it in the file list even though your computer hides it. If it is not there, you took route D and need step 4.</p>
+</div>
+
+<!-- ============================================================ STEP 4 -->
+<div class="stepbar">
+  <div class="k">Step 4</div>
+  <h2>Add the automation, only if it is missing</h2>
+  <p>Skip this entirely if you used routes A, B or C &mdash; those all upload <code>.github</code> for you.</p>
+</div>
+
+<p>Four files. For each one: <strong>Add file &rarr; Create new file</strong>, paste the path into the filename box, paste the contents into the editor, <strong>Commit changes</strong>.</p>
+
+<p>Typing the <code>/</code> characters in the filename makes GitHub create the folders for you &mdash; which is what gets around the hidden-folder problem.</p>
+
+<div class="note warn">
+  <span class="tag">Two things that will bite you</span>
+  <p><strong>Keep the leading dot</strong> on <code>.github</code>. Without it nothing runs.</p>
+  <p><strong>Use the Copy button</strong>, not a manual selection. These are YAML, where indentation carries meaning, and a stray space breaks the file.</p>
+</div>
+
+  <section class="file" id="f1">
+    <div class="fhead">
+      <div class="fnum">1</div>
+      <div class="fmeta">
+        <h3>Publish site</h3>
+        <p>Publishes your league page, the handbook and the showroom to GitHub Pages.</p>
+      </div>
+      <label class="doneline"><input type="checkbox" data-done="1"> Done</label>
+    </div>
+    <div class="row">
+      <span class="rk">Filename to type</span>
+      <code class="path">.github/workflows/pages.yml</code>
+      <button class="mini" data-copy="path1">Copy path</button>
+      <span class="hidden" id="path1">.github/workflows/pages.yml</span>
+    </div>
+    <div class="cmd">
+      <span class="lbl">61 lines &middot; paste all of it</span>
+      <button data-copy="body1">Copy file</button>
+      <pre id="body1"># Publishes the league&#x27;s public pages: the setup handbook, the live showroom,
+# and a landing page with the sign-up link and the current roster.
+#
+# Static hosting only — no server, no data. The live timing feed comes from
+# whoever is running PitWall.exe, not from here.
+
+name: Publish site
+
+on:
+  push:
+    # Covers repos whose default branch is either name. A workflow that only
+    # watches &quot;main&quot; silently never runs on a &quot;master&quot; repo.
+    branches: [main, master]
+    paths:
+      - &#x27;docs/**&#x27;
+      - &#x27;site/**&#x27;
+      - &#x27;roster.json&#x27;
+      - &#x27;.github/workflows/pages.yml&#x27;
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assemble the site
+        run: |
+          mkdir -p _site
+          cp -r site/* _site/ 2&gt;/dev/null || true
+          cp docs/setup-guide.html _site/setup.html 2&gt;/dev/null || true
+          cp docs/preview.html     _site/preview.html 2&gt;/dev/null || true
+          cp roster.json           _site/roster.json 2&gt;/dev/null || echo &#x27;{&quot;drivers&quot;:[]}&#x27; &gt; _site/roster.json
+          # GitHub Pages runs Jekyll unless told not to, which eats folders
+          # starting with an underscore.
+          touch _site/.nojekyll
+          ls -la _site
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: _site }
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
+</pre>
+    </div>
+  </section>
+
+  <section class="file" id="f2">
+    <div class="fhead">
+      <div class="fnum">2</div>
+      <div class="fmeta">
+        <h3>Build Windows app</h3>
+        <p>Builds PitWall.exe on a Windows runner, tests that it starts, and attaches it to a release.</p>
+      </div>
+      <label class="doneline"><input type="checkbox" data-done="2"> Done</label>
+    </div>
+    <div class="row">
+      <span class="rk">Filename to type</span>
+      <code class="path">.github/workflows/release.yml</code>
+      <button class="mini" data-copy="path2">Copy path</button>
+      <span class="hidden" id="path2">.github/workflows/release.yml</span>
+    </div>
+    <div class="cmd">
+      <span class="lbl">113 lines &middot; paste all of it</span>
+      <button data-copy="body2">Copy file</button>
+      <pre id="body2"># Builds PitWall.exe on GitHub&#x27;s Windows runners and attaches it to a release.
+#
+# The point: nobody in your league installs Python, unzips anything, or ticks
+# a PATH checkbox. They download one file and double-click it.
+#
+# To cut a release:  git tag v1.0.0 &amp;&amp; git push --tags
+# Or run this workflow by hand from the Actions tab.
+
+name: Build Windows app
+
+on:
+  push:
+    tags: [&#x27;v*&#x27;]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: &#x27;3.12&#x27;
+
+      # PitWall itself has no dependencies. PyInstaller is only needed to
+      # produce the .exe, and only here on the build machine.
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pip pyinstaller
+
+      - name: Build
+        run: python scripts/build_exe.py
+
+      - name: Smoke test the build
+        shell: pwsh
+        run: |
+          # Start the app in demo mode and prove it actually serves before we
+          # ship it. A release that does not start is worse than no release.
+          $p = Start-Process -FilePath &quot;dist\PitWall.exe&quot; `
+               -ArgumentList &quot;--demo&quot;,&quot;--no-browser&quot;,&quot;--port&quot;,&quot;8123&quot; `
+               -PassThru -WindowStyle Hidden
+          Start-Sleep -Seconds 12
+          try {
+            $r = Invoke-WebRequest -Uri &quot;http://127.0.0.1:8123/api/status&quot; -UseBasicParsing -TimeoutSec 15
+            if ($r.StatusCode -ne 200) { throw &quot;status endpoint returned $($r.StatusCode)&quot; }
+            $j = $r.Content | ConvertFrom-Json
+            if (-not $j.connected) { throw &quot;demo feed did not connect&quot; }
+            Write-Host &quot;OK - served $($j.ticks) ticks&quot;
+
+            foreach ($path in @(&#x27;/control&#x27;,&#x27;/timing&#x27;,&#x27;/register&#x27;,&#x27;/broadcast/tower.html&#x27;,&#x27;/hud/relative.html&#x27;)) {
+              $pr = Invoke-WebRequest -Uri &quot;http://127.0.0.1:8123$path&quot; -UseBasicParsing -TimeoutSec 10
+              if ($pr.StatusCode -ne 200) { throw &quot;$path returned $($pr.StatusCode)&quot; }
+              Write-Host &quot;OK - $path&quot;
+            }
+          } finally {
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path package | Out-Null
+          Copy-Item dist\PitWall.exe package\
+          Copy-Item README.md package\
+          Copy-Item docs\setup-guide.html package\ -ErrorAction SilentlyContinue
+          Copy-Item docs\preview.html package\ -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path package\config | Out-Null
+          Copy-Item config\pitwall.example.json package\config\
+          # A PowerShell here-string cannot be indented, and YAML block
+          # scalars require indentation, so build the file from an array.
+          @(
+            &#x27;PitWall&#x27;,
+            &#x27;&#x27;,
+            &#x27;1. Double-click PitWall.exe&#x27;,
+            &#x27;2. Your browser opens the control panel&#x27;,
+            &#x27;&#x27;,
+            &#x27;That is the whole install. No Python, no setup.&#x27;,
+            &#x27;&#x27;,
+            &#x27;To look around without iRacing running, open a command prompt here and run:&#x27;,
+            &#x27;    PitWall.exe --demo --demo-roster&#x27;,
+            &#x27;&#x27;,
+            &#x27;setup-guide.html  - full setup walkthrough, open it in a browser&#x27;,
+            &#x27;preview.html      - see every graphic working, no sim needed&#x27;
+          ) | Set-Content -Path package\START-HERE.txt -Encoding UTF8
+          Compress-Archive -Path package\* -DestinationPath PitWall-windows.zip -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PitWall-windows
+          path: PitWall-windows.zip
+          retention-days: 90
+
+      - name: Attach to the release
+        if: startsWith(github.ref, &#x27;refs/tags/&#x27;)
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            PitWall-windows.zip
+            dist/PitWall.exe
+          generate_release_notes: true
+          body: |
+            ## Install
+
+            Download **PitWall.exe**, put it in a folder, double-click it.
+
+            No Python. No setup. Nothing else to install.
+
+            Only one person in a league needs this — whoever is spectating or
+            driving in the session. Everyone else opens a web page.
+</pre>
+    </div>
+  </section>
+
+  <section class="file" id="f3">
+    <div class="fhead">
+      <div class="fnum">3</div>
+      <div class="fmeta">
+        <h3>Driver sign-ups</h3>
+        <p>Reads driver sign-up issues and keeps roster.json up to date.</p>
+      </div>
+      <label class="doneline"><input type="checkbox" data-done="3"> Done</label>
+    </div>
+    <div class="row">
+      <span class="rk">Filename to type</span>
+      <code class="path">.github/workflows/roster.yml</code>
+      <button class="mini" data-copy="path3">Copy path</button>
+      <span class="hidden" id="path3">.github/workflows/roster.yml</span>
+    </div>
+    <div class="cmd">
+      <span class="lbl">95 lines &middot; paste all of it</span>
+      <button data-copy="body3">Copy file</button>
+      <pre id="body3"># Turns driver sign-up issues into roster.json.
+#
+# A driver opens the &quot;Driver sign-up&quot; issue form, this reads it, updates
+# roster.json and commits. They install nothing. Editing the issue re-runs it,
+# so fixing a typo needs no new submission and no admin.
+
+name: Driver sign-ups
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  roster:
+    # Only sign-up issues; ignore everything else in the repo.
+    if: github.event_name == &#x27;workflow_dispatch&#x27; || contains(github.event.issue.labels.*.name, &#x27;driver-signup&#x27;)
+    runs-on: ubuntu-latest
+    concurrency:
+      # Two drivers submitting at once must not race each other&#x27;s commit.
+      group: roster-write
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: &#x27;3.12&#x27;
+
+      - name: Read the submission
+        env:
+          BODY: ${{ github.event.issue.body }}
+        run: printf &#x27;%s&#x27; &quot;$BODY&quot; &gt; /tmp/body.md
+
+      - name: Update the roster
+        id: build
+        run: |
+          set +e
+          python scripts/roster_from_issue.py \
+            --body-file /tmp/body.md \
+            --out roster.json \
+            --issue &quot;${{ github.event.issue.number }}&quot; \
+            --user &quot;${{ github.event.issue.user.login }}&quot; \
+            --comment-file /tmp/comment.md
+          echo &quot;rc=$?&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+
+      - name: Commit
+        if: steps.build.outputs.rc == &#x27;0&#x27;
+        run: |
+          git config user.name &quot;pitwall-bot&quot;
+          git config user.email &quot;41898282+github-actions[bot]@users.noreply.github.com&quot;
+          if git diff --quiet -- roster.json; then
+            echo &quot;roster unchanged&quot;
+            exit 0
+          fi
+          git add roster.json
+          git commit -m &quot;Roster: sign-up from #${{ github.event.issue.number }}&quot;
+          # Another sign-up may have landed while this one ran.
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin &quot;${GITHUB_REF_NAME}&quot; &amp;&amp; git push &amp;&amp; exit 0
+            echo &quot;push race, retrying ($i)&quot;
+            sleep $((RANDOM % 5 + 2))
+          done
+          echo &quot;could not push after 5 attempts&quot;; exit 1
+
+      - name: Reply on the issue
+        if: always() &amp;&amp; github.event_name != &#x27;workflow_dispatch&#x27;
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -f /tmp/comment.md ]; then
+            gh issue comment &quot;${{ github.event.issue.number }}&quot; \
+              --repo &quot;${{ github.repository }}&quot; --body-file /tmp/comment.md
+          fi
+
+      - name: Close it once accepted
+        if: steps.build.outputs.rc == &#x27;0&#x27; &amp;&amp; github.event_name != &#x27;workflow_dispatch&#x27;
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue close &quot;${{ github.event.issue.number }}&quot; \
+            --repo &quot;${{ github.repository }}&quot; --reason completed || true
+
+      - name: Reopen if it was rejected
+        if: steps.build.outputs.rc != &#x27;0&#x27; &amp;&amp; github.event_name != &#x27;workflow_dispatch&#x27;
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue reopen &quot;${{ github.event.issue.number }}&quot; \
+            --repo &quot;${{ github.repository }}&quot; || true
+</pre>
+    </div>
+  </section>
+
+  <section class="file" id="f4">
+    <div class="fhead">
+      <div class="fnum">4</div>
+      <div class="fmeta">
+        <h3>Sign-up form</h3>
+        <p>The form drivers fill in. Not a workflow - this one is the form itself.</p>
+      </div>
+      <label class="doneline"><input type="checkbox" data-done="4"> Done</label>
+    </div>
+    <div class="row">
+      <span class="rk">Filename to type</span>
+      <code class="path">.github/ISSUE_TEMPLATE/driver-signup.yml</code>
+      <button class="mini" data-copy="path4">Copy path</button>
+      <span class="hidden" id="path4">.github/ISSUE_TEMPLATE/driver-signup.yml</span>
+    </div>
+    <div class="cmd">
+      <span class="lbl">137 lines &middot; paste all of it</span>
+      <button data-copy="body4">Copy file</button>
+      <pre id="body4">name: Driver sign-up
+description: Register for the broadcast. Fills in your driver card, timing screen entry and country flag.
+title: &quot;Driver sign-up: &quot;
+labels: [&quot;driver-signup&quot;]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Fill this in once. It takes two minutes and you never have to do it again —
+        submitting again with the same customer ID just updates your entry.
+
+        Everything except the first two fields is optional, but the more you add,
+        the better your driver card looks on the broadcast.
+
+  - type: input
+    id: iracingId
+    attributes:
+      label: iRacing customer ID
+      description: &gt;
+        The number on the iRacing website under Account → My Account → Customer ID.
+        Numbers only. This is what links you to your car on track, so please get it right —
+        it is not your display name and not your car number.
+      placeholder: &quot;123456&quot;
+    validations:
+      required: true
+
+  - type: input
+    id: displayName
+    attributes:
+      label: Name to show on screen
+      placeholder: &quot;Alex Fenwick&quot;
+    validations:
+      required: true
+
+  - type: input
+    id: carNumber
+    attributes:
+      label: Car number
+      placeholder: &quot;32&quot;
+
+  - type: input
+    id: team
+    attributes:
+      label: Team
+      placeholder: &quot;Corvid Performance&quot;
+
+  - type: input
+    id: country
+    attributes:
+      label: Country
+      description: Two-letter code, for your flag. GB, US, DE, FR, NL, AU, BR, JP and so on.
+      placeholder: &quot;GB&quot;
+
+  - type: textarea
+    id: headshot
+    attributes:
+      label: Headshot
+      description: &gt;
+        Drag an image straight into this box and GitHub will upload it, or paste a link
+        to one. Square works best. Anything roughly head-and-shoulders is fine.
+
+  - type: input
+    id: pronouns
+    attributes:
+      label: Pronouns
+      placeholder: &quot;they/them&quot;
+
+  - type: input
+    id: hometown
+    attributes:
+      label: Where you are from
+      placeholder: &quot;Example City&quot;
+
+  - type: textarea
+    id: bio
+    attributes:
+      label: One line about you
+      description: What commentary might say when the camera cuts to you. Keep it to a sentence or two.
+      placeholder: &quot;Third season in the league. Two poles this year, still cannot get out of the last chicane cleanly.&quot;
+
+  - type: input
+    id: twitch
+    attributes:
+      label: Twitch
+      placeholder: &quot;yourchannel&quot;
+
+  - type: input
+    id: youtube
+    attributes:
+      label: YouTube
+      placeholder: &quot;yourchannel&quot;
+
+  - type: input
+    id: instagram
+    attributes:
+      label: Instagram
+      placeholder: &quot;yourhandle&quot;
+
+  - type: input
+    id: x
+    attributes:
+      label: X
+      placeholder: &quot;yourhandle&quot;
+
+  - type: input
+    id: discord
+    attributes:
+      label: Discord
+      placeholder: &quot;yourname&quot;
+
+  - type: input
+    id: sponsor
+    attributes:
+      label: Sponsor
+      description: Name of a sponsor to credit on your card, if you have one.
+
+  - type: textarea
+    id: sponsorLogo
+    attributes:
+      label: Sponsor logo
+      description: Drag an image in, or paste a link. A transparent PNG looks best.
+
+  - type: input
+    id: accentColor
+    attributes:
+      label: Accent colour
+      description: Hex colour for your card, for example #12b8ff. Leave blank to use your class colour.
+      placeholder: &quot;#12b8ff&quot;
+
+  - type: checkboxes
+    id: consent
+    attributes:
+      label: Confirm
+      options:
+        - label: I am happy for this to be shown on the league broadcast and timing screens.
+          required: true
+</pre>
+    </div>
+  </section>
+
+<div class="progress">
+  <span>Files added</span>
+  <span class="bar"><i id="pbar"></i></span>
+  <span class="cnt" id="pcount">0 / 4</span>
+</div>
+
+<!-- ============================================================ STEP 5 -->
+<div class="stepbar">
+  <div class="k">Step 5</div>
+  <h2>Switch it on</h2>
+  <p>Two settings and two button presses.</p>
+</div>
+
+<ol class="rich">
+  <li><strong>Settings &rarr; Actions &rarr; General &rarr; Workflow permissions</strong> &rarr; choose <strong>Read and write permissions</strong> &rarr; Save. Sign-ups cannot save the roster without this.</li>
+  <li><strong>Settings &rarr; Pages &rarr; Source</strong> &rarr; choose <strong>GitHub Actions</strong>. Ignore the two "Configure" cards it offers &mdash; those would add a competing workflow.</li>
+  <li><strong>Actions</strong> tab &rarr; <strong>Publish site</strong> &rarr; <strong>Run workflow</strong>. Under a minute, and your league page is live.</li>
+  <li><strong>Actions</strong> tab &rarr; <strong>Build Windows app</strong> &rarr; <strong>Run workflow</strong>. About three minutes, and the app download works.</li>
+</ol>
+
+<div class="note ok">
+  <span class="tag">You are done when</span>
+  <p>The Actions tab lists <strong>Publish site</strong>, <strong>Build Windows app</strong> and <strong>Driver sign-ups</strong> down the left instead of the "Get started with GitHub Actions" page, and both runs you triggered show a green tick.</p>
+</div>
+
+<footer>
+  Every file shown on this page is also in the PitWall download under <code>.github/</code>. The contents are identical &mdash; this page just saves you finding a folder your computer is hiding.
+</footer>
+
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  document.querySelectorAll('[data-copy]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var src = document.getElementById(btn.getAttribute('data-copy'));
+      if (!src) return;
+      var text = src.textContent;
+      var label = btn.textContent;
+      function ok(){
+        btn.textContent = 'Copied';
+        btn.classList.add('done');
+        setTimeout(function(){ btn.textContent = label; btn.classList.remove('done'); }, 1700);
+      }
+      function fallback(){
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;opacity:0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); ok(); } catch(e){ btn.textContent = 'Select it'; }
+        ta.remove();
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(ok, fallback);
+      } else { fallback(); }
+    });
+  });
+
+  var KEY = 'pitwall.repofix.v1';
+  var boxes = Array.prototype.slice.call(document.querySelectorAll('[data-done]'));
+  var bar = document.getElementById('pbar');
+  var cnt = document.getElementById('pcount');
+  function read(){ try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch(e){ return {}; } }
+  function write(s){ try { localStorage.setItem(KEY, JSON.stringify(s)); } catch(e){} }
+  function paint(){
+    var n = 0;
+    boxes.forEach(function(b){
+      var card = b.closest('.file');
+      if (card) card.classList.toggle('is-done', b.checked);
+      if (b.checked) n++;
+    });
+    bar.style.width = (n / boxes.length * 100) + '%';
+    cnt.textContent = n + ' / ' + boxes.length;
+  }
+  var saved = read();
+  boxes.forEach(function(b){
+    if (saved[b.getAttribute('data-done')]) b.checked = true;
+    b.addEventListener('change', function(){
+      var s = read();
+      if (b.checked) { s[b.getAttribute('data-done')] = 1; }
+      else { delete s[b.getAttribute('data-done')]; }
+      write(s); paint();
+    });
+  });
+  paint();
+}());
+</script>

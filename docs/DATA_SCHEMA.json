@@ -1,0 +1,503 @@
+{
+ "meta_sample": {
+  "type": "meta",
+  "serial": 1,
+  "track": {
+   "name": "Circuit de Spa-Francorchamps",
+   "shortName": "Spa",
+   "config": "Grand Prix",
+   "id": 341,
+   "lengthKm": 7.0,
+   "city": "Stavelot",
+   "country": "Belgium",
+   "turns": 19,
+   "pitSpeedKph": 60.0,
+   "northOffset": 3.1416,
+   "type": "road course",
+   "direction": "neutral"
+  },
+  "event": {
+   "series": null,
+   "season": null,
+   "subSessionId": 78123456,
+   "leagueId": 4412,
+   "official": 0,
+   "teamRacing": 1,
+   "eventType": "Race",
+   "simMode": "full",
+   "numStarters": 24,
+   "incidentLimit": 17,
+   "fastRepairs": 1,
+   "standingStart": 1,
+   "date": "2026-09-09",
+   "greenWhiteCheckered": 0
+  },
+  "sectors": [
+   0.0,
+   0.3153,
+   0.6944
+  ],
+  "drivers": {
+   "0": {
+    "idx": 0,
+    "userId": 100306,
+    "name": "Marco Whitcombe",
+    "abbrev": "Whitcombe, M",
+    "initials": "MW",
+    "team": "Solstice Motorsport",
+    "teamId": 900000,
+    "num": "18",
+    "numRaw": 18,
+    "car": "Ferrari 296 GT3",
+    "carShort": "296 GT3",
+    "carPath": "",
+    "carId": null,
+    "classId": 2523,
+    "classShort": "GT3",
+    "classColor": "#fe3b1f",
+    "classRelSpeed": 100,
+    "irating": 4054,
+    "license": "A 4.12",
+    "licColor": "#00c8ff",
+    "club": "ES",
+    "division": "Division 2",
+    "incidents": 0,
+    "teamIncidents": 0,
+    "isPace": false,
+    "isAI": false,
+    "isSpectator": false,
+    "sponsor1": null,
+    "sponsor2": null
+   },
+   "1": {
+    "idx": 1,
+    "userId": 100500,
+    "name": "Jordan Delacroix",
+    "abbrev": "Delacroix, J",
+    "initials": "JD",
+    "team": "Highfield Racing",
+    "teamId": 900001,
+    "num": "27",
+    "numRaw": 27,
+    "car": "Ferrari 296 GT3",
+    "carShort": "296 GT3",
+    "carPath": "",
+    "carId": null,
+    "classId": 2523,
+    "classShort": "GT3",
+    "classColor": "#fe3b1f",
+    "classRelSpeed": 100,
+    "irating": 2230,
+    "license": "B 3.44",
+    "licColor": "#00c8ff",
+    "club": "DE",
+    "division": "Division 2",
+    "incidents": 0,
+    "teamIncidents": 0,
+    "isPace": false,
+    "isAI": false,
+    "isSpectator": false,
+    "sponsor1": null,
+    "sponsor2": null
+   }
+  },
+  "classes": [
+   {
+    "id": 2523,
+    "short": "GT3",
+    "color": "#fe3b1f",
+    "relSpeed": 100,
+    "count": 14
+   },
+   {
+    "id": 2708,
+    "short": "GT4",
+    "color": "#33c9ff",
+    "relSpeed": 80,
+    "count": 10
+   }
+  ],
+  "playerIdx": 0,
+  "paceCarIdx": 63,
+  "sof": 1905,
+  "sessions": [
+   {
+    "num": 0,
+    "name": "RACE",
+    "type": "Race",
+    "laps": 42,
+    "time": "unlimited"
+   }
+  ],
+  "cameras": [
+   {
+    "num": 1,
+    "name": "Nose",
+    "scenic": false
+   },
+   {
+    "num": 2,
+    "name": "Gearbox",
+    "scenic": false
+   },
+   {
+    "num": 3,
+    "name": "TV1",
+    "scenic": false
+   },
+   {
+    "num": 4,
+    "name": "TV2",
+    "scenic": false
+   },
+   {
+    "num": 5,
+    "name": "Chase",
+    "scenic": false
+   },
+   {
+    "num": 11,
+    "name": "Scenic",
+    "scenic": true
+   }
+  ]
+ },
+ "tick_sample": {
+  "type": "tick",
+  "t": 1788977697.115,
+  "session": {
+   "num": 0,
+   "name": "RACE",
+   "type": "Race",
+   "state": "Racing",
+   "time": 361.09,
+   "timeRemain": null,
+   "timeTotal": null,
+   "lapsRemain": 39,
+   "lapsTotal": 42,
+   "raceLaps": 3,
+   "flagsRaw": 4,
+   "flags": [
+    "green"
+   ],
+   "flag": "green",
+   "caution": false,
+   "pitsOpen": true,
+   "paceMode": 4,
+   "timeOfDay": 50761.0,
+   "cautions": 0,
+   "cautionLaps": 0,
+   "leadChanges": 2,
+   "official": 0,
+   "trackWetness": "Dry",
+   "airTemp": 21.4,
+   "trackTemp": 31.8,
+   "precip": 0.0,
+   "windVel": 2.4,
+   "skies": 1
+  },
+  "cars": [
+   {
+    "i": 0,
+    "p": 1,
+    "lp": 1,
+    "cp": 1,
+    "lap": 3,
+    "lc": 2,
+    "pct": 0.61789,
+    "gl": 0.0,
+    "iv": null,
+    "gcl": null,
+    "civ": null,
+    "ld": 0,
+    "last": 136.708,
+    "best": 136.574,
+    "cur": 87.81,
+    "sec": [
+     39.961,
+     58.269,
+     38.478
+    ],
+    "secb": [
+     true,
+     false,
+     false
+    ],
+    "pbsec": [
+     39.961,
+     58.202,
+     38.41
+    ],
+    "st": "run",
+    "stops": 0,
+    "pitdur": null,
+    "pitlap": 0,
+    "stint": 3,
+    "fr": 0,
+    "tyre": 0,
+    "pl": -1,
+    "pr": -1,
+    "fast": true,
+    "inc": 0,
+    "delta": null
+   },
+   {
+    "i": 1,
+    "p": 2,
+    "lp": 2,
+    "cp": 2,
+    "lap": 3,
+    "lc": 2,
+    "pct": 0.61552,
+    "gl": 0.419,
+    "iv": 0.419,
+    "gcl": 0.419,
+    "civ": 0.419,
+    "ld": 0,
+    "last": 136.648,
+    "best": 136.648,
+    "cur": 87.51,
+    "sec": [
+     39.96,
+     58.269,
+     38.418
+    ],
+    "secb": [
+     false,
+     true,
+     true
+    ],
+    "pbsec": [
+     39.901,
+     58.269,
+     38.418
+    ],
+    "st": "run",
+    "stops": 0,
+    "pitdur": null,
+    "pitlap": 0,
+    "stint": 3,
+    "fr": 0,
+    "tyre": 0,
+    "pl": -1,
+    "pr": -1,
+    "fast": false,
+    "inc": 0,
+    "delta": null
+   },
+   {
+    "i": 2,
+    "p": 3,
+    "lp": 3,
+    "cp": 3,
+    "lap": 3,
+    "lc": 2,
+    "pct": 0.6153,
+    "gl": 0.463,
+    "iv": 0.044,
+    "gcl": 0.463,
+    "civ": 0.044,
+    "ld": 0,
+    "last": 136.648,
+    "best": 136.634,
+    "cur": 87.39,
+    "sec": [
+     39.96,
+     58.269,
+     38.418
+    ],
+    "secb": [
+     false,
+     false,
+     true
+    ],
+    "pbsec": [
+     39.901,
+     58.262,
+     38.418
+    ],
+    "st": "run",
+    "stops": 0,
+    "pitdur": null,
+    "pitlap": 0,
+    "stint": 3,
+    "fr": 0,
+    "tyre": 0,
+    "pl": -1,
+    "pr": -1,
+    "fast": false,
+    "inc": 0,
+    "delta": null
+   }
+  ],
+  "fastest": {
+   "idx": 0,
+   "time": 136.574,
+   "lap": 1,
+   "name": "Marco Whitcombe"
+  },
+  "fastestByClass": {
+   "2523": {
+    "idx": 0,
+    "time": 136.574
+   },
+   "2708": {
+    "idx": 14,
+    "time": 153.906
+   }
+  },
+  "battles": [
+   {
+    "ahead": 0,
+    "behind": 1,
+    "gap": 0.419,
+    "pos": 1,
+    "sameClass": true
+   },
+   {
+    "ahead": 1,
+    "behind": 2,
+    "gap": 0.044,
+    "pos": 2,
+    "sameClass": true
+   },
+   {
+    "ahead": 2,
+    "behind": 3,
+    "gap": 0.787,
+    "pos": 3,
+    "sameClass": true
+   },
+   {
+    "ahead": 3,
+    "behind": 4,
+    "gap": 0.924,
+    "pos": 4,
+    "sameClass": true
+   },
+   {
+    "ahead": 6,
+    "behind": 7,
+    "gap": 0.724,
+    "pos": 6,
+    "sameClass": true
+   },
+   {
+    "ahead": 7,
+    "behind": 8,
+    "gap": 0.171,
+    "pos": 7,
+    "sameClass": true
+   }
+  ],
+  "player": {
+   "idx": 0,
+   "pos": 1,
+   "classPos": 1,
+   "onPitRoad": false,
+   "inPitStall": false,
+   "pitSvStatus": "none",
+   "incidents": 2,
+   "teamIncidents": 2,
+   "fuel": 91.81,
+   "fuelPct": 0.918,
+   "fuelPerLap": null,
+   "fuelLapsLeft": null,
+   "fuelToAdd": null,
+   "speed": 69.41,
+   "rpm": 5741.0,
+   "gear": 3,
+   "throttle": 0.077,
+   "brake": 0.741,
+   "clutch": 1.0,
+   "steer": 1.87,
+   "steerMax": 8.0,
+   "abs": false,
+   "lap": 3,
+   "lapPct": 0.61789,
+   "lapCurrent": 87.812,
+   "lapLast": 136.708,
+   "lapBest": 136.574,
+   "delta": 0.446,
+   "deltaOK": true,
+   "deltaBest": 0.446,
+   "deltaOptimal": -0.591,
+   "leftRight": "clear",
+   "warnings": [],
+   "waterTemp": 88.0,
+   "oilTemp": 104.0,
+   "shiftPct": 0.6,
+   "onTrack": true,
+   "inGarage": false,
+   "fastRepairs": 0,
+   "fastRepairAvail": 1,
+   "tyres": {
+    "LF": {
+     "p": 165.0,
+     "tl": 82.0,
+     "tm": 85.0,
+     "tr": 88.0,
+     "wl": 0.964,
+     "wm": 0.944,
+     "wr": 0.954
+    },
+    "RF": {
+     "p": 166.0,
+     "tl": 84.0,
+     "tm": 87.0,
+     "tr": 90.0,
+     "wl": 0.964,
+     "wm": 0.944,
+     "wr": 0.954
+    },
+    "LR": {
+     "p": 167.0,
+     "tl": 86.0,
+     "tm": 89.0,
+     "tr": 92.0,
+     "wl": 0.964,
+     "wm": 0.944,
+     "wr": 0.954
+    },
+    "RR": {
+     "p": 168.0,
+     "tl": 88.0,
+     "tm": 91.0,
+     "tr": 94.0,
+     "wl": 0.964,
+     "wm": 0.944,
+     "wr": 0.954
+    }
+   },
+   "pitService": {
+    "flags": [
+     "LF",
+     "RF",
+     "fuel"
+    ],
+    "fuel": 42.0,
+    "tyreCompound": 0,
+    "active": false,
+    "repairLeft": 0.0,
+    "optRepairLeft": 0.0
+   },
+   "stint": 3,
+   "frameRate": 144.0
+  },
+  "cam": {
+   "idx": 0,
+   "group": 3,
+   "camera": 1
+  },
+  "radio": {
+   "idx": -1,
+   "freq": 0
+  },
+  "replay": {
+   "playing": false,
+   "speed": null,
+   "frame": null,
+   "frameEnd": null
+  }
+ }
+}

@@ -1,0 +1,463 @@
+<!doctype html>
+<!--
+  PitWall — Inputs (in-car HUD)
+  ---------------------------------------------------------------------------
+  Pedal and steering trace, fed from the server's 60 Hz `inputs` channel. A
+  scrolling trace of throttle (green), brake (red) and optionally clutch
+  (blue), vertical bar gauges for the pedals, a steering indicator, and a gear
+  and speed readout.
+
+  Everything is drawn into ONE canvas on requestAnimationFrame. Samples live
+  in preallocated typed-array ring buffers, so a full second of redraw
+  allocates nothing and the widget does not fight the sim for frame time. The
+  trace time base is extrapolated from the newest sample's session time, so it
+  scrolls smoothly between the 20 Hz network batches rather than stepping.
+
+  ABS: while the sim reports ABS active the brake trace is over-drawn in
+  yellow and the ABS badge lights, so a locked-then-modulated brake is
+  obvious after the fact.
+
+  Recommended window: 360 x 130.
+
+  Query string options
+    seconds=N    history window in seconds  (default 6, max 60)
+    bars=0       hide the vertical bar gauges
+    trace=0      hide the scrolling trace (bars + readout only)
+    clutch=1     include the clutch channel in trace and bars
+    speed=kph|mph   speed units            (default kph)
+    h=PX         total widget height       (default 130; header is 28px)
+    scale=1.2    overall scale             (PW.applyChrome)
+    opacity=0.8  panel opacity             (PW.applyChrome)
+    car=N        ignored — inputs are always the local player's
+    server=URL   point at a PitWall on another machine (pitwall.js)
+
+  Colour is information only: green throttle, red brake, blue clutch, yellow
+  ABS, red rev-limit on the shift bar.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PitWall — Inputs</title>
+<link rel="stylesheet" href="../shared/base.css">
+<style>
+  #root { width: 100%; }
+  #wrap { display: none; overflow: hidden; }
+  body.ready #wrap { display: block; }
+
+  .hdr {
+    height: 28px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 8px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .gear {
+    font-family: var(--mono);
+    font-size: 19px;
+    font-weight: 800;
+    line-height: 1;
+    min-width: 15px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .spd {
+    font-family: var(--mono);
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .spd .u {
+    font-family: var(--font);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--text-faint);
+    margin-left: 3px;
+  }
+
+  .rpm {
+    flex: 1 1 auto;
+    height: 4px;
+    min-width: 24px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.10);
+    overflow: hidden;
+  }
+  .rpm i {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: var(--secondary);
+    transform-origin: left center;
+  }
+  .rpm.hot i { background: var(--red); }
+
+  .abs {
+    flex: 0 0 auto;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.10em;
+    padding: 1px 4px;
+    border-radius: 2px;
+    color: var(--text-faint);
+    background: rgba(255, 255, 255, 0.06);
+  }
+  .abs.on { color: #191204; background: var(--yellow); }
+
+  canvas { display: block; width: 100%; }
+</style>
+</head>
+<body class="overlay">
+  <div id="pw-status"></div>
+  <div id="root" class="scale-root">
+    <div id="wrap" class="panel">
+      <div class="hdr">
+        <span class="gear num" id="gear">–</span>
+        <span class="spd num" id="spd">–<span class="u" id="unit">KPH</span></span>
+        <span class="rpm" id="rpm"><i id="rpmfill"></i></span>
+        <span class="abs" id="absb">ABS</span>
+      </div>
+      <canvas id="cv"></canvas>
+    </div>
+  </div>
+
+<script src="../shared/pitwall.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  PW.applyChrome();
+
+  var OPT = {
+    seconds: Math.max(1, Math.min(60, PW.optNum('seconds', 6))),
+    bars:    PW.optBool('bars', true),
+    trace:   PW.optBool('trace', true),
+    clutch:  PW.optBool('clutch', false),
+    mph:     String(PW.opt('speed', 'kph')).toLowerCase() === 'mph',
+    height:  PW.optNum('h', 130)
+  };
+
+  var HDR = 28;
+  var canvasH = Math.max(28, OPT.height - HDR);
+
+  var cv = document.getElementById('cv');
+  var ctx = cv.getContext('2d');
+  var elGear = document.getElementById('gear');
+  var elSpd = document.getElementById('spd');
+  var elUnit = document.getElementById('unit');
+  var elRpm = document.getElementById('rpm');
+  var elRpmFill = document.getElementById('rpmfill');
+  var elAbs = document.getElementById('absb');
+  elUnit.textContent = OPT.mph ? 'MPH' : 'KPH';
+
+  /* ------------------------------------------------------------ ring buffer */
+
+  // 60 Hz feed plus headroom. Preallocated once; never grown, never replaced.
+  var CAP = Math.min(4096, Math.ceil(60 * (OPT.seconds + 3)));
+  var bT = new Float64Array(CAP);
+  var bThr = new Float32Array(CAP);
+  var bBrk = new Float32Array(CAP);
+  var bClu = new Float32Array(CAP);
+  var bAbs = new Uint8Array(CAP);
+  var head = 0;      // next write slot
+  var count = 0;
+
+  var lastT = 0;          // session time of the newest sample
+  var lastRecv = 0;       // performance.now() when it arrived
+  var lastGear = 0, lastSpd = 0, lastRpm = 0, lastStr = 0, lastAbs = 0;
+  var rpmMax = 6000;      // learned from the car rather than assumed
+  var haveInputs = false;
+
+  function push(s) {
+    var t = +s.t;
+    if (!isFinite(t)) return;
+    if (count) {
+      // A big step backwards is a session reset: start the trace again.
+      if (t < lastT - 5) { count = 0; head = 0; }
+      // Anything else out of order is a duplicate or a replay scrub; keeping
+      // it would draw a line back across the plot.
+      else if (t <= lastT) return;
+    }
+    bT[head] = t;
+    bThr[head] = clamp01(s.thr);
+    bBrk[head] = clamp01(s.brk);
+    // iRacing reports Clutch as 1.0 when the clutch is ENGAGED (pedal up).
+    // Store the pedal travel a driver recognises so the bar and trace agree.
+    bClu[head] = 1 - clamp01(s.clu);
+    bAbs[head] = s.abs ? 1 : 0;
+    head = (head + 1) % CAP;
+    if (count < CAP) count++;
+    lastT = t;
+    lastGear = s.gear | 0;
+    lastSpd = +s.spd || 0;
+    lastRpm = +s.rpm || 0;
+    if (lastRpm > rpmMax) rpmMax = lastRpm;
+    lastStr = +s.str || 0;
+    lastAbs = s.abs ? 1 : 0;
+  }
+
+  function clamp01(v) {
+    v = +v;
+    if (!isFinite(v) || v < 0) return 0;
+    return v > 1 ? 1 : v;
+  }
+
+  PW.on('inputs', function (msg) {
+    var s = msg && msg.s;
+    if (!s || !s.length) return;
+    for (var i = 0; i < s.length; i++) push(s[i]);
+    lastRecv = performance.now();
+    haveInputs = true;
+    document.body.classList.add('ready');
+  });
+
+  /* -------------------------------------------------------- sizing / layout */
+
+  var dpr = 1, W = 0, H = 0;
+  var BARW = 9, BARGAP = 4, PADL = 6, PADR = 6, PADT = 4, PADB = 4;
+  var STEERH = 9, STEERGAP = 4;
+  var barX0 = 0, barCount = 0, plotX = 0, plotW = 0, plotY = 0, plotH = 0;
+  var steerY = 0;
+
+  function resize() {
+    var w = document.getElementById('root').clientWidth || window.innerWidth || 360;
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    W = Math.max(80, Math.round(w));
+    H = canvasH;
+    cv.style.height = H + 'px';
+    cv.width = Math.round(W * dpr);
+    cv.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    barCount = OPT.bars ? (OPT.clutch ? 3 : 2) : 0;
+    barX0 = PADL;
+    var barsW = barCount ? barCount * BARW + (barCount - 1) * BARGAP + 8 : 0;
+    plotX = PADL + barsW;
+    plotW = Math.max(20, W - plotX - PADR);
+    steerY = PADT;
+    plotY = PADT + STEERH + STEERGAP;
+    plotH = Math.max(10, H - plotY - PADB);
+    if (!OPT.trace) { plotW = 0; }
+  }
+
+  document.getElementById('wrap').style.height = OPT.height + 'px';
+  window.addEventListener('resize', resize);
+  resize();
+
+  /* ------------------------------------------------------------------- draw */
+
+  var GREEN = '#35d07f', RED = '#ff4d4d', BLUE = '#3b82f6', YELLOW = '#ffcc33';
+  var GRID = 'rgba(255,255,255,0.09)';
+  var FAINT = 'rgba(255,255,255,0.16)';
+
+  function traceNow() {
+    // Extrapolate between network batches for smooth scrolling, but never
+    // run away from the data if the feed stops.
+    var since = (performance.now() - lastRecv) / 1000;
+    if (since < 0) since = 0;
+    if (since > 0.5) since = 0.5;
+    return lastT + since;
+  }
+
+  /** Trace path plus a soft fill down to the baseline. */
+  function drawFilled(buf, now, color, width, fillAlpha) {
+    var span = OPT.seconds;
+    var i, idx, t, x, y, started = false, firstX = 0, lastX = 0;
+    ctx.beginPath();
+    for (i = 0; i < count; i++) {
+      idx = (head - count + i + CAP * 2) % CAP;
+      t = bT[idx];
+      if (now - t > span) continue;
+      x = plotX + plotW * (1 - (now - t) / span);
+      if (x > plotX + plotW) x = plotX + plotW;
+      y = plotY + plotH - buf[idx] * plotH;
+      if (started) { ctx.lineTo(x, y); } else { ctx.moveTo(x, y); started = true; firstX = x; }
+      lastX = x;
+    }
+    if (!started) return;
+    ctx.lineTo(lastX, plotY + plotH);
+    ctx.lineTo(firstX, plotY + plotH);
+    ctx.closePath();
+    ctx.globalAlpha = fillAlpha;
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    drawStroke(buf, now, color, width);
+  }
+
+  function drawStroke(buf, now, color, width) {
+    var span = OPT.seconds;
+    var i, idx, t, x, y, started = false;
+    ctx.beginPath();
+    for (i = 0; i < count; i++) {
+      idx = (head - count + i + CAP * 2) % CAP;
+      t = bT[idx];
+      if (now - t > span) continue;
+      x = plotX + plotW * (1 - (now - t) / span);
+      if (x > plotX + plotW) x = plotX + plotW;
+      y = plotY + plotH - buf[idx] * plotH;
+      if (started) ctx.lineTo(x, y); else { ctx.moveTo(x, y); started = true; }
+    }
+    if (!started) return;
+    ctx.lineWidth = width;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+  }
+
+  /** Over-draw the brake trace wherever the sim reported ABS active. */
+  function drawAbs(now) {
+    var span = OPT.seconds;
+    var i, idx, prev = -1, t, x, y, open = false;
+    ctx.lineWidth = 2.6;
+    ctx.strokeStyle = YELLOW;
+    ctx.beginPath();
+    for (i = 0; i < count; i++) {
+      idx = (head - count + i + CAP * 2) % CAP;
+      t = bT[idx];
+      if (now - t > span) continue;
+      x = plotX + plotW * (1 - (now - t) / span);
+      if (x > plotX + plotW) x = plotX + plotW;
+      y = plotY + plotH - bBrk[idx] * plotH;
+      if (bAbs[idx]) {
+        if (!open) {
+          if (prev >= 0) {
+            var px = plotX + plotW * (1 - (now - bT[prev]) / span);
+            ctx.moveTo(px, plotY + plotH - bBrk[prev] * plotH);
+            ctx.lineTo(x, y);
+          } else {
+            ctx.moveTo(x, y);
+          }
+          open = true;
+        } else {
+          ctx.lineTo(x, y);
+        }
+      } else {
+        open = false;
+      }
+      prev = idx;
+    }
+    ctx.stroke();
+  }
+
+  function drawBar(x, v, color) {
+    var y0 = plotY, h = plotH;
+    ctx.fillStyle = 'rgba(255,255,255,0.07)';
+    ctx.fillRect(x, y0, BARW, h);
+    var fh = v * h;
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y0 + h - fh, BARW, fh);
+    ctx.strokeStyle = FAINT;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y0 + 0.5, BARW - 1, h - 1);
+  }
+
+  function drawSteer() {
+    var x0 = OPT.trace ? plotX : PADL;
+    var w = OPT.trace ? plotW : (W - PADL - PADR);
+    if (w < 12) return;
+    var y = steerY;
+    ctx.fillStyle = 'rgba(255,255,255,0.07)';
+    ctx.fillRect(x0, y, w, STEERH);
+    var cx = x0 + w / 2;
+    // centre tick
+    ctx.fillStyle = FAINT;
+    ctx.fillRect(cx - 0.5, y, 1, STEERH);
+    var max = 8;
+    var p = PW.tick && PW.tick.player;
+    if (p && p.steerMax > 0.2) max = p.steerMax;
+    var f = -lastStr / max;                 // + is left in iRacing; show it left
+    if (f > 1) f = 1; else if (f < -1) f = -1;
+    var wDraw = Math.abs(f) * (w / 2);
+    ctx.fillStyle = '#e6ecf3';
+    if (f < 0) ctx.fillRect(cx, y + 1, wDraw, STEERH - 2);
+    else ctx.fillRect(cx - wDraw, y + 1, wDraw, STEERH - 2);
+  }
+
+  function drawGrid() {
+    ctx.strokeStyle = GRID;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    var mid = plotY + plotH / 2;
+    ctx.moveTo(plotX, Math.round(mid) + 0.5);
+    ctx.lineTo(plotX + plotW, Math.round(mid) + 0.5);
+    ctx.moveTo(plotX, Math.round(plotY + plotH) - 0.5);
+    ctx.lineTo(plotX + plotW, Math.round(plotY + plotH) - 0.5);
+    ctx.stroke();
+  }
+
+  var lastGearTxt = '', lastSpdTxt = '', lastRpmW = -1, lastAbsOn = null, lastRpmHot = null;
+
+  function drawReadout() {
+    var g = lastGear;
+    var txt = g > 0 ? String(g) : (g === 0 ? 'N' : 'R');
+    if (txt !== lastGearTxt) { elGear.textContent = txt; lastGearTxt = txt; }
+
+    var v = lastSpd * (OPT.mph ? 2.23694 : 3.6);
+    var st = String(Math.round(v));
+    if (st !== lastSpdTxt) { elSpd.firstChild.nodeValue = st; lastSpdTxt = st; }
+
+    var p = PW.tick && PW.tick.player;
+    var shift = (p && p.shiftPct > 0) ? p.shiftPct : 0.92;
+    var f = Math.max(0, Math.min(1, lastRpm / rpmMax));
+    var pct = Math.round(f * 100);
+    if (pct !== lastRpmW) { elRpmFill.style.width = pct + '%'; lastRpmW = pct; }
+    var hot = f >= shift;
+    if (hot !== lastRpmHot) { elRpm.classList.toggle('hot', hot); lastRpmHot = hot; }
+
+    var on = !!lastAbs;
+    if (on !== lastAbsOn) { elAbs.classList.toggle('on', on); lastAbsOn = on; }
+  }
+
+  function frame() {
+    requestAnimationFrame(frame);
+    if (!haveInputs) return;
+    ctx.clearRect(0, 0, W, H);
+
+    var now = traceNow();
+
+    if (OPT.trace && plotW > 0) {
+      drawGrid();
+      drawFilled(bThr, now, GREEN, 1.8, 0.16);
+      if (OPT.clutch) drawStroke(bClu, now, BLUE, 1.4);
+      drawStroke(bBrk, now, RED, 1.8);
+      drawAbs(now);
+    }
+
+    if (OPT.bars) {
+      var x = barX0;
+      // The pedal bars read the newest sample, so they and the right-hand edge
+      // of the trace always agree.
+      var idx = (head - 1 + CAP) % CAP;
+      drawBar(x, count ? bThr[idx] : 0, GREEN); x += BARW + BARGAP;
+      drawBar(x, count ? bBrk[idx] : 0, RED); x += BARW + BARGAP;
+      if (OPT.clutch) drawBar(x, count ? bClu[idx] : 0, BLUE);
+    }
+
+    drawSteer();
+    drawReadout();
+  }
+  requestAnimationFrame(frame);
+
+  PW.on('tick', function () {
+    if (haveInputs) return;
+    // No inputs yet (spectating, or the sim is paused): fall back to the tick
+    // so the readout is not blank, but leave the trace empty.
+    var p = PW.tick && PW.tick.player;
+    if (!p) return;
+    lastGear = p.gear | 0;
+    lastSpd = p.speed || 0;
+    lastRpm = p.rpm || 0;
+    lastStr = p.steer || 0;
+    document.body.classList.add('ready');
+    drawReadout();
+  });
+
+  PW.start({ sub: ['meta', 'tick', 'inputs'], rate: 20, name: 'inputs' });
+})();
+</script>
+</body>
+</html>

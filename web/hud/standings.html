@@ -1,0 +1,482 @@
+<!doctype html>
+<!--
+  PitWall — Standings (in-car HUD)
+  ---------------------------------------------------------------------------
+  The running order, sized for a corner of the driver's screen. Position, car
+  number, name, gap, last lap and stops. Your own row is highlighted and is
+  always on screen: when the field is longer than the widget is tall the top
+  of the order stays pinned and the rest of the list scrolls around you, with
+  a dashed separator marking the cut.
+
+  Rows are positioned by transform and reconciled on the car index, so a
+  position change slides instead of flickering — the same movement as the
+  broadcast tower.
+
+  Recommended window: 300 x 290 (13 rows). Height picks the row count when
+  ?rows= is not given: 22px per row.
+
+  Query string options
+    rows=N       fixed number of rows (default: as many as fit the window)
+    col=gap|int  right-hand time column: gap to leader, or interval to the car
+                 ahead (default gap). Grouped or class-filtered, these become
+                 the in-class gap / in-class interval.
+    last=0       hide the last-lap column
+    stops=0      hide the pit-stop count column
+    group=class  break the list into class blocks with class headers
+    class=SHORT  filter to a single class, e.g. ?class=GT3
+    me=N         cars to keep visible either side of you when the field is
+                 longer than the row count (default 2)
+    car=N        treat car index N as "you" (else camera car / player)
+    names=full|short|surname|abbrev   name style (pitwall.js)
+    w=PX         widget width (default 300)
+    scale=1.2    overall scale            (PW.applyChrome)
+    accent=%23ff8800   accent colour      (PW.applyChrome)
+    opacity=0.8  panel opacity            (PW.applyChrome)
+    server=URL   point at a PitWall on another machine (pitwall.js)
+
+  Colour is information only: class colour on the bar, purple for the car
+  holding the fastest lap, green for a personal-best last lap, yellow for pit.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PitWall — Standings</title>
+<link rel="stylesheet" href="../shared/base.css">
+<style>
+  :root { --row-h: 22px; --head-h: 16px; --sep-h: 7px; }
+
+  #root { width: var(--w, 300px); }
+  #rows { display: none; position: relative; overflow: hidden; }
+  body.ready #rows { display: block; }
+
+  .row, .chead, .sep {
+    position: absolute;
+    left: 0;
+    right: 0;
+    transition: transform 0.34s cubic-bezier(0.22, 0.61, 0.36, 1);
+    will-change: transform;
+  }
+  .row.noanim, .chead.noanim, .sep.noanim { transition: none; }
+
+  .row {
+    height: var(--row-h);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0 6px 0 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    font-size: 12px;
+  }
+
+  .pos {
+    flex: 0 0 20px;
+    text-align: right;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .class-bar { margin: 3px 0; width: 3px; flex: 0 0 3px; }
+  .single-class .class-bar { visibility: hidden; flex: 0 0 2px; width: 2px; }
+
+  .car-num {
+    flex: 0 0 auto;
+    min-width: 26px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 15px;
+    height: 15px;
+    padding: 0 4px;
+  }
+
+  .nm {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 12px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cell {
+    flex: 0 0 46px;
+    text-align: right;
+    font-size: 11.5px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .cell.last { flex: 0 0 50px; color: var(--text-dim); }
+  .cell.empty { color: var(--text-faint); }
+  .cell.pb { color: var(--pb); }
+  .cell.fastest { color: var(--purple); }
+  .cell.st-pit { color: var(--yellow); }
+
+  .stops {
+    flex: 0 0 14px;
+    text-align: right;
+    font-size: 10px;
+    color: var(--text-faint);
+  }
+
+  .row.is-pit { background: rgba(255, 204, 51, 0.10); }
+  .row.is-out { opacity: 0.35; }
+  .row.me {
+    background: rgba(255, 255, 255, 0.14);
+    box-shadow: inset 3px 0 0 var(--accent);
+  }
+  .row.me .nm { font-weight: 800; }
+
+  .chead {
+    height: var(--head-h);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid var(--line);
+  }
+  .chead .chip {
+    font-size: 8.5px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    padding: 1px 3px;
+    border-radius: 2px;
+    color: #05070a;
+  }
+  .chead .cn { font-size: 8.5px; letter-spacing: 0.12em; color: var(--text-faint); text-transform: uppercase; }
+
+  .sep { height: var(--sep-h); display: flex; align-items: center; padding: 0 6px; }
+  .sep i {
+    flex: 1;
+    height: 1px;
+    background: repeating-linear-gradient(90deg, var(--line-strong) 0 4px, transparent 4px 9px);
+  }
+</style>
+</head>
+<body class="overlay">
+  <div id="pw-status"></div>
+  <div id="root" class="scale-root">
+    <div id="rows" class="panel"></div>
+  </div>
+
+<script src="../shared/pitwall.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  PW.applyChrome();
+
+  var OPT = {
+    rows:   Math.max(0, PW.optNum('rows', 0)),
+    col:    PW.opt('col', 'gap') === 'int' ? 'int' : 'gap',
+    last:   PW.optBool('last', true),
+    stops:  PW.optBool('stops', true),
+    group:  PW.opt('group', 'none') === 'class' ? 'class' : 'none',
+    klass:  PW.opt('class', ''),
+    me:     Math.max(0, PW.optNum('me', 2)),
+    width:  PW.optNum('w', 300)
+  };
+  document.getElementById('root').style.setProperty('--w', OPT.width + 'px');
+
+  var elRows = document.getElementById('rows');
+  var HEAD_H = 16, SEP_H = 7;
+
+  function rowH() {
+    var v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--row-h'));
+    return v || 22;
+  }
+
+  function classGaps() { return OPT.group === 'class' || !!OPT.klass; }
+
+  /* ------------------------------------------------------------ cell values */
+
+  var lapsToAhead = {};
+  var lapsDown = {};
+
+  function gapCell(c) {
+    var cg = classGaps();
+    var v = OPT.col === 'int' ? (cg ? c.civ : c.iv) : (cg ? c.gcl : c.gl);
+    var ld = cg ? 0 : (OPT.col === 'int' ? (lapsToAhead[c.i] || 0) : (lapsDown[c.i] || 0));
+    var txt = PW.fmtGap(v, ld);
+    var lead = cg ? (c.cp === 1) : (c.p === 1);
+    if (!txt && !lead) txt = '–';
+    return { t: txt, c: txt === '–' ? 'empty' : '' };
+  }
+
+  function lapIsPB(c) {
+    return c.last != null && c.best != null && Math.abs(c.last - c.best) < 0.0005;
+  }
+
+  /* ---------------------------------------------------------------- layout */
+
+  function entriesFor(cars) {
+    var out = [];
+    if (OPT.klass) {
+      cars = cars.filter(function (c) {
+        var d = PW.driver(c.i);
+        return d && String(d.classShort).toLowerCase() === OPT.klass.toLowerCase();
+      });
+    }
+    if (PW.multiclass() && OPT.group === 'class') {
+      (PW.meta.classes || []).forEach(function (cl) {
+        var inClass = cars.filter(function (c) {
+          var d = PW.driver(c.i);
+          return d && d.classId === cl.id;
+        }).sort(function (a, b) { return (a.cp || 99) - (b.cp || 99); });
+        if (!inClass.length) return;
+        out.push({ type: 'head', key: 'h' + cl.id, cl: cl, h: HEAD_H, cost: HEAD_H / rowH() });
+        inClass.forEach(function (c) {
+          out.push({ type: 'car', key: 'c' + c.i, car: c, h: rowH(), cost: 1 });
+        });
+      });
+    } else {
+      cars.forEach(function (c) {
+        out.push({ type: 'car', key: 'c' + c.i, car: c, h: rowH(), cost: 1 });
+      });
+    }
+    return out;
+  }
+
+  function take(list, start, end, budget) {
+    var out = [], used = 0;
+    for (var i = start; i < end; i++) {
+      if (used + list[i].cost > budget + 0.001) break;
+      out.push(list[i]);
+      used += list[i].cost;
+    }
+    while (out.length && out[out.length - 1].type === 'head') out.pop();
+    return out;
+  }
+
+  function indexOfCar(list, idx) {
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].type === 'car' && list[i].car.i === idx) return i;
+    }
+    return -1;
+  }
+
+  /** Head of the order pinned at the top, a window around "me" below it. */
+  function layout(entries, capacity, meIdx) {
+    var head = take(entries, 0, entries.length, capacity);
+    var pi = indexOfCar(entries, meIdx);
+    if (pi < 0 || pi < head.length || head.length >= entries.length) return head;
+
+    // "me" fell off the bottom: reserve a window around it and pin the rest.
+    var winCost = 0, start = pi, end = pi + 1;
+    winCost += entries[pi].cost;
+    var wantEither = OPT.me;
+    for (var b = 0; b < wantEither && end < entries.length; b++) { winCost += entries[end].cost; end++; }
+    for (var a = 0; a < wantEither && start > 0; a++) { start--; winCost += entries[start].cost; }
+    while (start > 0 && entries[start].type === 'head') { start--; winCost += entries[start].cost; }
+
+    var sepCost = SEP_H / rowH();
+    var pinBudget = capacity - winCost - sepCost;
+    var pinned = pinBudget > 0 ? take(entries, 0, start, pinBudget) : [];
+
+    // Grow the window downwards into any budget the pinned block did not use.
+    var usedCost = winCost + (pinned.length ? sepCost : 0);
+    pinned.forEach(function (e) { usedCost += e.cost; });
+    while (end < entries.length && usedCost + entries[end].cost <= capacity + 0.001) {
+      usedCost += entries[end].cost;
+      end++;
+    }
+    while (start > 0 && usedCost + entries[start - 1].cost <= capacity + 0.001 &&
+           (!pinned.length || start - 1 >= pinned.length)) {
+      start--;
+      usedCost += entries[start].cost;
+    }
+
+    var win = entries.slice(start, end);
+    while (win.length && win[win.length - 1].type === 'head') win.pop();
+
+    var out = pinned.slice();
+    if (pinned.length && start > pinned.length) {
+      out.push({ type: 'sep', key: 'sep', h: SEP_H, cost: sepCost });
+    }
+    usedCost = 0;
+    out.forEach(function (e) { usedCost += e.cost; });
+    win.forEach(function (e) { usedCost += e.cost; });
+
+    // When grouping, the window can open part-way down a class block. Carry
+    // that block's header along so the list is never a column of unlabelled
+    // class positions.
+    if (OPT.group === 'class' && win.length && win[0].type === 'car') {
+      var hd = null;
+      for (var k = start - 1; k >= 0; k--) {
+        if (entries[k].type === 'head') { hd = entries[k]; break; }
+      }
+      var already = false;
+      out.forEach(function (e) { if (e.type === 'head' && hd && e.cl.id === hd.cl.id) already = true; });
+      if (hd && !already) {
+        while (win.length > 1 && usedCost + hd.cost > capacity + 0.001) {
+          usedCost -= win.pop().cost;
+        }
+        win.unshift(hd);
+      }
+    }
+    return out.concat(win);
+  }
+
+  /* ---------------------------------------------------------------- render */
+
+  function makeRow() {
+    var r = PW.el('div', 'row noanim');
+    r.innerHTML =
+      '<div class="pos num"></div>' +
+      '<div class="class-bar"></div>' +
+      '<div class="car-num num"></div>' +
+      '<div class="nm"></div>' +
+      '<div class="cell gap num"></div>' +
+      '<div class="cell last num"></div>' +
+      '<div class="stops num"></div>';
+    return r;
+  }
+
+  function makeHead() {
+    var h = PW.el('div', 'chead noanim');
+    h.innerHTML = '<span class="chip"></span><span class="cn"></span>';
+    return h;
+  }
+
+  function makeSep() {
+    var s = PW.el('div', 'sep noanim');
+    s.innerHTML = '<i></i>';
+    return s;
+  }
+
+  function setText(node, t) {
+    t = (t == null) ? '' : String(t);
+    if (node.textContent !== t) node.textContent = t;
+  }
+
+  function place(node, y) {
+    if (node._y !== y) {
+      node.style.transform = 'translateY(' + y + 'px)';
+      node._y = y;
+    }
+    if (node.classList.contains('noanim')) {
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () { node.classList.remove('noanim'); });
+      });
+    }
+  }
+
+  function updateRow(node, e, meIdx) {
+    var c = e.car;
+    var d = PW.driver(c.i) || {};
+    var q = node.children;
+
+    var pos = (classGaps() && c.cp) ? c.cp : c.p;
+    setText(q[0], pos > 0 ? pos : '');
+    q[1].style.background = d.classColor || 'var(--text-faint)';
+    setText(q[2], d.num != null ? d.num : '');
+    setText(q[3], PW.displayName(c.i));
+
+    var g;
+    if (c.st === 'out') g = { t: 'OUT', c: 'empty' };
+    else if (c.st === 'pit' || c.st === 'stall') g = { t: 'PIT', c: 'st-pit' };
+    else g = gapCell(c);
+    setText(q[4], g.t);
+    q[4].className = 'cell gap num ' + (g.c || '');
+
+    if (OPT.last) {
+      var lt = PW.fmtLap(c.last);
+      setText(q[5], lt || '–');
+      q[5].className = 'cell last num ' +
+        (!lt ? 'empty' : (c.fast && lapIsPB(c) ? 'fastest' : (lapIsPB(c) ? 'pb' : '')));
+      q[5].style.display = '';
+    } else {
+      q[5].style.display = 'none';
+    }
+
+    if (OPT.stops) {
+      setText(q[6], (c.stops != null && c.stops > 0) ? c.stops : '');
+      q[6].style.display = '';
+    } else {
+      q[6].style.display = 'none';
+    }
+
+    node.classList.toggle('is-pit', c.st === 'pit' || c.st === 'stall');
+    node.classList.toggle('is-out', c.st === 'out');
+    node.classList.toggle('me', meIdx != null && c.i === meIdx);
+  }
+
+  function capacity() {
+    if (OPT.rows > 0) return OPT.rows;
+    var scale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--scale')) || 1;
+    var avail = (window.innerHeight / scale) - 2;
+    return Math.max(1, Math.floor(avail / rowH()));
+  }
+
+  function render() {
+    if (!PW.meta || !PW.tick) { document.body.classList.remove('ready'); return; }
+    document.body.classList.add('ready');
+    document.body.classList.toggle('single-class', !PW.multiclass());
+
+    var cars = PW.cars().filter(function (c) { return c.p > 0 || c.lp > 0; });
+
+    // Laps down, rounded rather than floored. `c.ld` is a floor difference of
+    // track positions, so for most of every lap it reads 1 for the whole
+    // field the moment the leader crosses the line. Rounding the distance
+    // between two cars answers the question actually being asked: are they a
+    // whole lap apart at the same point on the track?
+    lapsDown = {};
+    lapsToAhead = {};
+    var order = cars.slice().sort(function (a, b) { return (a.p || 99) - (b.p || 99); });
+    var lead = order[0];
+    function tp(c) {
+      return ((c.lc != null) ? c.lc : Math.max(0, (c.lap || 1) - 1)) + (c.pct || 0);
+    }
+    if (lead) {
+      var lt = tp(lead);
+      order.forEach(function (c) { lapsDown[c.i] = Math.max(0, Math.round(lt - tp(c))); });
+    }
+    for (var oi = 1; oi < order.length; oi++) {
+      lapsToAhead[order[oi].i] =
+        Math.max(0, (lapsDown[order[oi].i] || 0) - (lapsDown[order[oi - 1].i] || 0));
+    }
+
+    var meIdx = PW.focusIdx();
+    var entries = entriesFor(cars);
+    var items = layout(entries, capacity(), meIdx);
+
+    // Reconcile in a stable key order: re-inserting a node would cancel its
+    // running transform transition and the row would snap instead of slide.
+    var stable = items.slice().sort(function (a, b) {
+      return a.key < b.key ? -1 : (a.key > b.key ? 1 : 0);
+    });
+
+    PW.reconcile(elRows, stable,
+      function (e) { return e.key; },
+      function (e) {
+        return e.type === 'car' ? makeRow() : (e.type === 'head' ? makeHead() : makeSep());
+      },
+      function (node, e) {
+        if (e.type === 'car') updateRow(node, e, meIdx);
+        else if (e.type === 'head') {
+          var chip = node.children[0];
+          chip.textContent = e.cl.short || '';
+          chip.style.background = e.cl.color;
+          node.children[1].textContent = (e.cl.count || 0) + ' cars';
+        }
+      });
+
+    var byKey = {};
+    Array.prototype.forEach.call(elRows.children, function (n) { byKey[n.dataset.key] = n; });
+    var y = 0;
+    for (var i = 0; i < items.length; i++) {
+      var node = byKey[items[i].key];
+      if (!node) continue;
+      place(node, y);
+      y += items[i].h;
+    }
+    elRows.style.height = y + 'px';
+  }
+
+  window.addEventListener('resize', render);
+  PW.on('meta', render);
+  PW.on('tick', render);
+  PW.start({ sub: ['meta', 'tick'], rate: 10, name: 'hud-standings' });
+})();
+</script>
+</body>
+</html>

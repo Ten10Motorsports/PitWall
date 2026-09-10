@@ -1,0 +1,1472 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PitWall — Control Panel</title>
+<link rel="stylesheet" href="../shared/base.css">
+<!--
+  PitWall — operator control panel.
+  ---------------------------------------------------------------------------
+  The page that opens when PitWall starts, and the first thing a new user
+  sees. Its whole job is to make the system obviously work, or to say exactly
+  why it does not.
+
+    Status       is anything connected, and what is it looking at
+    Diagnostics  /api/diagnostics, in words, with the fix for each problem
+    Overlays     every browser source with its URL, size and a live preview
+    Roster       driver-submitted profiles, import/export and GitHub sync
+    League       branding and roster storage, saved to config/pitwall.json
+    Sim control  camera and replay control through irsdk_broadcastMsg
+
+  Options: server=http://host:port when this page is not served by PitWall
+           (pitwall.js), tab=status|diagnostics|overlays|roster|league|control
+           to open on a particular tab. The tab is also in the URL hash.
+-->
+<style>
+  body.solid {
+    background:
+      radial-gradient(120% 70% at 50% -10%, #151a23 0%, rgba(11,13,16,0) 60%),
+      var(--bg);
+    min-height: 100vh;
+  }
+
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px 80px; }
+
+  /* ============================================================== header */
+
+  header.top {
+    display: flex; align-items: center; gap: 16px;
+    padding: 18px 0 14px;
+    flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: center; gap: 11px; }
+  .brand i { width: 5px; height: 30px; background: var(--accent); border-radius: 2px; }
+  .brand .t { font-size: 21px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.05; }
+  .brand .s { font-size: 9px; letter-spacing: 0.2em; color: var(--text-faint); text-transform: uppercase; }
+
+  .hpills { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    height: 30px; padding: 0 11px;
+    border: 1px solid var(--line); border-radius: 4px;
+    background: rgba(var(--panel-2), 0.6);
+    font-size: 12px; white-space: nowrap;
+  }
+  .pill b { font-weight: 600; }
+  .pill .k { color: var(--text-faint); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); flex: 0 0 8px; }
+  .dot.ok { background: var(--green); box-shadow: 0 0 8px rgba(53,208,127,0.6); }
+  .dot.info { background: var(--blue); }
+  .dot.warn { background: var(--yellow); }
+
+  /* ================================================================ tabs */
+
+  nav.tabs {
+    display: flex; gap: 2px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 22px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  nav.tabs::-webkit-scrollbar { display: none; }
+  nav.tabs button {
+    background: transparent; border: none; border-bottom: 2px solid transparent;
+    border-radius: 0;
+    padding: 11px 15px;
+    font-size: 13px; font-weight: 600; color: var(--text-dim);
+    white-space: nowrap;
+  }
+  nav.tabs button:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+  nav.tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+  nav.tabs button .badge { margin-left: 7px; }
+
+  section.tab { display: none; }
+  section.tab.on { display: block; }
+
+  /* ============================================================== cards */
+
+  .card {
+    background: rgba(var(--panel-2), 0.5);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 18px;
+    margin-bottom: 18px;
+  }
+  .card > h2 {
+    font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--text-faint); margin: 0 0 14px; font-weight: 800;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .card > h2 .sp { flex: 1; }
+  .card > h2 button { padding: 4px 10px; font-size: 11px; letter-spacing: 0; text-transform: none; }
+  .card > h2 .plain { text-transform: none; letter-spacing: 0; font-weight: 500; }
+  .lede { color: var(--text-dim); font-size: 13px; line-height: 1.6; margin: -4px 0 14px; }
+
+  h3.sub {
+    font-size: 12px; font-weight: 700; margin: 22px 0 10px;
+    color: var(--text); letter-spacing: 0.02em;
+  }
+
+  /* ========================================================= status tiles */
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+  .tile {
+    border: 1px solid var(--line); border-radius: 7px;
+    background: rgba(0,0,0,0.25);
+    padding: 14px 15px;
+  }
+  .tile .k { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-faint); font-weight: 700; }
+  .tile .v { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin-top: 6px; line-height: 1.15; }
+  .tile .v.sm { font-size: 16px; }
+  .tile .n { font-size: 11px; color: var(--text-dim); margin-top: 5px; line-height: 1.45; }
+  .tile.hero { grid-column: span 2; }
+  .tile.good { border-color: rgba(53,208,127,0.35); background: rgba(53,208,127,0.07); }
+  .tile.bad { border-color: rgba(255,77,77,0.35); background: rgba(255,77,77,0.07); }
+  .tile.info { border-color: rgba(59,130,246,0.35); background: rgba(59,130,246,0.07); }
+  @media (max-width: 640px) { .tile.hero { grid-column: span 1; } }
+
+  .linklist { display: flex; flex-direction: column; gap: 8px; }
+  .urlrow { display: flex; gap: 8px; align-items: center; flex: 1 1 auto; min-width: 0; }
+  .urlrow input { min-width: 0; }
+  .linkrow { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+  .linkrow > .lbl { flex: 0 0 108px; font-size: 12px; color: var(--text-dim); }
+  @media (max-width: 640px) {
+    .linkrow { flex-wrap: wrap; gap: 5px; }
+    .linkrow > .lbl { flex: 1 1 100%; }
+  }
+  .urlrow input {
+    font-family: var(--mono); font-size: 12px; padding: 7px 9px;
+  }
+  .urlrow button { flex: 0 0 auto; padding: 7px 11px; font-size: 12px; }
+  .urlrow a.btn { text-decoration: none; display: inline-block; }
+
+  /* ========================================================= diagnostics */
+
+  .summary {
+    display: flex; gap: 16px; align-items: flex-start;
+    border-radius: 8px; padding: 18px 20px;
+    border: 1px solid var(--line);
+    background: rgba(0,0,0,0.25);
+    margin-bottom: 18px;
+  }
+  .summary.ok   { border-color: rgba(53,208,127,0.4); background: rgba(53,208,127,0.08); }
+  .summary.warn { border-color: rgba(255,204,51,0.4); background: rgba(255,204,51,0.07); }
+  .summary.fail { border-color: rgba(255,77,77,0.45); background: rgba(255,77,77,0.08); }
+  .summary .icon {
+    flex: 0 0 44px; height: 44px; border-radius: 50%;
+    display: grid; place-items: center;
+    font-size: 20px; font-weight: 800;
+    background: rgba(255,255,255,0.08);
+  }
+  .summary.ok .icon { color: var(--green); }
+  .summary.warn .icon { color: var(--yellow); }
+  .summary.fail .icon { color: var(--red); }
+  .summary .st {
+    font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+    font-weight: 800; color: var(--text-faint);
+  }
+  .summary h2 { font-size: 17px; font-weight: 700; margin: 5px 0 0; line-height: 1.4; letter-spacing: -0.01em; }
+  .summary .fix { font-size: 13px; color: var(--text-dim); line-height: 1.6; margin-top: 8px; }
+
+  .check {
+    display: grid; grid-template-columns: 74px 1fr; gap: 12px;
+    padding: 13px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .check:last-child { border-bottom: none; }
+  .check .nm { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+  .check .dt { font-size: 12.5px; color: var(--text-dim); line-height: 1.55; }
+  .check .fx {
+    font-size: 12.5px; line-height: 1.6; margin-top: 8px;
+    padding: 9px 11px; border-radius: 5px;
+    border-left: 2px solid var(--line-strong);
+    background: rgba(255,255,255,0.04);
+    color: var(--text);
+  }
+  .check.warn .fx { border-left-color: var(--yellow); }
+  .check.fail .fx { border-left-color: var(--red); }
+  .check.info .fx { border-left-color: var(--blue); }
+  .check .fx b { color: var(--text-dim); font-weight: 700; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; display: block; margin-bottom: 4px; }
+
+  /* ============================================================ overlays */
+
+  .ovgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  .ov {
+    border: 1px solid var(--line); border-radius: 7px;
+    background: rgba(0,0,0,0.22);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .ov .shot {
+    height: 150px; position: relative; overflow: hidden;
+    background:
+      linear-gradient(120deg, #223047 0%, #131922 55%, #1c2431 100%);
+    border-bottom: 1px solid var(--line);
+  }
+  .ov .shot iframe {
+    position: absolute; top: 0; left: 0;
+    border: 0;
+    transform-origin: top left;
+    pointer-events: none;
+  }
+  .ov .shot .missing {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    font-size: 12px; color: var(--text-faint); text-align: center; padding: 14px; line-height: 1.5;
+  }
+  .ov .body { padding: 12px 13px; display: flex; flex-direction: column; gap: 7px; flex: 1; }
+  .ov .nm { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .ov .nm .size { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--text-faint); }
+  .ov .ds { font-size: 12px; color: var(--text-dim); line-height: 1.5; flex: 1; }
+  .ov .urlrow input { font-size: 11px; padding: 6px 8px; }
+  .ov .urlrow button { padding: 6px 9px; font-size: 11px; }
+
+  .builder { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+  .builder .field { margin-bottom: 0; }
+  .builder label { margin-bottom: 4px; }
+  .builder select, .builder input { padding: 6px 8px; font-size: 12px; }
+  .checkline { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text); }
+  .checkline input { width: auto; accent-color: var(--accent); }
+
+  .bigurl {
+    font-family: var(--mono); font-size: 12px; line-height: 1.5;
+    word-break: break-all;
+    background: rgba(0,0,0,0.45); border: 1px solid var(--line-strong);
+    border-radius: 5px; padding: 10px 12px; color: var(--text);
+    margin: 12px 0;
+  }
+  .previewframe {
+    border: 1px solid var(--line); border-radius: 6px;
+    background: linear-gradient(120deg, #223047 0%, #131922 55%, #1c2431 100%);
+    height: 420px; position: relative; overflow: hidden;
+  }
+  .previewframe iframe { position: absolute; top: 0; left: 0; border: 0; transform-origin: top left; }
+
+  /* ============================================================== roster */
+
+  table.rt { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.rt th {
+    text-align: left; font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--text-faint); font-weight: 700; padding: 0 8px 8px; white-space: nowrap;
+  }
+  table.rt td { padding: 7px 8px; border-top: 1px solid var(--line); vertical-align: middle; }
+  table.rt tr:hover td { background: rgba(255,255,255,0.03); }
+  table.rt .th-shot { width: 40px; }
+  .rshot {
+    width: 30px; height: 30px; border-radius: 50%; overflow: hidden;
+    background: rgba(0,0,0,0.45); display: grid; place-items: center;
+    font-family: var(--mono); font-size: 11px; color: var(--text-faint);
+    box-shadow: inset 0 0 0 1px var(--line-strong);
+  }
+  .rshot img { width: 100%; height: 100%; object-fit: cover; }
+  .rt .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12px; }
+  .rt .dimc { color: var(--text-dim); }
+  .rt td.act { text-align: right; white-space: nowrap; }
+  .rt td.act button { padding: 4px 9px; font-size: 11px; }
+  .tablescroll { overflow-x: auto; }
+
+  .result {
+    font-size: 12.5px; line-height: 1.55; margin-top: 10px;
+    padding: 9px 11px; border-radius: 5px; display: none;
+  }
+  .result.show { display: block; }
+  .result.ok { background: rgba(53,208,127,0.12); border: 1px solid rgba(53,208,127,0.35); color: #bff3d8; }
+  .result.bad { background: rgba(255,77,77,0.12); border: 1px solid rgba(255,77,77,0.4); color: #ffc9c9; }
+  .result.info { background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.35); color: #cfe0ff; }
+
+  .btnrow { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; }
+
+  .signup {
+    border: 1px solid rgba(59,130,246,0.35);
+    background: rgba(59,130,246,0.08);
+    border-radius: 8px; padding: 16px;
+    margin-bottom: 18px;
+  }
+  .signup h3 { margin: 0 0 6px; font-size: 14px; font-weight: 700; }
+  .signup p { margin: 0 0 12px; font-size: 12.5px; color: var(--text-dim); line-height: 1.55; }
+
+  .kvlist { display: grid; grid-template-columns: 130px 1fr; gap: 7px 12px; font-size: 12.5px; }
+  .kvlist .k { color: var(--text-faint); }
+  .kvlist .v { font-family: var(--mono); word-break: break-all; }
+
+  /* ========================================================= sim control */
+
+  .disabled-note {
+    border: 1px solid rgba(255,204,51,0.4);
+    background: rgba(255,204,51,0.08);
+    border-radius: 8px; padding: 16px 18px; margin-bottom: 18px;
+    font-size: 13px; line-height: 1.6;
+  }
+  .disabled-note b { color: var(--yellow); }
+  .locked { opacity: 0.42; pointer-events: none; filter: saturate(0.4); }
+
+  .padgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 9px; }
+  .padgrid button { padding: 11px 10px; font-size: 13px; }
+  .speedrow { display: flex; gap: 8px; flex-wrap: wrap; }
+  .speedrow button { min-width: 56px; }
+
+  .swatchrow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  input[type=color] { width: 54px; height: 36px; padding: 2px; cursor: pointer; }
+  .accentdemo {
+    display: flex; gap: 10px; align-items: center; margin-top: 12px;
+    border: 1px solid var(--line); border-radius: 6px; padding: 12px;
+    background: rgba(0,0,0,0.3);
+  }
+  .accentdemo .bar { width: 5px; height: 30px; border-radius: 2px; }
+  .accentdemo .nm { font-size: 16px; font-weight: 700; }
+  .accentdemo .chip {
+    font-size: 10px; font-weight: 800; letter-spacing: 0.06em; padding: 3px 8px;
+    border-radius: 3px; color: #05070a;
+  }
+  select:not(:focus) { outline: none; }
+  code {
+    font-family: var(--mono); font-size: 12px;
+    background: rgba(0,0,0,0.4); padding: 1px 5px; border-radius: 3px;
+  }
+</style>
+</head>
+<body class="solid">
+<div id="pw-status"></div>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <i></i>
+      <div>
+        <div class="t" id="brandname">PitWall</div>
+        <div class="s">Control panel</div>
+      </div>
+    </div>
+    <div class="hpills" id="hpills"></div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button data-tab="status" class="on">Status</button>
+    <button data-tab="diagnostics">Diagnostics <span id="diagbadge"></span></button>
+    <button data-tab="overlays">Overlays</button>
+    <button data-tab="roster">Roster <span id="rosterbadge"></span></button>
+    <button data-tab="league">League</button>
+    <button data-tab="control">Sim control</button>
+  </nav>
+
+  <!-- ============================================================ STATUS -->
+  <section class="tab on" id="tab-status">
+    <div class="card">
+      <h2>System</h2>
+      <div class="tiles" id="statustiles"></div>
+    </div>
+
+    <div class="card">
+      <h2>Session</h2>
+      <div class="tiles" id="sessiontiles"></div>
+    </div>
+
+    <div class="card">
+      <h2>Open on this machine or another device</h2>
+      <p class="lede">Any device on the same network can open these. If another
+        device cannot reach them, allow Python through the Windows firewall on
+        private networks.</p>
+      <div class="linklist" id="lanlinks"></div>
+    </div>
+  </section>
+
+  <!-- ======================================================= DIAGNOSTICS -->
+  <section class="tab" id="tab-diagnostics">
+    <div id="diagsummary"></div>
+    <div class="card">
+      <h2>Environment checks
+        <span class="sp"></span>
+        <span class="faint plain" id="diagtime" style="font-size:11px"></span>
+        <button id="diagrefresh">Run again</button>
+      </h2>
+      <div id="diaglist"></div>
+    </div>
+  </section>
+
+  <!-- ========================================================== OVERLAYS -->
+  <section class="tab" id="tab-overlays">
+    <div class="card">
+      <h2>Browser sources</h2>
+      <p class="lede">Add each of these to OBS as a <b>Browser</b> source at the
+        size shown, with “Shutdown source when not visible” off. They are
+        transparent: the preview here sits on a fake video background so you can
+        see what OBS will get.</p>
+      <div class="ovgrid" id="ovgrid"></div>
+    </div>
+
+    <div class="card">
+      <h2>Timing tower option builder</h2>
+      <p class="lede">Every overlay is configured from its URL, so a scene
+        collection carries its own settings. Build the tower URL here, then paste
+        it into the OBS browser source.</p>
+      <div class="builder" id="builder"></div>
+      <div class="bigurl" id="builderurl"></div>
+      <div class="btnrow">
+        <button class="primary" id="bcopy">Copy URL</button>
+        <button id="bopen">Open in a tab</button>
+        <button id="breset">Reset</button>
+        <span id="bmsg" class="faint" style="font-size:12px"></span>
+      </div>
+      <h3 class="sub">Live preview</h3>
+      <div class="previewframe" id="bpreview"></div>
+    </div>
+
+    <div class="card">
+      <h2>Addresses for other devices</h2>
+      <div class="linklist" id="ovlan"></div>
+    </div>
+  </section>
+
+  <!-- ============================================================ ROSTER -->
+  <section class="tab" id="tab-roster">
+    <div class="signup">
+      <h3>Driver sign-up link</h3>
+      <p>This is the link a league admin sends to their drivers. They fill it in
+        once on a phone; the headshot, country, team, bio and socials then appear
+        on every overlay automatically.</p>
+      <div class="linklist" id="signuplinks"></div>
+    </div>
+
+    <div class="card">
+      <h2>Drivers
+        <span class="sp"></span>
+        <span class="faint plain" id="rostercount" style="font-size:11px"></span>
+        <button id="rosterrefresh">Refresh</button>
+      </h2>
+      <div class="tablescroll"><table class="rt" id="rostertable"></table></div>
+      <div class="result" id="rostermsg"></div>
+      <h3 class="sub">Import and export</h3>
+      <div class="btnrow">
+        <button id="rexport">Download roster.json</button>
+        <button id="rimportbtn">Import JSON…</button>
+        <input type="file" id="rimport" accept="application/json,.json" style="display:none">
+        <span class="faint" style="font-size:11.5px">Import replaces the whole list.</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>GitHub sync</h2>
+      <p class="lede">In <code>github</code> mode the repository is the shared
+        database: drivers' submissions land as commits, everyone in the league
+        reads the same file, and you get history and rollback for free.</p>
+      <div class="kvlist" id="synccfg"></div>
+      <div class="btnrow" style="margin-top:14px">
+        <button id="rpull">Pull from GitHub</button>
+        <button id="rpush">Push to GitHub</button>
+      </div>
+      <div class="result" id="syncmsg"></div>
+    </div>
+  </section>
+
+  <!-- ============================================================ LEAGUE -->
+  <section class="tab" id="tab-league">
+    <div class="card">
+      <h2>Branding</h2>
+      <p class="lede">Applied to every overlay the moment you save. An individual
+        browser source can still override the accent with
+        <code>?accent=%23ff8800</code>.</p>
+      <div class="grid-2">
+        <div class="field">
+          <label for="lname">League name</label>
+          <input id="lname" placeholder="Midweek Endurance Series">
+        </div>
+        <div class="field">
+          <label for="lhash">Hashtag</label>
+          <input id="lhash" placeholder="#MESRacing">
+        </div>
+      </div>
+      <div class="field">
+        <label for="llogo">Logo URL</label>
+        <input id="llogo" placeholder="https://… or /uploads/logo.png">
+        <div class="hint">Anything the browser can load. Leave empty for none.</div>
+      </div>
+      <div class="grid-2">
+        <div class="field">
+          <label for="laccent">Accent colour</label>
+          <div class="swatchrow">
+            <input type="color" id="laccent" value="#e8443a">
+            <input id="laccenttxt" style="max-width:140px" value="#e8443a">
+          </div>
+        </div>
+        <div class="field">
+          <label for="lsecond">Secondary colour</label>
+          <div class="swatchrow">
+            <input type="color" id="lsecond" value="#12b8ff">
+            <input id="lsecondtxt" style="max-width:140px" value="#12b8ff">
+          </div>
+        </div>
+      </div>
+      <div class="accentdemo" id="accentdemo">
+        <div class="bar"></div>
+        <div class="nm">P1 · Preview</div>
+        <span class="chip">GT3</span>
+        <span class="chip second">LIVE</span>
+      </div>
+      <div class="btnrow" style="margin-top:16px">
+        <button class="primary" id="lsave">Save branding</button>
+      </div>
+      <div class="result" id="leaguemsg"></div>
+    </div>
+
+    <div class="card">
+      <h2>Roster storage</h2>
+      <div class="grid-2">
+        <div class="field">
+          <label for="rmode">Mode</label>
+          <select id="rmode">
+            <option value="local">local — roster.json on this machine</option>
+            <option value="github">github — a file in a GitHub repo</option>
+            <option value="url">url — read-only pull from any URL</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="rrepo">Repository (owner/name)</label>
+          <input id="rrepo" placeholder="myleague/broadcast">
+        </div>
+        <div class="field">
+          <label for="rbranch">Branch</label>
+          <input id="rbranch" placeholder="main">
+        </div>
+        <div class="field">
+          <label for="rpath">Path in the repo</label>
+          <input id="rpath" placeholder="roster.json">
+        </div>
+      </div>
+      <div class="field">
+        <label for="rurl">URL (url mode only)</label>
+        <input id="rurl" placeholder="https://raw.githubusercontent.com/…/roster.json">
+      </div>
+      <div class="hint" style="margin-bottom:14px">
+        The GitHub token is read from the <code>PITWALL_GITHUB_TOKEN</code>
+        environment variable and is never shown here or sent to this page.
+        Token currently detected: <b id="hastoken">no</b>.
+      </div>
+      <div class="btnrow">
+        <button class="primary" id="rsave">Save storage settings</button>
+      </div>
+      <div class="result" id="storagemsg"></div>
+    </div>
+  </section>
+
+  <!-- ======================================================= SIM CONTROL -->
+  <section class="tab" id="tab-control">
+    <div id="controlnote"></div>
+    <div id="controlbody">
+      <div class="card">
+        <h2>Camera</h2>
+        <div class="grid-2">
+          <div class="field">
+            <label for="camgroup">Camera group</label>
+            <select id="camgroup"></select>
+            <div class="hint">Applied to every camera action below. “Auto” lets
+              iRacing keep the group it is on.</div>
+          </div>
+          <div class="field">
+            <label for="camcar">Cut to a car</label>
+            <div class="btnrow">
+              <select id="camcar" style="flex:1 1 200px"></select>
+              <button class="primary" id="camcarbtn">Cut</button>
+            </div>
+            <div class="hint">Sends the car number, so leading zeros survive.</div>
+          </div>
+        </div>
+        <h3 class="sub">Director</h3>
+        <div class="padgrid">
+          <button data-focus="leader">Focus on leader</button>
+          <button data-focus="exciting">Most exciting</button>
+          <button data-focus="incident">Last incident</button>
+        </div>
+        <div class="result" id="cammsg"></div>
+      </div>
+
+      <div class="card">
+        <h2>Replay transport</h2>
+        <div class="padgrid">
+          <button data-search="prevIncident">◀ Previous incident</button>
+          <button data-search="nextIncident">Next incident ▶</button>
+          <button data-search="prevLap">◀ Previous lap</button>
+          <button data-search="nextLap">Next lap ▶</button>
+          <button data-search="toStart">⏮ Start of replay</button>
+          <button data-live="1" class="primary">⏭ Jump to live</button>
+        </div>
+        <h3 class="sub">Play speed</h3>
+        <div class="speedrow" id="speeds"></div>
+        <h3 class="sub">Slow motion</h3>
+        <div class="speedrow" id="slows"></div>
+        <div class="result" id="replaymsg"></div>
+      </div>
+
+      <div class="card">
+        <h2>Capture</h2>
+        <div class="padgrid">
+          <button data-capture="screenshot">Screenshot</button>
+          <button data-capture="startCapture">Start video capture</button>
+          <button data-capture="endCapture">End video capture</button>
+          <button data-capture="toggleCapture">Toggle capture</button>
+          <button data-capture="showTimer">Show capture timer</button>
+          <button data-capture="hideTimer">Hide capture timer</button>
+        </div>
+        <div class="result" id="capturemsg"></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="../shared/pitwall.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  PW.applyChrome();
+
+  var status = null;
+  var config = null;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (ch) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch];
+    });
+  }
+  function $(id) { return document.getElementById(id); }
+  function base() { return PW.serverBase(); }
+
+  function say(el, kind, text) {
+    el.className = 'result show ' + kind;
+    el.textContent = text;
+  }
+  function clear(el) { el.className = 'result'; el.textContent = ''; }
+
+  /** Only touch the DOM when the markup actually changed: this page polls. */
+  function setHTML(el, html) {
+    if (el._h === html) return;
+    el._h = html;
+    el.innerHTML = html;
+  }
+
+  function copy(text, done) {
+    var ok = function () { if (done) done(true); };
+    var bad = function () {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (done) done(true);
+      } catch (e) { if (done) done(false); }
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(ok, bad);
+    } else bad();
+  }
+
+  function urlRow(url, opts) {
+    opts = opts || {};
+    return '<div class="urlrow">' +
+      '<input readonly value="' + esc(url) + '">' +
+      '<button data-copy="' + esc(url) + '">Copy</button>' +
+      (opts.noOpen ? '' : '<a class="btn" href="' + esc(url) + '" target="_blank" rel="noopener">Open</a>') +
+      '</div>';
+  }
+
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-copy]');
+    if (!b) return;
+    var was = b.textContent;
+    copy(b.dataset.copy, function (ok) {
+      b.textContent = ok ? 'Copied' : 'Copy failed';
+      setTimeout(function () { b.textContent = was; }, 1400);
+    });
+  });
+
+  /* ================================================================ tabs */
+
+  var TABS = ['status', 'diagnostics', 'overlays', 'roster', 'league', 'control'];
+  var loaded = {};
+
+  function showTab(name) {
+    if (TABS.indexOf(name) < 0) name = 'status';
+    TABS.forEach(function (t) {
+      $('tab-' + t).classList.toggle('on', t === name);
+    });
+    Array.prototype.forEach.call($('tabs').children, function (b) {
+      b.classList.toggle('on', b.dataset.tab === name);
+    });
+    if (location.hash !== '#' + name) history.replaceState(null, '', '#' + name);
+    if (!loaded[name]) {
+      loaded[name] = true;
+      if (name === 'diagnostics') runDiagnostics();
+      if (name === 'overlays') initOverlays();
+      if (name === 'roster') loadRoster();
+      if (name === 'league') fillLeague();
+      if (name === 'control') renderControl();
+    }
+    if (name === 'control') renderControl();
+  }
+
+  $('tabs').addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-tab]');
+    if (b) showTab(b.dataset.tab);
+  });
+
+  /* ============================================================== header */
+
+  function renderPills() {
+    var s = status;
+    var conn = s && s.connected;
+    var demo = s && s.demo;
+    var h = '';
+    h += '<span class="pill"><i class="dot ' + (conn ? (demo ? 'info' : 'ok') : '') + '"></i>' +
+         '<b>' + (conn ? (demo ? 'Demo mode' : 'Live telemetry') : 'No telemetry') + '</b></span>';
+    h += '<span class="pill"><span class="k">Overlays</span><b class="num">' +
+         (s ? s.clients : '–') + '</b></span>';
+    h += '<span class="pill"><span class="k">Ticks</span><b class="num">' +
+         (s ? s.ticks.toLocaleString() : '–') + '</b></span>';
+    setHTML($('hpills'), h);
+
+    var lg = (s && s.league) || {};
+    $('brandname').textContent = lg.name || 'PitWall';
+  }
+
+  /* ============================================================== status */
+
+  function renderStatus() {
+    var s = status;
+    if (!s) {
+      $('statustiles').innerHTML =
+        '<div class="tile bad hero"><div class="k">Server</div><div class="v">Not answering</div>' +
+        '<div class="n">This page cannot reach the PitWall server at ' + esc(base()) +
+        '. If it is still starting up this will clear on its own.</div></div>';
+      return;
+    }
+    var t = '';
+    if (s.connected) {
+      t += '<div class="tile ' + (s.demo ? 'info' : 'good') + ' hero"><div class="k">Data source</div>' +
+           '<div class="v">' + (s.demo ? 'Demo mode' : 'Connected to iRacing') + '</div>' +
+           '<div class="n">' + (s.demo
+              ? 'A synthetic 24-car race is driving every overlay. Restart PitWall without --demo to read the real sim.'
+              : 'Reading iRacing’s shared memory. Everything downstream is live.') +
+           '</div></div>';
+    } else {
+      t += '<div class="tile bad hero"><div class="k">Data source</div>' +
+           '<div class="v">Not connected</div>' +
+           '<div class="n">' + esc(s.error || 'PitWall is not receiving telemetry from iRacing.') +
+           ' Open the Diagnostics tab: it names the cause.</div></div>';
+    }
+    t += '<div class="tile"><div class="k">Overlays connected</div><div class="v num">' + s.clients + '</div>' +
+         '<div class="n">Browser sources, HUD windows and timing pages currently subscribed.</div></div>';
+    t += '<div class="tile"><div class="k">Ticks read</div><div class="v num">' + s.ticks.toLocaleString() + '</div>' +
+         '<div class="n">Up ' + PW.fmtClock(s.uptime) + '.</div></div>';
+    t += '<div class="tile"><div class="k">Sim control</div><div class="v sm">' +
+         (s.controlAvailable ? 'Available' : 'Unavailable') + '</div>' +
+         '<div class="n">' + (s.controlAvailable
+            ? 'Camera and replay control can be sent to iRacing.'
+            : 'Windows only — this copy of PitWall cannot send camera or replay commands.') + '</div></div>';
+    t += '<div class="tile"><div class="k">Roster</div><div class="v num">' +
+         ((s.roster && s.roster.count) || 0) + '</div>' +
+         '<div class="n">Driver profiles stored in ' + esc((s.roster && s.roster.mode) || 'local') + ' mode.</div></div>';
+    setHTML($('statustiles'), t);
+
+    var m = PW.meta, k = PW.tick;
+    var st = '';
+    if (!m || !k) {
+      st = '<div class="tile hero"><div class="k">Session</div><div class="v sm">Waiting for data</div>' +
+           '<div class="n">Nothing has arrived over the websocket yet.</div></div>';
+    } else {
+      var tr = m.track || {}, ss = k.session || {};
+      st += '<div class="tile hero"><div class="k">Track</div><div class="v sm">' + esc(tr.name || '–') + '</div>' +
+            '<div class="n">' + esc([tr.config, tr.lengthKm ? tr.lengthKm.toFixed(3) + ' km' : '', tr.country]
+              .filter(Boolean).join(' · ')) + '</div></div>';
+      st += '<div class="tile"><div class="k">Session</div><div class="v sm">' +
+            esc(ss.name || ss.type || '–') + '</div><div class="n">' + esc(ss.state || '') + '</div></div>';
+      st += '<div class="tile"><div class="k">Flag</div><div class="v sm">' +
+            esc((ss.caution ? 'CAUTION' : (ss.flag || 'none')).toUpperCase()) + '</div>' +
+            '<div class="n">' + (ss.cautions || 0) + ' caution' + ((ss.cautions === 1) ? '' : 's') + '</div></div>';
+      st += '<div class="tile"><div class="k">Cars</div><div class="v num">' + (k.cars || []).length + '</div>' +
+            '<div class="n">' + ((m.classes || []).map(function (c) { return c.short + ' ' + c.count; }).join(' · ') || '') +
+            '</div></div>';
+      st += '<div class="tile"><div class="k">Strength of field</div><div class="v num">' + (m.sof || '–') + '</div>' +
+            '<div class="n">Air ' + (ss.airTemp != null ? ss.airTemp.toFixed(1) + '°C' : '–') +
+            ' · Track ' + (ss.trackTemp != null ? ss.trackTemp.toFixed(1) + '°C' : '–') + '</div></div>';
+    }
+    setHTML($('sessiontiles'), st);
+
+    var urls = s.urls || [base()];
+    var pages = [['Control panel', '/control'], ['Live timing', '/timing'], ['Driver sign-up', '/register']];
+    var h = '';
+    urls.forEach(function (u, i) {
+      h += '<div style="margin-bottom:6px"><span class="faint" style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase">' +
+           (i === 0 ? 'This machine' : 'On your network') + '</span></div>';
+      pages.forEach(function (p) {
+        h += '<div class="linkrow"><span class="lbl">' + p[0] + '</span>' +
+             urlRow(u + p[1]) + '</div>';
+      });
+    });
+    setHTML($('lanlinks'), h);
+    setHTML($('ovlan'), h);
+  }
+
+  function pollStatus() {
+    PW.api('/api/status').then(function (s) {
+      status = s;
+      renderPills();
+      renderStatus();
+      updateBadges();
+    }).catch(function () {
+      status = null;
+      renderPills();
+      renderStatus();
+    });
+  }
+
+  function updateBadges() {
+    if (status && status.roster) {
+      $('rosterbadge').className = 'badge info';
+      $('rosterbadge').textContent = status.roster.count;
+    }
+  }
+
+  /* ========================================================= diagnostics */
+
+  var STATUS_ICON = { ok: '✓', warn: '!', fail: '✕', info: 'i' };
+
+  function runDiagnostics() {
+    $('diaglist').innerHTML = '<div class="dt dim" style="font-size:13px;color:var(--text-dim)">Running checks…</div>';
+    PW.api('/api/diagnostics').then(function (d) {
+      var sum = d.summary || {};
+      $('diagsummary').innerHTML =
+        '<div class="summary ' + esc(sum.status || 'info') + '">' +
+        '<div class="icon">' + (STATUS_ICON[sum.status] || 'i') + '</div>' +
+        '<div><div class="st">' +
+        (sum.status === 'ok' ? 'All clear' : sum.status === 'fail' ? 'Something is broken' : 'Worth a look') +
+        '</div><h2>' + esc(sum.headline || '') + '</h2>' +
+        (sum.fix ? '<div class="fix">' + esc(sum.fix) + '</div>' : '') +
+        '</div></div>';
+
+      var counts = { ok: 0, warn: 0, fail: 0, info: 0 };
+      var h = '';
+      (d.checks || []).forEach(function (c) {
+        counts[c.status] = (counts[c.status] || 0) + 1;
+        h += '<div class="check ' + esc(c.status) + '">' +
+             '<div><span class="badge ' + esc(c.status) + '">' + esc(c.status.toUpperCase()) + '</span></div>' +
+             '<div><div class="nm">' + esc(c.name) + '</div>' +
+             '<div class="dt">' + esc(c.detail) + '</div>' +
+             (c.fix && c.status !== 'ok'
+                ? '<div class="fx"><b>' + (c.status === 'info' ? 'Note' : 'What to do') + '</b>' +
+                  esc(c.fix) + '</div>'
+                : '') +
+             '</div></div>';
+      });
+      $('diaglist').innerHTML = h || '<div class="dt">No checks reported.</div>';
+      $('diagtime').textContent = 'Checked at ' + new Date().toLocaleTimeString();
+
+      var b = $('diagbadge');
+      if (counts.fail) { b.className = 'badge fail'; b.textContent = counts.fail; }
+      else if (counts.warn) { b.className = 'badge warn'; b.textContent = counts.warn; }
+      else { b.className = 'badge ok'; b.textContent = '✓'; }
+    }).catch(function (e) {
+      $('diagsummary').innerHTML =
+        '<div class="summary fail"><div class="icon">✕</div><div>' +
+        '<div class="st">Cannot run diagnostics</div><h2>' + esc(e.message) + '</h2>' +
+        '<div class="fix">The PitWall server is not answering /api/diagnostics.</div></div></div>';
+      $('diaglist').innerHTML = '';
+    });
+  }
+  $('diagrefresh').addEventListener('click', runDiagnostics);
+
+  /* ============================================================ overlays */
+
+  var OVERLAYS = [
+    ['broadcast/tower.html', 'Timing tower', 460, 1080,
+     'Running order with gaps, sector pips and optional class blocks. The main graphic of any broadcast.'],
+    ['broadcast/session-bar.html', 'Session bar', 1920, 120,
+     'Session name, flag, laps or time remaining and the fastest lap, across the top of the frame.'],
+    ['broadcast/driver-card.html', 'Driver card', 1920, 1080,
+     'Lower third for the car the camera is on, using the driver-submitted headshot, bio and socials.'],
+    ['broadcast/battle.html', 'Battle box', 1920, 1080,
+     'Head-to-head comparison of the closest fight on track, with the live gap.'],
+    ['broadcast/trackmap.html', 'Track map', 600, 600,
+     'Every car around a map of the circuit, coloured by class.'],
+    ['broadcast/standings.html', 'Standings board', 1920, 1080,
+     'Full-field results board for the grid walk, a caution period or the podium.'],
+    ['hud/relative.html', 'HUD · Relative', 400, 320,
+     'Cars around you by track position. The one widget every driver wants.'],
+    ['hud/standings.html', 'HUD · Standings', 400, 600,
+     'Running order in the sim, for the driver rather than the audience.'],
+    ['hud/inputs.html', 'HUD · Inputs', 420, 200,
+     'Throttle, brake and steering trace at 60 Hz.'],
+    ['hud/fuel.html', 'HUD · Fuel', 340, 200,
+     'Fuel per lap, laps remaining in the tank and how much to add at the stop.'],
+    ['hud/delta.html', 'HUD · Delta', 340, 130,
+     'Live delta to your own best lap.'],
+    ['hud/flags.html', 'HUD · Flags', 420, 110,
+     'Big, unmissable flag and incident banner.']
+  ];
+
+  function initOverlays() {
+    var h = '';
+    OVERLAYS.forEach(function (o, i) {
+      var url = base() + '/' + o[0];
+      h += '<div class="ov" id="ov' + i + '">' +
+           '<div class="shot" data-shot="' + i + '"></div>' +
+           '<div class="body">' +
+           '<div class="nm">' + esc(o[1]) + '<span class="size">' + o[2] + '×' + o[3] + '</span></div>' +
+           '<div class="ds">' + esc(o[4]) + '</div>' +
+           urlRow(url) +
+           '</div></div>';
+    });
+    $('ovgrid').innerHTML = h;
+
+    OVERLAYS.forEach(function (o, i) {
+      var url = base() + '/' + o[0];
+      var box = document.querySelector('[data-shot="' + i + '"]');
+      // The catalogue lists every source PitWall ships. Anything not present
+      // in this build is called out rather than shown as a blank frame.
+      fetch(url, { method: 'GET', cache: 'no-store' }).then(function (r) {
+        if (!r.ok) throw new Error(String(r.status));
+        mountPreview(box, url, o[2], o[3]);
+      }).catch(function () {
+        box.innerHTML = '<div class="missing">Not installed in this build.<br>' +
+          '<span class="faint">' + esc(o[0]) + '</span></div>';
+        document.getElementById('ov' + i).style.opacity = '0.65';
+      });
+    });
+
+    buildBuilder();
+  }
+
+  function mountPreview(box, url, w, h) {
+    var bw = box.clientWidth || 300, bh = box.clientHeight || 150;
+    // A tall source (the tower, the HUD standings) is shown at full width with
+    // its bottom cropped; a wide one is fitted whole and centred.
+    var tall = h > w * 1.2;
+    var k = tall ? bw / w : Math.min(bw / w, bh / h);
+    var f = document.createElement('iframe');
+    f.src = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'scale=1';
+    f.width = w; f.height = tall ? Math.ceil(bh / k) : h;
+    f.style.transform = 'scale(' + k + ')';
+    f.style.width = w + 'px';
+    f.style.height = (tall ? Math.ceil(bh / k) : h) + 'px';
+    f.style.left = Math.max(0, (bw - w * k) / 2) + 'px';
+    f.style.top = tall ? '0' : Math.max(0, (bh - h * k) / 2) + 'px';
+    f.setAttribute('scrolling', 'no');
+    f.loading = 'lazy';
+    box.appendChild(f);
+  }
+
+  /* ---- tower option builder ---- */
+
+  var BOPTS = [
+    { k: 'rows', label: 'Rows', type: 'number', dflt: '', ph: 'auto', hint: '' },
+    { k: 'col', label: 'Data column', type: 'select', dflt: 'gap',
+      opts: [['gap', 'Gap to leader'], ['int', 'Interval'], ['last', 'Last lap'], ['best', 'Best lap'], ['delta', 'Delta']] },
+    { k: 'col2', label: 'Second column', type: 'select', dflt: '',
+      opts: [['', 'none'], ['gap', 'Gap to leader'], ['int', 'Interval'], ['last', 'Last lap'], ['best', 'Best lap'], ['delta', 'Delta']] },
+    { k: 'group', label: 'Grouping', type: 'select', dflt: 'none',
+      opts: [['none', 'One list'], ['class', 'Break into classes']] },
+    { k: 'names', label: 'Names', type: 'select', dflt: 'short',
+      opts: [['short', 'A. Fenwick'], ['full', 'Alex Fenwick'], ['surname', 'FENWICK'], ['abbrev', 'Fenwick, A']] },
+    { k: 'scale', label: 'Scale', type: 'select', dflt: '1',
+      opts: [['0.8', '0.8×'], ['0.9', '0.9×'], ['1', '1×'], ['1.1', '1.1×'], ['1.25', '1.25×'], ['1.5', '1.5×']] },
+    { k: 'accent', label: 'Accent colour', type: 'color', dflt: '' },
+    { k: 'focus', label: 'Follow the camera car', type: 'check', dflt: '' },
+    { k: 'header', label: 'Show the header block', type: 'check', dflt: '1' }
+  ];
+  var bstate = {};
+
+  function buildBuilder() {
+    BOPTS.forEach(function (o) { if (!(o.k in bstate)) bstate[o.k] = o.dflt; });
+    var h = '';
+    BOPTS.forEach(function (o) {
+      if (o.type === 'check') {
+        h += '<div class="field"><label>&nbsp;</label><label class="checkline">' +
+             '<input type="checkbox" data-b="' + o.k + '"' + (bstate[o.k] ? ' checked' : '') + '> ' +
+             esc(o.label) + '</label></div>';
+      } else if (o.type === 'select') {
+        h += '<div class="field"><label>' + esc(o.label) + '</label><select data-b="' + o.k + '">' +
+             o.opts.map(function (p) {
+               return '<option value="' + esc(p[0]) + '"' + (String(bstate[o.k]) === p[0] ? ' selected' : '') +
+                      '>' + esc(p[1]) + '</option>';
+             }).join('') + '</select></div>';
+      } else if (o.type === 'color') {
+        h += '<div class="field"><label>' + esc(o.label) + '</label>' +
+             '<div class="swatchrow"><input type="color" data-b="' + o.k + '" value="' +
+             esc(bstate[o.k] || ((status && status.league && status.league.accent) || '#e8443a')) + '">' +
+             '<label class="checkline"><input type="checkbox" data-bon="accent"' +
+             (bstate.accent ? ' checked' : '') + '> set</label></div></div>';
+      } else {
+        h += '<div class="field"><label>' + esc(o.label) + '</label>' +
+             '<input type="number" min="1" max="63" data-b="' + o.k + '" placeholder="' + esc(o.ph || '') +
+             '" value="' + esc(bstate[o.k]) + '"></div>';
+      }
+    });
+    // class filter, from the live field
+    var classes = (PW.meta && PW.meta.classes) || [];
+    if (classes.length > 1) {
+      h += '<div class="field"><label>Class filter</label><select data-b="class">' +
+           '<option value="">All classes</option>' +
+           classes.map(function (c) {
+             return '<option value="' + esc(c.short) + '"' + (bstate['class'] === c.short ? ' selected' : '') +
+                    '>' + esc(c.short) + ' only</option>';
+           }).join('') + '</select></div>';
+    }
+    $('builder').innerHTML = h;
+    updateBuilder();
+  }
+
+  $('builder').addEventListener('input', function (ev) {
+    var el = ev.target;
+    if (el.dataset.bon === 'accent') {
+      var picker = $('builder').querySelector('[data-b="accent"]');
+      bstate.accent = el.checked ? picker.value : '';
+      updateBuilder();
+      return;
+    }
+    var k = el.dataset.b;
+    if (!k) return;
+    if (el.type === 'checkbox') bstate[k] = el.checked ? '1' : '';
+    else if (k === 'accent') {
+      var on = $('builder').querySelector('[data-bon="accent"]');
+      if (on && !on.checked) { on.checked = true; }
+      bstate.accent = el.value;
+    } else bstate[k] = el.value;
+    updateBuilder();
+  });
+
+  function builderUrl() {
+    var q = [];
+    if (bstate.rows) q.push('rows=' + encodeURIComponent(bstate.rows));
+    if (bstate.col && bstate.col !== 'gap') q.push('col=' + bstate.col);
+    if (bstate.col2) q.push('col2=' + bstate.col2);
+    if (bstate.group === 'class') q.push('group=class');
+    if (bstate['class']) q.push('class=' + encodeURIComponent(bstate['class']));
+    if (bstate.names && bstate.names !== 'short') q.push('names=' + bstate.names);
+    if (bstate.scale && bstate.scale !== '1') q.push('scale=' + bstate.scale);
+    if (bstate.accent) q.push('accent=' + encodeURIComponent(bstate.accent));
+    if (bstate.focus) q.push('focus=1');
+    if (!bstate.header) q.push('header=0');
+    return base() + '/broadcast/tower.html' + (q.length ? '?' + q.join('&') : '');
+  }
+
+  var previewTimer = null;
+  function updateBuilder() {
+    var url = builderUrl();
+    $('builderurl').textContent = url;
+    $('bcopy').dataset.copy = url;
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(function () {
+      var box = $('bpreview');
+      box.innerHTML = '';
+      var bw = box.clientWidth || 600, bh = box.clientHeight || 300;
+      // The tower is 1080 tall; showing all of it would make it unreadable, so
+      // preview it near full size and crop the bottom.
+      var k = Math.min(1, bw / 480, bh / 520);
+      var f = document.createElement('iframe');
+      f.src = url;
+      f.style.width = '460px';
+      f.style.height = Math.round(bh / k) + 'px';
+      f.style.transform = 'scale(' + k + ')';
+      f.style.left = Math.max(0, (bw - 460 * k) / 2) + 'px';
+      f.setAttribute('scrolling', 'no');
+      box.appendChild(f);
+    }, 260);
+  }
+
+  $('bopen').addEventListener('click', function () { window.open(builderUrl(), '_blank', 'noopener'); });
+  $('breset').addEventListener('click', function () {
+    bstate = {};
+    buildBuilder();
+    $('bmsg').textContent = 'Back to defaults.';
+    setTimeout(function () { $('bmsg').textContent = ''; }, 1500);
+  });
+
+  /* ============================================================== roster */
+
+  function loadRoster() {
+    PW.api('/api/roster').then(function (r) {
+      renderRoster(r.drivers || []);
+      renderSync(r.status || {});
+    }).catch(function (e) {
+      $('rostertable').innerHTML = '';
+      say($('rostermsg'), 'bad', 'Could not read the roster: ' + e.message);
+    });
+    renderSignup();
+  }
+
+  function renderSignup() {
+    var urls = (status && status.urls) || [base()];
+    var h = '';
+    urls.forEach(function (u, i) {
+      h += '<div class="linkrow"><span class="lbl">' +
+           (i === 0 ? 'This machine' : 'On your network') + '</span>' +
+           urlRow(u + '/register') + '</div>';
+    });
+    $('signuplinks').innerHTML = h;
+  }
+
+  function renderRoster(drivers) {
+    $('rostercount').textContent = drivers.length + ' driver' + (drivers.length === 1 ? '' : 's');
+    if (!drivers.length) {
+      $('rostertable').innerHTML =
+        '<tr><td style="border:none;padding:18px 0;color:var(--text-dim);font-size:13px">' +
+        'No profiles yet. Send drivers the sign-up link above, or import a roster.json.</td></tr>';
+      return;
+    }
+    var h = '<tr><th class="th-shot"></th><th>Customer ID</th><th>Name</th><th>No.</th>' +
+            '<th>Team</th><th>Country</th><th>Submitted</th><th></th></tr>';
+    drivers.forEach(function (d) {
+      var name = d.displayName || '';
+      var initials = name.split(/\s+/).map(function (w) { return w[0] || ''; }).join('').slice(0, 2).toUpperCase();
+      h += '<tr data-id="' + esc(d.iracingId) + '">' +
+           '<td><div class="rshot">' + (d.headshot
+              ? '<img src="' + esc(d.headshot) + '" alt="">' : esc(initials)) + '</div></td>' +
+           '<td class="mono">' + esc(d.iracingId) + '</td>' +
+           '<td><b>' + esc(name) + '</b></td>' +
+           '<td class="mono">' + esc(d.carNumber || '') + '</td>' +
+           '<td class="dimc">' + esc(d.team || '') + '</td>' +
+           '<td>' + (d.country ? PW.flag(d.country) + ' <span class="dimc">' + esc(d.country) + '</span>' : '<span class="faint">–</span>') + '</td>' +
+           '<td class="dimc mono">' + esc(d.submittedAt || '') + '</td>' +
+           '<td class="act"><button class="danger" data-del="' + esc(d.iracingId) + '">Delete</button></td>' +
+           '</tr>';
+    });
+    $('rostertable').innerHTML = h;
+  }
+
+  // Two-step delete: no confirm() dialogs anywhere in PitWall.
+  $('rostertable').addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-del]');
+    if (!b) return;
+    if (b.dataset.armed !== '1') {
+      Array.prototype.forEach.call($('rostertable').querySelectorAll('[data-del]'), function (o) {
+        o.dataset.armed = '0'; o.textContent = 'Delete';
+      });
+      b.dataset.armed = '1';
+      b.textContent = 'Really delete?';
+      setTimeout(function () {
+        if (b.dataset.armed === '1') { b.dataset.armed = '0'; b.textContent = 'Delete'; }
+      }, 4000);
+      return;
+    }
+    var id = b.dataset.del;
+    PW.api('/api/roster?id=' + encodeURIComponent(id), { method: 'DELETE' }).then(function (r) {
+      say($('rostermsg'), r.ok ? 'ok' : 'bad',
+        r.ok ? 'Deleted driver ' + id + '.' : 'No roster entry with ID ' + id + '.');
+      loadRoster();
+      pollStatus();
+    }).catch(function (e) { say($('rostermsg'), 'bad', e.message); });
+  });
+
+  $('rosterrefresh').addEventListener('click', function () { clear($('rostermsg')); loadRoster(); });
+
+  $('rexport').addEventListener('click', function () {
+    PW.api('/api/roster').then(function (r) {
+      var blob = new Blob([JSON.stringify({ drivers: r.drivers || [] }, null, 2)],
+                          { type: 'application/json' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'roster.json';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      say($('rostermsg'), 'ok', 'Downloaded ' + (r.drivers || []).length + ' driver profiles as roster.json.');
+    }).catch(function (e) { say($('rostermsg'), 'bad', e.message); });
+  });
+
+  $('rimportbtn').addEventListener('click', function () { $('rimport').click(); });
+  $('rimport').addEventListener('change', function (ev) {
+    var file = ev.target.files && ev.target.files[0];
+    if (!file) return;
+    var fr = new FileReader();
+    fr.onload = function () {
+      var data;
+      try { data = JSON.parse(fr.result); }
+      catch (e) { return say($('rostermsg'), 'bad', 'That file is not valid JSON: ' + e.message); }
+      var drivers = Array.isArray(data) ? data : data.drivers;
+      if (!Array.isArray(drivers)) {
+        return say($('rostermsg'), 'bad',
+          'Expected either a JSON array of drivers or an object with a "drivers" array.');
+      }
+      PW.api('/api/roster/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ drivers: drivers })
+      }).then(function (r) {
+        say($('rostermsg'), 'ok', 'Imported ' + r.count + ' driver profiles.');
+        loadRoster();
+        pollStatus();
+      }).catch(function (e) { say($('rostermsg'), 'bad', e.message); });
+    };
+    fr.readAsText(file);
+    ev.target.value = '';
+  });
+
+  function renderSync(st) {
+    $('synccfg').innerHTML =
+      '<div class="k">Mode</div><div class="v">' + esc(st.mode || 'local') + '</div>' +
+      '<div class="k">Repository</div><div class="v">' + esc(st.repo || '–') + '</div>' +
+      '<div class="k">Branch</div><div class="v">' + esc(st.branch || '–') + '</div>' +
+      '<div class="k">Path</div><div class="v">' + esc(st.path || '–') + '</div>' +
+      (st.url ? '<div class="k">URL</div><div class="v">' + esc(st.url) + '</div>' : '') +
+      '<div class="k">Token</div><div class="v">' + (st.hasToken ? 'present' : 'not set') + '</div>' +
+      '<div class="k">Local file</div><div class="v">' + esc(st.file || '') + '</div>' +
+      '<div class="k">Last sync</div><div class="v">' + esc(st.lastSync || 'never') + '</div>';
+    if (st.error) say($('syncmsg'), 'bad', 'Last sync error: ' + st.error);
+  }
+
+  function sync(what) {
+    var btn = what === 'pull' ? $('rpull') : $('rpush');
+    btn.disabled = true;
+    say($('syncmsg'), 'info', (what === 'pull' ? 'Pulling' : 'Pushing') + '…');
+    PW.api('/api/roster/' + what, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    }).then(function (r) {
+      btn.disabled = false;
+      if (r.ok) {
+        say($('syncmsg'), 'ok', (what === 'pull' ? 'Pulled ' : 'Pushed ') + r.count + ' driver profiles.');
+        loadRoster();
+      } else {
+        say($('syncmsg'), 'bad', r.error || 'The server refused that.');
+      }
+    }).catch(function (e) {
+      btn.disabled = false;
+      say($('syncmsg'), 'bad', e.message);
+    });
+  }
+  $('rpull').addEventListener('click', function () { sync('pull'); });
+  $('rpush').addEventListener('click', function () { sync('push'); });
+
+  /* ============================================================== league */
+
+  function fillLeague() {
+    PW.api('/api/config').then(function (c) {
+      config = c;
+      var lg = c.league || {};
+      $('lname').value = lg.name || '';
+      $('lhash').value = lg.hashtag || '';
+      $('llogo').value = lg.logo || '';
+      setColour('laccent', 'laccenttxt', lg.accent || '#e8443a');
+      setColour('lsecond', 'lsecondtxt', lg.secondary || '#12b8ff');
+      var r = c.roster || {};
+      $('rmode').value = r.mode || 'local';
+      $('rrepo').value = r.repo || '';
+      $('rbranch').value = r.branch || 'main';
+      $('rpath').value = r.path || 'roster.json';
+      $('rurl').value = r.url || '';
+      $('hastoken').textContent =
+        (status && status.roster && status.roster.hasToken) ? 'yes' : 'no';
+      paintDemo();
+    }).catch(function (e) {
+      say($('leaguemsg'), 'bad', 'Could not read the configuration: ' + e.message);
+    });
+  }
+
+  function setColour(a, b, v) { $(a).value = v; $(b).value = v; }
+
+  function paintDemo() {
+    var d = $('accentdemo');
+    d.querySelector('.bar').style.background = $('laccenttxt').value;
+    d.querySelectorAll('.chip')[0].style.background = $('laccenttxt').value;
+    d.querySelectorAll('.chip')[1].style.background = $('lsecondtxt').value;
+    d.querySelector('.nm').textContent = ($('lname').value || 'P1') + ' · Preview';
+  }
+
+  ['laccent', 'lsecond'].forEach(function (id) {
+    $(id).addEventListener('input', function () {
+      $(id + 'txt').value = $(id).value;
+      paintDemo();
+    });
+  });
+  ['laccenttxt', 'lsecondtxt'].forEach(function (id) {
+    $(id).addEventListener('input', function () {
+      var v = $(id).value.trim();
+      if (/^#[0-9a-f]{6}$/i.test(v)) $(id.replace('txt', '')).value = v;
+      paintDemo();
+    });
+  });
+  $('lname').addEventListener('input', paintDemo);
+
+  $('lsave').addEventListener('click', function () {
+    var body = {
+      league: {
+        name: $('lname').value.trim(),
+        logo: $('llogo').value.trim(),
+        accent: $('laccenttxt').value.trim() || '#e8443a',
+        secondary: $('lsecondtxt').value.trim() || '#12b8ff',
+        hashtag: $('lhash').value.trim()
+      }
+    };
+    postConfig(body, $('leaguemsg'),
+      'Branding saved to config/pitwall.json. Overlays pick it up as they reconnect.');
+  });
+
+  $('rsave').addEventListener('click', function () {
+    var body = {
+      roster: {
+        mode: $('rmode').value,
+        repo: $('rrepo').value.trim(),
+        branch: $('rbranch').value.trim() || 'main',
+        path: $('rpath').value.trim() || 'roster.json',
+        url: $('rurl').value.trim()
+      }
+    };
+    postConfig(body, $('storagemsg'), 'Roster storage settings saved.');
+  });
+
+  function postConfig(body, msgEl, okText) {
+    say(msgEl, 'info', 'Saving…');
+    PW.api('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function () {
+      say(msgEl, 'ok', okText);
+      if (body.league) {
+        document.documentElement.style.setProperty('--accent', body.league.accent);
+        document.documentElement.style.setProperty('--secondary', body.league.secondary);
+        $('brandname').textContent = body.league.name || 'PitWall';
+      }
+      pollStatus();
+    }).catch(function (e) {
+      say(msgEl, 'bad', 'Could not save: ' + e.message);
+    });
+  }
+
+  /* ========================================================= sim control */
+
+  function controlAvailable() {
+    if (PW.hello && typeof PW.hello.controlAvailable === 'boolean') return PW.hello.controlAvailable;
+    return !!(status && status.controlAvailable);
+  }
+
+  function renderControl() {
+    var ok = controlAvailable();
+    $('controlbody').classList.toggle('locked', !ok);
+    $('controlnote').innerHTML = ok
+      ? '<div class="disabled-note" style="border-color:rgba(59,130,246,0.35);background:rgba(59,130,246,0.08)">' +
+        '<b style="color:var(--blue)">Before you rely on this.</b> These are iRacing’s own ' +
+        'broadcast messages, and there is no acknowledgement: PitWall cannot tell whether the sim ' +
+        'acted on them. If iRacing runs elevated and PitWall does not, Windows silently drops every ' +
+        'one of them — run both the same way. Camera changes are debounced, so holding a button down ' +
+        'will not stutter the director camera.</div>'
+      : '<div class="disabled-note"><b>Sim control is unavailable on this machine.</b><br>' +
+        'Camera and replay control is a Windows broadcast window message ' +
+        '(<code>irsdk_broadcastMsg</code>), so PitWall has to be running on the same Windows PC as ' +
+        'iRacing. This server reports <code>controlAvailable: false</code>, so the controls below are ' +
+        'disabled. Everything else — overlays, timing, roster — works from any machine.<br><br>' +
+        'One more caveat for when it is available: if iRacing runs as administrator and PitWall does ' +
+        'not, Windows drops every message and these buttons silently do nothing.</div>';
+
+    // camera groups
+    var groups = (PW.meta && PW.meta.cameras) || [];
+    var sel = $('camgroup');
+    var sig = groups.map(function (g) { return g.num; }).join(',');
+    if (sel._sig !== sig) {
+      sel._sig = sig;
+      sel.innerHTML = '<option value="0">Auto — keep the current group</option>' +
+        groups.map(function (g) {
+          return '<option value="' + g.num + '">' + esc(g.name) + (g.scenic ? ' (scenic)' : '') + '</option>';
+        }).join('');
+    }
+
+    // car picker
+    var cars = PW.cars();
+    var csel = $('camcar');
+    var csig = cars.map(function (c) { return c.i + ':' + c.p; }).join(',');
+    if (csel._sig !== csig) {
+      csel._sig = csig;
+      var prev = csel.value;
+      csel.innerHTML = cars.slice().sort(function (a, b) { return (a.p || 99) - (b.p || 99); })
+        .map(function (c) {
+          var d = PW.driver(c.i) || {};
+          return '<option value="' + esc(d.num) + '">P' + c.p + ' · #' + esc(d.num) + ' ' +
+                 esc(d.name || '') + (d.classShort ? ' (' + esc(d.classShort) + ')' : '') + '</option>';
+        }).join('');
+      if (prev) csel.value = prev;
+    }
+
+    if (!$('speeds').children.length) {
+      $('speeds').innerHTML = [
+        ['0', 'Pause'], ['1', '1×'], ['2', '2×'], ['4', '4×'], ['8', '8×'], ['16', '16×'], ['-2', 'Rewind 2×']
+      ].map(function (p) {
+        return '<button data-speed="' + p[0] + '">' + p[1] + '</button>';
+      }).join('');
+      $('slows').innerHTML = [['2', '½ speed'], ['4', '¼ speed'], ['8', '⅛ speed'], ['16', '1/16 speed']]
+        .map(function (p) { return '<button data-slow="' + p[0] + '">' + p[1] + '</button>'; }).join('');
+    }
+  }
+
+  function group() { return parseInt($('camgroup').value, 10) || 0; }
+
+  function fire(action, extra, msgEl, label) {
+    say(msgEl, 'info', 'Sending ' + label + '…');
+    PW.control(action, extra).then(function (r) {
+      if (r && r.ok) {
+        say(msgEl, 'ok', label + ' sent to iRacing. There is no acknowledgement from the sim — ' +
+          'check the game window.');
+      } else {
+        say(msgEl, 'bad', (r && r.error) || 'iRacing did not accept that command.');
+      }
+    }).catch(function (e) { say(msgEl, 'bad', 'Could not reach the server: ' + e.message); });
+  }
+
+  $('camcarbtn').addEventListener('click', function () {
+    var num = $('camcar').value;
+    if (!num) return say($('cammsg'), 'bad', 'No car selected — the field is empty.');
+    fire('camera.car', { carNumber: num, group: group() }, $('cammsg'), 'Camera to car #' + num);
+  });
+
+  document.querySelectorAll('[data-focus]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      fire('camera.focus', { mode: b.dataset.focus, group: group() }, $('cammsg'),
+           'Camera focus (' + b.dataset.focus + ')');
+    });
+  });
+
+  document.querySelectorAll('[data-search]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      fire('replay.search', { what: b.dataset.search }, $('replaymsg'), b.textContent.trim());
+    });
+  });
+  document.querySelector('[data-live]').addEventListener('click', function () {
+    fire('replay.live', {}, $('replaymsg'), 'Jump to live');
+  });
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-speed]');
+    if (b) return fire('replay.speed', { speed: parseInt(b.dataset.speed, 10), slow: false },
+                       $('replaymsg'), 'Play speed ' + b.textContent.trim());
+    var s = ev.target.closest('[data-slow]');
+    if (s) return fire('replay.speed', { speed: parseInt(s.dataset.slow, 10), slow: true },
+                       $('replaymsg'), s.textContent.trim());
+    var c = ev.target.closest('[data-capture]');
+    if (c) return fire('capture', { what: c.dataset.capture }, $('capturemsg'), c.textContent.trim());
+  });
+
+  /* ================================================================ boot */
+
+  var startTab = PW.opt('tab', (location.hash || '').replace('#', '')) || 'status';
+  showTab(startTab);
+  window.addEventListener('hashchange', function () {
+    showTab((location.hash || '').replace('#', ''));
+  });
+
+  pollStatus();
+  setInterval(pollStatus, 2000);
+
+  PW.on('meta', function () {
+    if (loaded.control) renderControl();
+    renderStatus();
+  });
+  PW.on('tick', function () {
+    renderStatus();
+  });
+  PW.on('hello', function () { if (loaded.control) renderControl(); });
+  PW.start({ sub: ['meta', 'tick'], rate: 2, name: 'control' });
+})();
+</script>
+</body>
+</html>

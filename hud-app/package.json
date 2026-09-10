@@ -1,0 +1,21 @@
+{
+  "name": "pitwall-hud",
+  "productName": "PitWall HUD",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Transparent in-game HUD shell for PitWall. Loads the same overlay pages the server feeds to OBS and the second screen.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --x64"
+  },
+  "devDependencies": {
+    "electron": "^32.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "app.pitwall.hud",
+    "win": { "target": ["portable", "nsis"] },
+    "files": ["main.js", "preload.js", "icon.png", "package.json"]
+  }
+}

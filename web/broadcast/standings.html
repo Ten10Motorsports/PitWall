@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PitWall — Standings</title>
+<link rel="stylesheet" href="../shared/base.css">
+<!--
+  Standings / results board — a full-frame 1920x1080 graphic for pre-race,
+  intermission and post-race.
+
+  The page body stays transparent (it is still an OBS browser source and may
+  sit over a background loop); the dark backdrop is a panel inside it.
+
+  Under a checkered flag the board titles itself RESULTS and lifts the podium
+  three out into a larger treatment above the field.
+
+  Options (query string)
+    title=<text>   override the board title (default STANDINGS / RESULTS).
+    cols=1|2|3     number of columns. Default: auto (2, or 3 above 20 cars).
+    group=class    break the board into one block per class.
+    class=<short>  only show one class, e.g. class=GT3.
+    show=<list>    fields, comma separated, in order.
+                   Keys: pos cls num flag name team best last gap int stops inc ir
+                   default: pos,num,flag,name,team,best,gap,stops,inc
+    names=full|short|surname|abbrev                        default full
+    podium=0       never lift the top three out.           default 1
+    scale=1.0      whole-graphic scale.     accent=%23ff0
+    debug=1        show the connection pill.
+    server=http://host:port   when the page is not served by PitWall itself.
+-->
+<style>
+  #stage { position: absolute; width: 1920px; height: 1080px; top: 0; left: 0; }
+
+  #board {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(120% 90% at 12% 0%, rgba(255,255,255,0.055), transparent 60%),
+      linear-gradient(165deg, #12161c 0%, #0a0c10 55%, #07090c 100%);
+    display: flex; flex-direction: column;
+    padding: 44px 56px 40px;
+    opacity: 0;
+    transition: opacity 320ms ease;
+  }
+  #board.in { opacity: 1; }
+
+  /* header --------------------------------------------------------------- */
+  .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 30px; }
+  .head .ttl {
+    font-size: 52px; font-weight: 800; letter-spacing: -0.02em; line-height: 0.92;
+    text-transform: uppercase;
+  }
+  .head .accentline { height: 4px; width: 74px; background: var(--accent); margin-bottom: 12px; border-radius: 2px; }
+  .head .where { margin-top: 9px; font-size: 16px; color: var(--text-dim); letter-spacing: 0.02em; }
+  .head .where b { color: var(--text); font-weight: 700; }
+  .head .where .sep { color: var(--text-faint); margin: 0 8px; }
+  .head .right { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  .head .sess { font-size: 20px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
+  .head .prog { font-size: 14px; color: var(--text-dim); }
+  .head .prog b { font-family: var(--mono); color: var(--text); }
+  .flagchip {
+    font-size: 11px; font-weight: 800; letter-spacing: 0.14em;
+    padding: 4px 10px; border-radius: 3px; text-transform: uppercase;
+  }
+  /* the checkered pattern eats its own label, so give it a plate to sit on */
+  .flagchip.flag-checkered { padding: 4px; }
+  .flagchip.flag-checkered span { background: rgba(0,0,0,0.72); padding: 3px 8px; border-radius: 2px; }
+
+  .rule { height: 1px; background: var(--line-strong); margin: 20px 0 18px; }
+
+  /* podium --------------------------------------------------------------- */
+  .podium { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px; }
+  .pod {
+    display: flex; align-items: center; gap: 14px;
+    background: rgba(255,255,255,0.045);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--pc, var(--text-faint));
+    border-radius: 5px;
+    padding: 12px 16px;
+    min-width: 0;
+  }
+  .pod .p { font-family: var(--mono); font-weight: 800; font-size: 40px; line-height: 1; min-width: 46px; }
+  .pod.p1 .p { color: #ffd257; }
+  .pod.p2 .p { color: #d7dee6; }
+  .pod.p3 .p { color: #e0975a; }
+  .pod .who { min-width: 0; flex: 1 1 auto; }
+  .pod .nm {
+    font-size: 24px; font-weight: 800; text-transform: uppercase; letter-spacing: -0.01em;
+    display: flex; align-items: center; gap: 8px; min-width: 0;
+  }
+  .pod .nm span.t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pod .tm { font-size: 13px; color: var(--text-dim); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pod .plate {
+    font-family: var(--mono); font-weight: 800; font-size: 16px; line-height: 1;
+    padding: 5px 7px 4px; border-radius: 3px; min-width: 42px; text-align: center;
+  }
+  .pod .rt { text-align: right; flex: 0 0 auto; min-width: 76px; }
+  .pod .rt .k { font-size: 9px; font-weight: 800; letter-spacing: 0.12em; color: var(--text-faint); }
+  .pod .rt .v { font-family: var(--mono); font-size: 17px; font-weight: 700; }
+
+  /* class blocks --------------------------------------------------------- */
+  /* The board is a fixed 1080 frame, so the rows stretch to fill whatever is
+     left under the header (capped, then centred) rather than leaving a third
+     of the screen empty under a short field. */
+  .blocks {
+    flex: 1 1 auto; display: flex; flex-direction: column;
+    gap: 18px; min-height: 0; justify-content: center;
+  }
+  .block { display: flex; flex-direction: column; min-height: 0; flex: 0 0 auto; }
+  .block-hd { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
+  .block-hd .chip {
+    font-size: 11px; font-weight: 800; letter-spacing: 0.1em; padding: 3px 8px;
+    border-radius: 3px; text-transform: uppercase;
+  }
+  .block-hd .cnt { font-size: 11px; color: var(--text-faint); letter-spacing: 0.1em; }
+
+  .cols { display: grid; gap: 0 26px; flex: 0 0 auto; }
+  .col { min-width: 0; display: flex; flex-direction: column; }
+  .colhd {
+    display: grid; align-items: center; gap: 8px;
+    padding: 0 8px 5px;
+    font-size: 9px; font-weight: 800; letter-spacing: 0.12em;
+    color: var(--text-faint); text-transform: uppercase;
+    border-bottom: 1px solid var(--line);
+  }
+  .rows { display: flex; flex-direction: column; }
+
+  .row {
+    display: grid; align-items: center; gap: 8px;
+    flex: 0 0 auto; height: var(--rh, 36px); padding: 0 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.055);
+    transition: transform 260ms cubic-bezier(0.2,0.8,0.3,1);
+  }
+  .row:nth-child(even) { background: rgba(255,255,255,0.022); }
+  .row .pos { font-family: var(--mono); font-weight: 800; font-size: 16px; text-align: right; }
+  .row .cls { font-size: 9px; font-weight: 800; letter-spacing: 0.06em; padding: 2px 4px; border-radius: 3px; text-align: center; }
+  .row .num {
+    font-family: var(--mono); font-weight: 800; font-size: 13px;
+    padding: 3px 4px 2px; border-radius: 3px; text-align: center;
+  }
+  .row .flag { font-size: 14px; text-align: center; }
+  .row .name { font-size: 16px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .team { font-size: 12px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .best, .row .last, .row .gap, .row .int {
+    font-family: var(--mono); font-size: 13px; text-align: right; font-variant-numeric: tabular-nums;
+  }
+  .row .gap, .row .int { color: var(--text-dim); }
+  .row .stops, .row .inc, .row .ir {
+    font-family: var(--mono); font-size: 13px; text-align: right; color: var(--text-dim);
+  }
+  .row.is-out { opacity: 0.42; }
+  .row.is-pit .name { color: var(--yellow); }
+</style>
+</head>
+<body class="overlay">
+  <div id="pw-status"></div>
+  <div id="root" class="scale-root">
+    <div id="stage">
+      <div id="board">
+        <div class="head">
+          <div>
+            <div class="accentline"></div>
+            <div class="ttl" id="ttl">STANDINGS</div>
+            <div class="where" id="where"></div>
+          </div>
+          <div class="right">
+            <div class="flagchip flag-none" id="flagchip">GREEN</div>
+            <div class="sess" id="sess"></div>
+            <div class="prog" id="prog"></div>
+          </div>
+        </div>
+        <div class="rule"></div>
+        <div class="podium hide" id="podium"></div>
+        <div class="blocks" id="blocks"></div>
+      </div>
+    </div>
+  </div>
+
+<script src="../shared/pitwall.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  PW.applyChrome();
+
+  var TITLE   = PW.opt('title', null);
+  var COLS    = PW.optNum('cols', 0);
+  var GROUP   = String(PW.opt('group', '')).toLowerCase() === 'class';
+  var CLASSF  = PW.opt('class', null);
+  var SHOW    = PW.optList('show', ['pos', 'num', 'flag', 'name', 'team', 'best', 'gap', 'stops', 'inc']);
+  var NAMES   = PW.opt('names', 'full');
+  var PODIUM  = PW.optBool('podium', true);
+
+  var board  = document.getElementById('board');
+  var blocks = document.getElementById('blocks');
+  var podium = document.getElementById('podium');
+
+  var WIDTH = {
+    pos: '40px', cls: '38px', num: '44px', flag: '22px',
+    name: 'minmax(0, 1.35fr)', team: 'minmax(0, 1fr)',
+    best: '74px', last: '74px', gap: '66px', int: '60px',
+    stops: '30px', inc: '34px', ir: '52px'
+  };
+  var LABEL = {
+    pos: 'P', cls: 'CLS', num: 'NO', flag: '', name: 'DRIVER', team: 'TEAM',
+    best: 'BEST', last: 'LAST', gap: 'GAP', int: 'INT', stops: 'ST', inc: 'INC', ir: 'iR'
+  };
+  var FIELDS = SHOW.filter(function (f) { return WIDTH[f]; });
+  var TEMPLATE = FIELDS.map(function (f) { return WIDTH[f]; }).join(' ');
+
+  var groupPos = {};          /* car index -> rank inside its class block */
+
+  function ink(hex) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ''));
+    if (!m) return '#05070a';
+    var n = parseInt(m[1], 16);
+    var l = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+    return l > 0.6 ? '#05070a' : '#ffffff';
+  }
+  function countryOf(idx) {
+    var d = PW.driver(idx) || {};
+    var p = d.profile || {};
+    var c = p.country || d.club || '';
+    return /^[A-Za-z]{2}$/.test(c) ? c.toUpperCase() : '';
+  }
+  function teamOf(idx) {
+    var d = PW.driver(idx) || {};
+    return (d.profile && d.profile.team) || d.team || '';
+  }
+
+  /* ------------------------------------------------------------ cell fill */
+  function cellText(f, c, idx) {
+    var d = PW.driver(idx) || {};
+    switch (f) {
+      /* inside a class block the rank within that class is what matters */
+      case 'pos':   return GROUP && groupPos[idx]
+                      ? String(groupPos[idx])
+                      : (c.p ? String(c.p) : '');
+      case 'cls':   return d.classShort || '';
+      case 'num':   return d.num || '';
+      case 'flag':  return PW.flag(countryOf(idx));
+      case 'name':  return PW.displayName(idx, NAMES) || d.name || '';
+      case 'team':  return teamOf(idx);
+      case 'best':  return PW.fmtLap(c.best) || '—';
+      case 'last':  return PW.fmtLap(c.last) || '—';
+      case 'gap':   return c.p === 1 ? '' : (PW.fmtGap(c.gl, c.ld) || '—');
+      case 'int':   return PW.fmtGap(c.iv, c.ld) || '—';
+      case 'stops': return c.stops === null || c.stops === undefined ? '—' : String(c.stops);
+      case 'inc':   return c.inc === null || c.inc === undefined ? '—' : String(c.inc);
+      case 'ir':    return d.irating ? String(d.irating) : '—';
+    }
+    return '';
+  }
+
+  function makeRow() {
+    var r = document.createElement('div');
+    r.className = 'row';
+    r.style.gridTemplateColumns = TEMPLATE;
+    FIELDS.forEach(function (f) {
+      var c = document.createElement('div');
+      c.className = f;
+      r.appendChild(c);
+    });
+    return r;
+  }
+
+  function fillRow(row, car) {
+    var idx = car.i;
+    var d = PW.driver(idx) || {};
+    var col = d.classColor || '#8894a4';
+    var fast = PW.tick && PW.tick.fastest;
+    FIELDS.forEach(function (f, i) {
+      var cell = row.children[i];
+      var txt = cellText(f, car, idx);
+      if (cell.textContent !== txt) cell.textContent = txt;
+      if (f === 'num' || f === 'cls') {
+        cell.style.background = col;
+        cell.style.color = ink(col);
+      }
+      if (f === 'best') {
+        cell.classList.toggle('fastest', !!car.fast);
+      }
+    });
+    row.classList.toggle('is-out', car.st === 'out');
+    row.classList.toggle('is-pit', car.st === 'pit' || car.st === 'stall');
+  }
+
+  /* ------------------------------------------------------------- columns */
+  function columnCount(n) {
+    if (COLS >= 1 && COLS <= 3) return COLS;
+    if (n > 30) return 3;
+    if (n > 11) return 2;
+    return 1;
+  }
+
+  /* Rows are sized to fill the frame: the board is always 1080 tall, so a
+     short field gets taller rows rather than a third of the screen left
+     empty, and a 30-car field tightens up instead of overflowing. */
+  function rowHeight(rowCounts, blockCount) {
+    var avail = blocks.clientHeight - (blockCount - 1) * 18
+                - blockCount * (22 + (GROUP ? 30 : 0)) - 4;
+    var total = rowCounts.reduce(function (a, b) { return a + b; }, 0) || 1;
+    return Math.max(34, Math.min(64, Math.floor(avail / total)));
+  }
+
+  function renderGrid(host, cars, rh, forceCols) {
+    var cn = forceCols || columnCount(cars.length);
+    var per = Math.ceil(cars.length / cn);
+    var wrap = host.querySelector('.cols');
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.className = 'cols';
+      host.appendChild(wrap);
+    }
+    wrap.style.gridTemplateColumns = 'repeat(' + cn + ', minmax(0, 1fr))';
+    if (rh) wrap.style.setProperty('--rh', rh + 'px');
+
+    var groups = [];
+    for (var i = 0; i < cn; i++) groups.push(cars.slice(i * per, (i + 1) * per));
+
+    PW.reconcile(wrap, groups.map(function (g, i) { return { i: i, cars: g }; }),
+      function (g) { return 'col' + g.i; },
+      function () {
+        var col = document.createElement('div');
+        col.className = 'col';
+        var hd = document.createElement('div');
+        hd.className = 'colhd';
+        hd.style.gridTemplateColumns = TEMPLATE;
+        FIELDS.forEach(function (f) {
+          var c = document.createElement('div');
+          c.className = f;
+          c.textContent = LABEL[f] || '';
+          hd.appendChild(c);
+        });
+        col.appendChild(hd);
+        col.appendChild(PW.el('div', 'rows'));
+        return col;
+      },
+      function (col, g) {
+        PW.reconcile(col.querySelector('.rows'), g.cars,
+          function (c) { return c.i; }, makeRow, fillRow);
+      });
+  }
+
+  /* -------------------------------------------------------------- podium */
+  function renderPodium(cars, on) {
+    if (!on || cars.length < 3) { podium.classList.add('hide'); return; }
+    podium.classList.remove('hide');
+    PW.reconcile(podium, cars.slice(0, 3), function (c) { return c.i; },
+      function () {
+        var el = document.createElement('div');
+        el.className = 'pod';
+        el.innerHTML =
+          '<div class="p num"></div>' +
+          '<div class="plate num"></div>' +
+          '<div class="who"><div class="nm"><span class="fl"></span><span class="t"></span></div>' +
+          '<div class="tm"></div></div>' +
+          '<div class="rt"><div class="k">BEST</div><div class="v"></div></div>';
+        return el;
+      },
+      function (el, c, i) {
+        var d = PW.driver(c.i) || {};
+        var col = d.classColor || '#8894a4';
+        el.className = 'pod p' + (i + 1);
+        el.style.setProperty('--pc', col);
+        el.children[0].textContent = c.p || (i + 1);
+        var plate = el.children[1];
+        plate.textContent = d.num || '';
+        plate.style.background = col;
+        plate.style.color = ink(col);
+        var cc = countryOf(c.i);
+        el.querySelector('.fl').textContent = cc ? PW.flag(cc) : '';
+        el.querySelector('.t').textContent = PW.displayName(c.i, NAMES) || d.name || '';
+        el.querySelector('.tm').textContent = teamOf(c.i) || d.car || '';
+        el.querySelector('.rt .v').textContent = PW.fmtLap(c.best) || '—';
+        el.querySelector('.rt .v').classList.toggle('fastest', !!c.fast);
+      });
+  }
+
+  /* ------------------------------------------------------------- rendering */
+  function render() {
+    if (!PW.meta || !PW.tick) { board.classList.remove('in'); return; }
+    board.classList.add('in');
+
+    var s = PW.tick.session || {};
+    var finished = (s.flags || []).indexOf('checkered') >= 0 || s.flag === 'checkered' ||
+                   String(s.state || '').toLowerCase() === 'checkered';
+
+    document.getElementById('ttl').textContent =
+      TITLE || (finished ? 'RESULTS' : 'STANDINGS');
+
+    var t = PW.meta.track || {};
+    var where = document.getElementById('where');
+    where.innerHTML = '';
+    if (t.name) where.appendChild(PW.el('b', null, t.name));
+    if (t.config) {
+      where.appendChild(PW.el('span', 'sep', '·'));
+      where.appendChild(PW.el('span', null, t.config));
+    }
+    if (t.lengthKm) {
+      where.appendChild(PW.el('span', 'sep', '·'));
+      where.appendChild(PW.el('span', null, t.lengthKm.toFixed(2) + ' km'));
+    }
+
+    document.getElementById('sess').textContent = s.name || s.type || '';
+
+    var prog = document.getElementById('prog');
+    prog.innerHTML = '';
+    if (s.lapsTotal) {
+      prog.appendChild(document.createTextNode('LAP '));
+      prog.appendChild(PW.el('b', null, (s.raceLaps || 0) + ' / ' + s.lapsTotal));
+    } else if (s.timeRemain !== null && s.timeRemain !== undefined) {
+      prog.appendChild(document.createTextNode('REMAINING '));
+      prog.appendChild(PW.el('b', null, PW.fmtClock(s.timeRemain)));
+    } else if (PW.tick.fastest && PW.tick.fastest.time) {
+      prog.appendChild(document.createTextNode('FASTEST LAP '));
+      prog.appendChild(PW.el('b', null, PW.fmtLap(PW.tick.fastest.time)));
+    }
+
+    var chip = document.getElementById('flagchip');
+    var fl = finished ? 'checkered' : (s.flag || 'none');
+    chip.className = 'flagchip flag-' + (['green','yellow','red','white','checkered'].indexOf(fl) >= 0 ? fl : 'none');
+    var flagText = finished ? 'CHECKERED' : (s.caution ? 'CAUTION' : String(fl).toUpperCase());
+    chip.innerHTML = '';
+    chip.appendChild(PW.el('span', null, flagText));
+
+    /* field ------------------------------------------------------------- */
+    var cars = PW.cars().filter(function (c) {
+      var d = PW.driver(c.i);
+      if (!d || d.isPace || d.isSpectator) return false;
+      if (CLASSF) {
+        var want = String(CLASSF).toLowerCase();
+        if (String(d.classShort || '').toLowerCase() !== want && String(d.classId) !== want) return false;
+      }
+      return true;
+    });
+
+    var podiumOn = PODIUM && finished && !GROUP && cars.length > 6;
+    renderPodium(cars, podiumOn);
+    /* the podium three are already on screen; the columns pick up from P4 */
+    var field = podiumOn ? cars.slice(3) : cars;
+
+    if (GROUP && PW.multiclass()) {
+      var classes = (PW.meta.classes || []).filter(function (cl) {
+        return cars.some(function (c) { return (PW.driver(c.i) || {}).classId === cl.id; });
+      });
+      /* every class block shares one column count, so the blocks line up */
+      var sizes = classes.map(function (cl) {
+        return cars.filter(function (c) { return (PW.driver(c.i) || {}).classId === cl.id; }).length;
+      });
+      var cnG = columnCount(Math.max.apply(null, sizes.concat([0])));
+      var counts = sizes.map(function (n) { return Math.ceil(n / cnG); });
+      var rhG = rowHeight(counts, classes.length);
+
+      /* position inside a class block is its rank in that block */
+      groupPos = {};
+      classes.forEach(function (cl) {
+        var n = 0;
+        cars.forEach(function (c) {
+          if ((PW.driver(c.i) || {}).classId === cl.id) groupPos[c.i] = ++n;
+        });
+      });
+      PW.reconcile(blocks, classes, function (cl) { return 'cls' + cl.id; },
+        function () {
+          var b = document.createElement('div');
+          b.className = 'block';
+          b.innerHTML = '<div class="block-hd"><span class="chip"></span><span class="cnt"></span></div>';
+          return b;
+        },
+        function (b, cl) {
+          var chipEl = b.querySelector('.chip');
+          chipEl.textContent = cl.short || ('CLASS ' + cl.id);
+          chipEl.style.background = cl.color || '#8894a4';
+          chipEl.style.color = ink(cl.color);
+          var mine = cars.filter(function (c) { return (PW.driver(c.i) || {}).classId === cl.id; });
+          b.querySelector('.cnt').textContent = mine.length + ' CARS';
+          renderGrid(b, mine, rhG, cnG);
+        });
+    } else {
+      var rh = rowHeight([Math.ceil(field.length / columnCount(field.length))], 1);
+      PW.reconcile(blocks, [{ k: 'all' }], function (x) { return x.k; },
+        function () { return PW.el('div', 'block'); },
+        function (b) { renderGrid(b, field, rh); });
+    }
+  }
+
+  PW.on('meta', render);
+  PW.on('tick', render);
+  PW.start({ sub: ['meta', 'tick'], rate: 4 });
+})();
+</script>
+</body>
+</html>

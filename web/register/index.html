@@ -1,0 +1,800 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PitWall — Driver Registration</title>
+<link rel="stylesheet" href="../shared/base.css">
+<!--
+  Driver sign-up. A normal solid web page, filled in once on a phone or laptop.
+
+  Everything here is what iRacing cannot tell a broadcast: headshot, country,
+  team, pronouns, hometown, bio, sponsor, socials and accent colour. It is
+  POSTed as JSON to /api/roster/submit and upserted on the iRacing customer ID,
+  so re-submitting with the same ID edits the existing entry.
+
+  Images are read with FileReader, downscaled in a canvas (headshot 512px
+  square, logo 400px) and sent as headshotData / sponsorLogoData data URLs,
+  which keeps them well inside the server's 2 MB limit.
+
+  Options: server=http://host:port when this page is not served by PitWall.
+-->
+<style>
+  body.solid { background: radial-gradient(120% 80% at 50% 0%, #141922 0%, var(--bg) 55%); }
+
+  .wrap { max-width: 780px; margin: 0 auto; padding: 26px 18px 90px; }
+
+  header.top { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+  header.top .mark { width: 10px; height: 26px; background: var(--accent); border-radius: 2px; }
+  header.top h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+  header.top .sub { font-size: 12px; color: var(--text-faint); letter-spacing: 0.14em; text-transform: uppercase; }
+  .lede { color: var(--text-dim); font-size: 14px; line-height: 1.55; margin: 12px 0 20px; }
+
+  .card {
+    background: rgba(var(--panel-2), 0.55);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 18px;
+    margin-bottom: 18px;
+  }
+  .card > h2 {
+    font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--text-faint); margin: 0 0 14px; font-weight: 800;
+  }
+
+  .callout {
+    border: 1px solid rgba(59,130,246,0.35);
+    background: rgba(59,130,246,0.09);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 18px;
+    font-size: 13px; line-height: 1.6; color: var(--text);
+  }
+  .callout b { color: var(--blue); }
+  .callout ol { margin: 8px 0 0; padding-left: 20px; color: var(--text-dim); }
+  .callout code {
+    font-family: var(--mono); font-size: 12px;
+    background: rgba(0,0,0,0.4); padding: 1px 5px; border-radius: 3px; color: var(--text);
+  }
+
+  /* base.css outlines every select, not just the focused one */
+  select:not(:focus) { outline: none; }
+
+  .req { color: var(--accent); }
+  .err { color: var(--red); font-size: 11px; margin-top: 4px; display: none; }
+  .field.bad input, .field.bad select, .field.bad textarea { border-color: rgba(255,77,77,0.75); }
+  .field.bad .err { display: block; }
+
+  .counter { float: right; font-size: 11px; color: var(--text-faint); font-family: var(--mono); }
+  .counter.over { color: var(--red); }
+
+  .row-inline { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+  .row-inline .grow { flex: 1 1 180px; }
+  .row-inline button { white-space: nowrap; }
+
+  /* uploads -------------------------------------------------------------- */
+  .up { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  .up .prev-shot {
+    width: 104px; height: 104px; border-radius: 50%;
+    background: rgba(0,0,0,0.4);
+    box-shadow: inset 0 0 0 2px var(--pick, var(--accent));
+    display: grid; place-items: center; overflow: hidden; flex: 0 0 auto;
+  }
+  .up .prev-shot img { width: 100%; height: 100%; object-fit: cover; }
+  .up .prev-shot .ph { font-size: 11px; color: var(--text-faint); text-align: center; padding: 0 8px; }
+  .up .prev-logo {
+    width: 148px; height: 74px; border-radius: 5px;
+    background: rgba(0,0,0,0.4); border: 1px dashed var(--line-strong);
+    display: grid; place-items: center; overflow: hidden; flex: 0 0 auto;
+  }
+  .up .prev-logo img { max-width: 92%; max-height: 84%; object-fit: contain; }
+  .up .prev-logo .ph { font-size: 11px; color: var(--text-faint); }
+  .up .ctl { flex: 1 1 220px; min-width: 0; }
+  input[type=file] { display: none; }
+
+  .swatches { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  input[type=color] { width: 52px; height: 36px; padding: 2px; cursor: pointer; }
+  .swatch { width: 24px; height: 24px; border-radius: 4px; border: 1px solid var(--line-strong); cursor: pointer; }
+
+  /* submit bar ----------------------------------------------------------- */
+  .actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .actions .msg { font-size: 13px; }
+  .msg.bad { color: var(--red); }
+  .msg.ok { color: var(--green); }
+  .banner {
+    border-radius: 6px; padding: 11px 13px; font-size: 13px; line-height: 1.5;
+    margin-bottom: 14px; display: none;
+  }
+  .banner.show { display: block; }
+  .banner.bad { background: rgba(255,77,77,0.12); border: 1px solid rgba(255,77,77,0.4); color: #ffc9c9; }
+  .banner.ok { background: rgba(53,208,127,0.12); border: 1px solid rgba(53,208,127,0.4); color: #bff3d8; }
+  .banner.info { background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.4); color: #cfe0ff; }
+
+  /* confirmation --------------------------------------------------------- */
+  #done { display: none; }
+  #done.show { display: block; }
+  .preview-frame {
+    background:
+      linear-gradient(120deg, #202733, #10141a 60%),
+      #10141a;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    padding: 26px 18px;
+    display: grid; place-items: center;
+    overflow-x: auto;
+  }
+  .preview-note { font-size: 11px; color: var(--text-faint); text-align: center; margin-top: 10px; }
+
+  /* the broadcast card, in miniature ------------------------------------- */
+  .dcard {
+    width: 560px; max-width: 100%;
+    display: flex; align-items: stretch;
+    background: rgba(12,15,19,0.94);
+    border: 1px solid var(--line);
+    border-left: none;
+    border-radius: 6px;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+    overflow: hidden;
+    position: relative;
+  }
+  .dcard .stripe { flex: 0 0 6px; background: var(--pick, var(--accent)); }
+  .dcard .body { display: flex; gap: 14px; padding: 14px 16px 13px; min-width: 0; flex: 1 1 auto; }
+  .dcard .shot {
+    width: 104px; height: 104px; border-radius: 8px; overflow: hidden; flex: 0 0 auto;
+    box-shadow: inset 0 0 0 2px var(--pick, var(--accent));
+    background: rgba(255,255,255,0.05);
+  }
+  .dcard .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .dcard .shot .ini {
+    width: 100%; height: 100%; display: grid; place-items: center;
+    font-size: 36px; font-weight: 800; background: var(--pick, var(--accent)); color: #05070a;
+  }
+  .dcard .main { min-width: 0; flex: 1 1 auto; }
+  .dcard .idrow { display: flex; align-items: center; gap: 9px; min-width: 0; }
+  .dcard .plate {
+    font-family: var(--mono); font-weight: 800; font-size: 18px; line-height: 1;
+    padding: 5px 7px 4px; border-radius: 4px; min-width: 40px; text-align: center;
+    background: var(--pick, var(--accent)); color: #05070a;
+  }
+  .dcard .nm {
+    font-size: 27px; font-weight: 800; text-transform: uppercase; letter-spacing: -0.015em;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .dcard .sub { margin-top: 6px; font-size: 14px; display: flex; gap: 7px; min-width: 0; }
+  .dcard .sub .tm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dcard .m2 { margin-top: 3px; font-size: 11px; color: var(--text-dim); }
+  .dcard .stats {
+    display: flex; gap: 14px; margin-top: 10px; padding: 7px 0 6px;
+    border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  }
+  .dcard .stat .k { font-size: 8px; letter-spacing: 0.12em; color: var(--text-faint); font-weight: 800; }
+  .dcard .stat .v { font-family: var(--mono); font-size: 15px; font-weight: 700; color: var(--text-faint); }
+  .dcard .bio {
+    margin-top: 8px; font-size: 12px; line-height: 1.35; color: var(--text-dim);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .dcard .socs { margin-top: 7px; display: flex; gap: 10px; flex-wrap: wrap; font-size: 10px; color: var(--text-dim); }
+  .dcard .socs .k { font-size: 8px; font-weight: 800; letter-spacing: 0.1em; color: var(--text-faint); margin-right: 4px; }
+  .dcard .sponsor { position: absolute; top: 12px; right: 14px; max-height: 26px; max-width: 110px; object-fit: contain; }
+
+  @media (max-width: 680px) {
+    .wrap { padding: 20px 14px 70px; }
+    .dcard { width: 100%; }
+    .dcard .nm { font-size: 21px; }
+    .dcard .shot { width: 78px; height: 78px; }
+  }
+</style>
+</head>
+<body class="solid">
+  <div id="pw-status"></div>
+  <div class="wrap">
+
+    <header class="top">
+      <div class="mark"></div>
+      <div>
+        <h1 id="leagueName">Driver registration</h1>
+        <div class="sub">PitWall roster</div>
+      </div>
+    </header>
+
+    <p class="lede" id="lede">
+      Fill this in once. Everything you enter here is what the broadcast graphics
+      use when the camera cuts to your car — iRacing on its own only knows your
+      name and your number.
+    </p>
+
+    <div class="callout" id="callout">
+      <b>You need your iRacing customer ID.</b> It is the key everything joins on,
+      and it is the field people get wrong.
+      <ol>
+        <li>Go to the iRacing website and sign in</li>
+        <li>Open <code>Account</code> → <code>My Account</code></li>
+        <li>Copy the number next to <code>Customer ID</code></li>
+      </ol>
+      It is digits only — something like <code>512345</code>. Not your display
+      name, not your email.
+    </div>
+
+    <!-- form ------------------------------------------------------------- -->
+    <form id="form" novalidate>
+      <div id="banner" class="banner"></div>
+
+      <div class="card">
+        <h2>Already registered?</h2>
+        <div class="row-inline">
+          <div class="grow field" style="margin-bottom:0">
+            <label for="loadId">Customer ID</label>
+            <input id="loadId" class="num" inputmode="numeric" autocomplete="off" placeholder="512345">
+          </div>
+          <button type="button" id="loadBtn">Load my existing entry</button>
+        </div>
+        <div class="hint">Loads what you submitted before so you can edit it. Submitting
+          again with the same customer ID replaces your entry — it never creates a duplicate.</div>
+      </div>
+
+      <div class="card">
+        <h2>Identity</h2>
+        <div class="grid-2">
+          <div class="field" id="f-iracingId">
+            <label for="iracingId">iRacing customer ID <span class="req">*</span></label>
+            <input id="iracingId" name="iracingId" class="num" inputmode="numeric" autocomplete="off" placeholder="512345">
+            <div class="err">Digits only — the Customer ID from your iRacing account page.</div>
+          </div>
+          <div class="field" id="f-displayName">
+            <label for="displayName">Display name <span class="req">*</span></label>
+            <input id="displayName" name="displayName" autocomplete="name" placeholder="Alex Fenwick">
+            <div class="err">Please enter the name you want on screen.</div>
+            <div class="hint">How you want it shown on the broadcast.</div>
+          </div>
+          <div class="field">
+            <label for="carNumber">Car number</label>
+            <input id="carNumber" name="carNumber" class="num" autocomplete="off" placeholder="18">
+          </div>
+          <div class="field">
+            <label for="team">Team</label>
+            <input id="team" name="team" autocomplete="organization" placeholder="Solstice Motorsport">
+          </div>
+          <div class="field">
+            <label for="country">Country</label>
+            <select id="country" name="country"></select>
+            <div class="hint">Flies your flag next to your name.</div>
+          </div>
+          <div class="field">
+            <label for="pronouns">Pronouns</label>
+            <input id="pronouns" name="pronouns" autocomplete="off" placeholder="she/her">
+          </div>
+          <div class="field">
+            <label for="hometown">Hometown</label>
+            <input id="hometown" name="hometown" autocomplete="off" placeholder="Stavelot, Belgium">
+          </div>
+          <div class="field">
+            <label for="accentColor">Accent colour</label>
+            <div class="swatches">
+              <input type="color" id="accentColor" name="accentColor" value="#e8443a">
+              <input id="accentHex" class="num" style="width:110px" maxlength="7" value="#e8443a">
+              <span class="swatch" data-c="#e8443a"></span>
+              <span class="swatch" data-c="#12b8ff"></span>
+              <span class="swatch" data-c="#35d07f"></span>
+              <span class="swatch" data-c="#ffcc33"></span>
+              <span class="swatch" data-c="#b06cff"></span>
+            </div>
+            <div class="hint">Used for the ring around your headshot and the card edge.</div>
+          </div>
+        </div>
+
+        <div class="field" style="margin-bottom:0">
+          <label for="bio">One-line bio <span class="counter" id="bioCount">0 / 220</span></label>
+          <textarea id="bio" name="bio" maxlength="220" rows="2"
+            placeholder="Third season in the league, two poles at Spa, still cannot get out of Eau Rouge cleanly."></textarea>
+          <div class="hint">Kept to two lines on screen. Short beats complete.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Headshot</h2>
+        <div class="up">
+          <div class="prev-shot" id="shotPrev"><div class="ph">No photo yet</div></div>
+          <div class="ctl">
+            <input type="file" id="headshotFile" accept="image/png,image/jpeg,image/webp">
+            <div class="row-inline">
+              <button type="button" id="shotPick">Choose photo</button>
+              <button type="button" id="shotClear" class="ghost">Remove</button>
+            </div>
+            <div class="hint" id="shotInfo">
+              A head-and-shoulders photo works best. It is cropped to a square and
+              resized to 512px in your browser before it is uploaded.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Sponsor</h2>
+        <div class="field">
+          <label for="sponsor">Sponsor name</label>
+          <input id="sponsor" name="sponsor" autocomplete="off" placeholder="Corvid Performance">
+        </div>
+        <div class="up">
+          <div class="prev-logo" id="logoPrev"><div class="ph">No logo yet</div></div>
+          <div class="ctl">
+            <input type="file" id="logoFile" accept="image/png,image/jpeg,image/webp">
+            <div class="row-inline">
+              <button type="button" id="logoPick">Choose logo</button>
+              <button type="button" id="logoClear" class="ghost">Remove</button>
+            </div>
+            <div class="hint" id="logoInfo">
+              PNG with a transparent background looks best over video. Resized to
+              400px in your browser.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Socials</h2>
+        <div class="grid-2">
+          <div class="field"><label for="twitch">Twitch</label><input id="twitch" name="twitch" autocomplete="off" placeholder="yourchannel"></div>
+          <div class="field"><label for="youtube">YouTube</label><input id="youtube" name="youtube" autocomplete="off" placeholder="@yourchannel"></div>
+          <div class="field"><label for="instagram">Instagram</label><input id="instagram" name="instagram" autocomplete="off" placeholder="yourhandle"></div>
+          <div class="field"><label for="x">X</label><input id="x" name="x" autocomplete="off" placeholder="yourhandle"></div>
+          <div class="field" style="margin-bottom:0"><label for="discord">Discord</label><input id="discord" name="discord" autocomplete="off" placeholder="yourname"></div>
+        </div>
+        <div class="hint">Handles, not full URLs — either works, the graphics strip the rest.</div>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="primary" id="submitBtn">Submit my entry</button>
+        <span class="msg" id="msg"></span>
+      </div>
+    </form>
+
+    <!-- confirmation ------------------------------------------------------ -->
+    <div id="done">
+      <div class="card">
+        <h2>You are in the roster</h2>
+        <p class="lede" style="margin-top:0">
+          <span id="doneName"></span> is registered. This is roughly how your card
+          looks when the director cuts to your car — the live timing fills in the
+          numbers.
+        </p>
+        <div class="preview-frame"><div class="dcard" id="previewCard"></div></div>
+        <div class="preview-note">Preview only. On the broadcast this sits over the race, bottom left.</div>
+        <div class="actions" style="margin-top:18px">
+          <button type="button" class="primary" id="editBtn">Edit my entry</button>
+          <span class="msg" id="doneMsg"></span>
+        </div>
+        <div class="hint" style="margin-top:10px">
+          You can come back to this page any time. Submitting again with customer ID
+          <b id="doneId" class="num"></b> updates the same entry.
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+<script src="../shared/pitwall.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  PW.applyChrome();
+
+  /* ------------------------------------------------------------ countries */
+  var COUNTRIES = ('AR Argentina|AU Australia|AT Austria|BE Belgium|BR Brazil|BG Bulgaria|' +
+    'CA Canada|CL Chile|CN China|CO Colombia|HR Croatia|CY Cyprus|CZ Czechia|DK Denmark|' +
+    'EE Estonia|FI Finland|FR France|DE Germany|GR Greece|HK Hong Kong|HU Hungary|IS Iceland|' +
+    'IN India|ID Indonesia|IE Ireland|IL Israel|IT Italy|JP Japan|LV Latvia|LT Lithuania|' +
+    'LU Luxembourg|MY Malaysia|MT Malta|MX Mexico|MC Monaco|NL Netherlands|NZ New Zealand|' +
+    'NO Norway|PE Peru|PH Philippines|PL Poland|PT Portugal|PR Puerto Rico|RO Romania|' +
+    'SA Saudi Arabia|RS Serbia|SG Singapore|SK Slovakia|SI Slovenia|ZA South Africa|' +
+    'KR South Korea|ES Spain|SE Sweden|CH Switzerland|TW Taiwan|TH Thailand|TR Turkey|' +
+    'UA Ukraine|AE United Arab Emirates|GB United Kingdom|US United States|UY Uruguay|VE Venezuela'
+  ).split('|');
+
+  var sel = document.getElementById('country');
+  sel.appendChild(new Option('— not set —', ''));
+  COUNTRIES.forEach(function (row) {
+    var code = row.slice(0, 2), name = row.slice(3);
+    var f = PW.flag(code);
+    sel.appendChild(new Option((f ? f + '  ' : '') + name, code));
+  });
+
+  /* --------------------------------------------------------------- fields */
+  var TEXT_FIELDS = ['iracingId', 'displayName', 'carNumber', 'team', 'country',
+                     'pronouns', 'hometown', 'bio', 'twitch', 'youtube',
+                     'instagram', 'x', 'discord', 'sponsor', 'accentColor'];
+  var $ = function (id) { return document.getElementById(id); };
+  var form = $('form'), banner = $('banner'), msg = $('msg');
+
+  /* images held as data URLs until submit; null means "leave what is on the
+     server alone", '' is not sent at all (the server keeps the old image). */
+  var images = { headshotData: null, sponsorLogoData: null };
+  var existingImages = { headshot: '', sponsorLogo: '' };
+
+  /* --------------------------------------------------------- accent colour */
+  var colorEl = $('accentColor'), hexEl = $('accentHex');
+  function setColor(v) {
+    if (!/^#[0-9a-f]{6}$/i.test(v)) return;
+    colorEl.value = v;
+    hexEl.value = v;
+    document.documentElement.style.setProperty('--pick', v);
+  }
+  colorEl.addEventListener('input', function () { setColor(colorEl.value); });
+  hexEl.addEventListener('input', function () { setColor(hexEl.value.trim()); });
+  Array.prototype.forEach.call(document.querySelectorAll('.swatch'), function (s) {
+    s.style.background = s.dataset.c;
+    s.addEventListener('click', function () { setColor(s.dataset.c); });
+  });
+  setColor('#e8443a');
+
+  /* ------------------------------------------------------------ bio count */
+  var bio = $('bio'), bioCount = $('bioCount');
+  function countBio() {
+    bioCount.textContent = bio.value.length + ' / 220';
+    bioCount.classList.toggle('over', bio.value.length >= 220);
+  }
+  bio.addEventListener('input', countBio);
+  countBio();
+
+  /* --------------------------------------------------------- image resize */
+  function readFile(file) {
+    return new Promise(function (res, rej) {
+      var fr = new FileReader();
+      fr.onload = function () { res(fr.result); };
+      fr.onerror = function () { rej(new Error('That file could not be read.')); };
+      fr.readAsDataURL(file);
+    });
+  }
+  function loadImage(src) {
+    return new Promise(function (res, rej) {
+      var im = new Image();
+      im.onload = function () { res(im); };
+      im.onerror = function () { rej(new Error('That does not look like an image PitWall can read.')); };
+      im.src = src;
+    });
+  }
+  function bytesOf(dataUrl) { return Math.ceil(dataUrl.length * 0.75); }
+
+  /**
+   * Downscale in a canvas and return a data URL. `square` centre-crops first.
+   * Retries smaller / lower quality until it is comfortably under the server's
+   * 2 MB ceiling, so a 12 MP phone photo still goes through on mobile data.
+   */
+  function shrink(im, maxPx, square, wantPng) {
+    var LIMIT = 1500 * 1024;
+    var quality = 0.88;
+    var size = maxPx;
+    for (var attempt = 0; attempt < 6; attempt++) {
+      var cv = document.createElement('canvas');
+      var ctx;
+      if (square) {
+        var side = Math.min(im.width, im.height);
+        var sx = (im.width - side) / 2, sy = (im.height - side) / 2;
+        var d = Math.min(size, side);
+        cv.width = cv.height = d;
+        ctx = cv.getContext('2d');
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(im, sx, sy, side, side, 0, 0, d, d);
+      } else {
+        var s = Math.min(1, size / Math.max(im.width, im.height));
+        cv.width = Math.max(1, Math.round(im.width * s));
+        cv.height = Math.max(1, Math.round(im.height * s));
+        ctx = cv.getContext('2d');
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(im, 0, 0, cv.width, cv.height);
+      }
+      var url = wantPng ? cv.toDataURL('image/png') : cv.toDataURL('image/jpeg', quality);
+      if (bytesOf(url) <= LIMIT) return url;
+      if (wantPng && attempt >= 1) { wantPng = false; continue; }   /* PNG too fat: fall back to JPEG */
+      quality = Math.max(0.5, quality - 0.12);
+      size = Math.round(size * 0.8);
+    }
+    return null;
+  }
+
+  function wireUpload(opts) {
+    var input = $(opts.file), prev = $(opts.prev), info = $(opts.info);
+    $(opts.pick).addEventListener('click', function () { input.click(); });
+    $(opts.clear).addEventListener('click', function () {
+      images[opts.key] = null;
+      existingImages[opts.stored] = '';
+      input.value = '';
+      prev.innerHTML = '<div class="ph">' + opts.empty + '</div>';
+      info.textContent = opts.hint;
+    });
+    input.addEventListener('change', function () {
+      var f = input.files && input.files[0];
+      if (!f) return;
+      if (!/^image\/(png|jpeg|webp)$/.test(f.type)) {
+        info.textContent = 'Images must be PNG, JPEG or WebP.';
+        return;
+      }
+      info.textContent = 'Processing…';
+      readFile(f).then(loadImage).then(function (im) {
+        var url = shrink(im, opts.max, opts.square, /png/.test(f.type) && !opts.square);
+        if (!url) throw new Error('That image is too large even after resizing. Try a smaller one.');
+        images[opts.key] = url;
+        prev.innerHTML = '';
+        var el = new Image();
+        el.src = url;
+        prev.appendChild(el);
+        info.textContent = 'Ready — ' + Math.round(bytesOf(url) / 1024) + ' KB after resizing.';
+      }).catch(function (e) {
+        info.textContent = e.message || 'That image could not be processed.';
+      });
+    });
+  }
+
+  wireUpload({ file: 'headshotFile', prev: 'shotPrev', info: 'shotInfo', pick: 'shotPick',
+               clear: 'shotClear', key: 'headshotData', stored: 'headshot', max: 512, square: true,
+               empty: 'No photo yet',
+               hint: 'A head-and-shoulders photo works best. It is cropped to a square and resized to 512px in your browser before it is uploaded.' });
+  wireUpload({ file: 'logoFile', prev: 'logoPrev', info: 'logoInfo', pick: 'logoPick',
+               clear: 'logoClear', key: 'sponsorLogoData', stored: 'sponsorLogo', max: 400, square: false,
+               empty: 'No logo yet',
+               hint: 'PNG with a transparent background looks best over video. Resized to 400px in your browser.' });
+
+  /* -------------------------------------------------------------- helpers */
+  function abs(url) {
+    if (!url) return '';
+    if (/^(https?:|data:)/i.test(url)) return url;
+    return PW.serverBase() + (url.charAt(0) === '/' ? '' : '/') + url;
+  }
+  function setBanner(kind, text) {
+    banner.className = 'banner show ' + kind;
+    banner.textContent = text;
+  }
+  function clearBanner() { banner.className = 'banner'; banner.textContent = ''; }
+  function markBad(id, on) { $('f-' + id).classList.toggle('bad', !!on); }
+  function handle(v) {
+    if (!v) return '';
+    var s = String(v).trim().replace(/^https?:\/\/[^/]+\//i, '').replace(/\/+$/, '');
+    s = s.split('/').pop().split('?')[0];
+    return s ? '@' + s.replace(/^@/, '') : '';
+  }
+  function ink(hex) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ''));
+    if (!m) return '#05070a';
+    var n = parseInt(m[1], 16);
+    var l = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+    return l > 0.6 ? '#05070a' : '#ffffff';
+  }
+  function initialsOf(name) {
+    var n = String(name || '').trim().split(/\s+/);
+    if (!n[0]) return '?';
+    return (n[0].charAt(0) + (n.length > 1 ? n[n.length - 1].charAt(0) : '')).toUpperCase();
+  }
+
+  /* ------------------------------------------------------------- populate */
+  function collect() {
+    var out = {};
+    TEXT_FIELDS.forEach(function (f) { out[f] = ($(f).value || '').trim(); });
+    return out;
+  }
+  function populate(entry) {
+    TEXT_FIELDS.forEach(function (f) {
+      if (f === 'accentColor') return;
+      $(f).value = entry[f] === undefined || entry[f] === null ? '' : String(entry[f]);
+    });
+    if (entry.accentColor && /^#[0-9a-f]{6}$/i.test(entry.accentColor)) setColor(entry.accentColor);
+    countBio();
+
+    existingImages.headshot = entry.headshot || '';
+    existingImages.sponsorLogo = entry.sponsorLogo || '';
+    images.headshotData = null;
+    images.sponsorLogoData = null;
+
+    if (entry.headshot) {
+      $('shotPrev').innerHTML = '';
+      var im = new Image();
+      im.onerror = function () { $('shotPrev').innerHTML = '<div class="ph">No photo yet</div>'; };
+      im.src = abs(entry.headshot);
+      $('shotPrev').appendChild(im);
+      $('shotInfo').textContent = 'Your existing photo. Choose a new one to replace it.';
+    }
+    if (entry.sponsorLogo) {
+      $('logoPrev').innerHTML = '';
+      var lg = new Image();
+      lg.onerror = function () { $('logoPrev').innerHTML = '<div class="ph">No logo yet</div>'; };
+      lg.src = abs(entry.sponsorLogo);
+      $('logoPrev').appendChild(lg);
+      $('logoInfo').textContent = 'Your existing logo. Choose a new one to replace it.';
+    }
+  }
+
+  /* --------------------------------------------------------- load existing */
+  $('loadBtn').addEventListener('click', function () {
+    var id = ($('loadId').value || '').trim();
+    if (!/^\d+$/.test(id)) {
+      setBanner('bad', 'Enter your numeric iRacing customer ID to load your entry.');
+      return;
+    }
+    setBanner('info', 'Looking up ' + id + '…');
+    PW.api('/api/roster').then(function (data) {
+      var hit = (data.drivers || []).filter(function (e) {
+        return String(e.iracingId) === id;
+      })[0];
+      if (!hit) {
+        setBanner('info', 'No entry yet for customer ID ' + id + '. Fill the form in and submit — it will be created.');
+        $('iracingId').value = id;
+        return;
+      }
+      populate(hit);
+      setBanner('ok', 'Loaded ' + (hit.displayName || id) + '. Change what you need and submit again to update it.');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }).catch(function (e) { setBanner('bad', netMessage(e)); });
+  });
+
+  function netMessage(e) {
+    if (e instanceof TypeError || /fetch|network|load failed/i.test(e.message || '')) {
+      return 'Could not reach the PitWall server at ' + PW.serverBase() +
+             '. Check it is running and that you are on the same network, then try again.';
+    }
+    return e.message || 'Something went wrong.';
+  }
+
+  /* ---------------------------------------------------------------- submit */
+  form.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    clearBanner();
+    msg.textContent = '';
+    msg.className = 'msg';
+
+    var v = collect();
+    var ok = true;
+    if (!/^\d+$/.test(v.iracingId)) { markBad('iracingId', true); ok = false; } else markBad('iracingId', false);
+    if (!v.displayName) { markBad('displayName', true); ok = false; } else markBad('displayName', false);
+    if (!ok) {
+      setBanner('bad', 'Two things are needed before this can be saved: your numeric iRacing customer ID and a display name.');
+      var bad = document.querySelector('.field.bad input');
+      if (bad) bad.focus();
+      return;
+    }
+
+    var payload = {};
+    Object.keys(v).forEach(function (k) { if (v[k] !== '') payload[k] = v[k]; });
+    if (images.headshotData) payload.headshotData = images.headshotData;
+    if (images.sponsorLogoData) payload.sponsorLogoData = images.sponsorLogoData;
+
+    var btn = $('submitBtn');
+    btn.disabled = true;
+    msg.textContent = 'Sending…';
+
+    PW.api('/api/roster/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(function (res) {
+      btn.disabled = false;
+      msg.textContent = '';
+      var entry = res.entry || res.driver || payload;
+      showDone(entry);
+    }).catch(function (e) {
+      btn.disabled = false;
+      msg.textContent = '';
+      setBanner('bad', netMessage(e));
+      if (/customer id/i.test(e.message || '')) markBad('iracingId', true);
+      if (/display name/i.test(e.message || '')) markBad('displayName', true);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
+
+  /* ------------------------------------------------------- confirmation */
+  function previewCard(entry) {
+    var accent = /^#[0-9a-f]{6}$/i.test(entry.accentColor || '') ? entry.accentColor : '#e8443a';
+    var shot = images.headshotData || abs(entry.headshot || existingImages.headshot);
+    var logo = images.sponsorLogoData || abs(entry.sponsorLogo || existingImages.sponsorLogo);
+    var card = $('previewCard');
+    card.style.setProperty('--pick', accent);
+    card.innerHTML = '';
+
+    card.appendChild(PW.el('div', 'stripe'));
+    var body = PW.el('div', 'body');
+
+    var shotEl = PW.el('div', 'shot');
+    if (shot) {
+      var im = new Image();
+      im.src = shot;
+      im.onerror = function () {
+        shotEl.innerHTML = '';
+        var f = PW.el('div', 'ini', initialsOf(entry.displayName));
+        f.style.color = ink(accent);
+        shotEl.appendChild(f);
+      };
+      shotEl.appendChild(im);
+    } else {
+      var ini = PW.el('div', 'ini', initialsOf(entry.displayName));
+      ini.style.color = ink(accent);
+      shotEl.appendChild(ini);
+    }
+    body.appendChild(shotEl);
+
+    var main = PW.el('div', 'main');
+    var idrow = PW.el('div', 'idrow');
+    var plate = PW.el('div', 'plate num', entry.carNumber || '—');
+    plate.style.color = ink(accent);
+    idrow.appendChild(plate);
+    idrow.appendChild(PW.el('div', 'nm', entry.displayName || ''));
+    main.appendChild(idrow);
+
+    var sub = PW.el('div', 'sub');
+    if (entry.country) sub.appendChild(PW.el('span', 'fl', PW.flag(entry.country)));
+    sub.appendChild(PW.el('span', 'tm', entry.team || 'Independent'));
+    main.appendChild(sub);
+
+    var bits = [];
+    if (entry.pronouns) bits.push(entry.pronouns);
+    if (entry.hometown) bits.push(entry.hometown);
+    if (bits.length) main.appendChild(PW.el('div', 'm2', bits.join('  ·  ')));
+
+    var stats = PW.el('div', 'stats');
+    [['POS', '—'], ['LAST', '—:—.—'], ['BEST', '—:—.—'], ['GAP', '—'], ['INC', '—']].forEach(function (s) {
+      var st = PW.el('div', 'stat');
+      st.appendChild(PW.el('div', 'k', s[0]));
+      st.appendChild(PW.el('div', 'v', s[1]));
+      stats.appendChild(st);
+    });
+    main.appendChild(stats);
+
+    if (entry.bio) main.appendChild(PW.el('div', 'bio', entry.bio));
+
+    var socs = [['TWITCH', entry.twitch], ['X', entry.x], ['IG', entry.instagram], ['YT', entry.youtube]]
+      .map(function (s) { return [s[0], handle(s[1])]; })
+      .filter(function (s) { return !!s[1]; });
+    if (socs.length) {
+      var row = PW.el('div', 'socs');
+      socs.forEach(function (s) {
+        var w = PW.el('span');
+        w.appendChild(PW.el('span', 'k', s[0]));
+        w.appendChild(document.createTextNode(s[1]));
+        row.appendChild(w);
+      });
+      main.appendChild(row);
+    }
+
+    body.appendChild(main);
+    card.appendChild(body);
+
+    if (logo) {
+      var lg = new Image();
+      lg.className = 'sponsor';
+      lg.onerror = function () { lg.remove(); };
+      lg.src = logo;
+      card.appendChild(lg);
+    }
+  }
+
+  function showDone(entry) {
+    clearBanner();
+    previewCard(entry);
+    $('doneName').textContent = entry.displayName || 'Your entry';
+    $('doneId').textContent = entry.iracingId || '';
+    form.style.display = 'none';
+    $('callout').style.display = 'none';
+    $('lede').style.display = 'none';
+    $('done').classList.add('show');
+    $('loadId').value = String(entry.iracingId || '');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  $('editBtn').addEventListener('click', function () {
+    $('done').classList.remove('show');
+    form.style.display = '';
+    $('callout').style.display = '';
+    $('lede').style.display = '';
+    setBanner('info', 'Editing your entry. Submit again to replace what is stored — same customer ID, same entry.');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  /* league skin + a quiet heads-up if the server is not there ------------- */
+  PW.on('hello', function (h) {
+    if (h.league && h.league.name) {
+      document.getElementById('leagueName').textContent = h.league.name + ' — driver registration';
+      document.title = 'PitWall — ' + h.league.name + ' registration';
+    }
+  });
+  PW.start({ sub: [], rate: 1 });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,331 @@
+<!doctype html>
+<!--
+  PitWall — HUD widget launcher
+  ---------------------------------------------------------------------------
+  Not an overlay: a full page (body class "solid") for working out what to add
+  to OBS or to the PitWall HUD app. Every in-game widget is listed with a live
+  preview at its intended size, the exact URL to paste, and the window size to
+  give it.
+
+  The previews are the real widgets in iframes against a dark "over the sim"
+  backdrop, so what you see here is what lands on the screen.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PitWall — HUD Widgets</title>
+<link rel="stylesheet" href="../shared/base.css">
+<style>
+  body.solid { padding: 0 0 48px; }
+
+  .top {
+    padding: 22px 26px 18px;
+    border-bottom: 1px solid var(--line);
+    background: rgb(var(--panel-2));
+  }
+  .top h1 {
+    margin: 0 0 5px;
+    font-size: 19px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+  }
+  .top h1 span {
+    display: inline-block;
+    width: 3px;
+    height: 15px;
+    background: var(--accent);
+    margin-right: 9px;
+    vertical-align: -2px;
+  }
+  .top p { margin: 0; font-size: 12.5px; color: var(--text-dim); max-width: 760px; line-height: 1.55; }
+  .top .st { margin-top: 10px; font-size: 11.5px; color: var(--text-faint); }
+  .top .st b { color: var(--green); font-weight: 700; }
+  .top .st b.off { color: var(--red); }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    align-items: start;
+    gap: 16px;
+    padding: 18px 26px;
+  }
+  @media (max-width: 720px) { .cards { grid-template-columns: 1fr; padding: 14px; } }
+
+  .card {
+    background: rgb(var(--panel-2));
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .card header { padding: 12px 14px 10px; }
+  .card h2 {
+    margin: 0 0 4px;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .card h2 .size {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--text-faint);
+    letter-spacing: 0;
+  }
+  .card p { margin: 0; font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+
+  /* A stand-in for "the sim underneath": dark, slightly textured, so a
+     transparent overlay is judged the way it will actually be seen. */
+  .prev {
+    position: relative;
+    height: 232px;
+    margin: 0 14px;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+    overflow: hidden;
+    background:
+      radial-gradient(120% 90% at 30% 0%, #2b3340 0%, #12161c 55%, #080a0d 100%),
+      #0a0c0f;
+    display: grid;
+    place-items: center;
+  }
+  .prev::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(115deg,
+      rgba(255,255,255,0.030) 0 2px, transparent 2px 9px);
+    pointer-events: none;
+  }
+  .prev iframe {
+    border: 0;
+    background: transparent;
+    transform-origin: center center;
+  }
+
+  .opts {
+    padding: 10px 14px 0;
+    font-size: 11px;
+    color: var(--text-faint);
+    line-height: 1.65;
+  }
+  .opts code {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--text-dim);
+    background: rgba(255,255,255,0.06);
+    padding: 1px 4px;
+    border-radius: 2px;
+  }
+
+  .urlrow {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 12px 14px 14px;
+    margin-top: auto;
+  }
+  .urlrow input {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 7px 8px;
+    background: rgba(0,0,0,0.45);
+  }
+  .urlrow button { flex: 0 0 auto; font-size: 12px; padding: 7px 11px; }
+  .urlrow button.done { border-color: rgba(53,208,127,0.55); color: var(--green); }
+
+  .foot {
+    padding: 4px 26px 0;
+    font-size: 11.5px;
+    color: var(--text-faint);
+    line-height: 1.7;
+    max-width: 900px;
+  }
+  .foot code {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    background: rgba(255,255,255,0.06);
+    padding: 1px 4px;
+    border-radius: 2px;
+  }
+</style>
+</head>
+<body class="solid">
+  <div class="top">
+    <h1><span></span>HUD widgets</h1>
+    <p>
+      Small transparent always-on-top windows that sit over iRacing while you drive.
+      Each one is a plain URL: add it as an OBS browser source at the size shown, or
+      point a PitWall HUD window at it. Every option is a query-string parameter, so
+      you configure a widget by editing its URL.
+    </p>
+    <div class="st" id="st">Connecting to PitWall…</div>
+  </div>
+
+  <div class="cards" id="cards"></div>
+
+  <div class="foot">
+    Options shared by every widget: <code>scale=1.2</code> to resize the whole thing,
+    <code>opacity=0.8</code> for panel transparency, <code>accent=%23ff8800</code> to
+    recolour the highlight, <code>car=N</code> to lock a widget to one car index, and
+    <code>server=http://192.168.1.20:8099</code> to run the overlay on a second PC.
+    Sizes are for scale 1; multiply by your <code>scale</code>.
+  </div>
+
+<script src="../shared/pitwall.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var WIDGETS = [
+    {
+      file: 'relative.html',
+      name: 'Relative',
+      w: 300, h: 162,
+      desc: 'Cars around you by track position with the time gap to each — positive ' +
+            'ahead, negative behind. Your row is centred; cars a lap up are red, a ' +
+            'lap down blue, so you know instantly whether the car behind is racing ' +
+            'you or lapping you.',
+      opts: ['ahead=3', 'behind=3', 'class=0', 'irating=1', 'inc=1', 'names=surname', 'w=300']
+    },
+    {
+      file: 'standings.html',
+      name: 'Standings',
+      w: 300, h: 290,
+      desc: 'The running order with gap, last lap and stops. Your row stays on screen: ' +
+            'when the field is longer than the widget the leaders stay pinned and the ' +
+            'list scrolls around you.',
+      opts: ['rows=12', 'col=int', 'group=class', 'class=GT3', 'me=2', 'last=0', 'stops=0']
+    },
+    {
+      file: 'inputs.html',
+      name: 'Inputs',
+      w: 360, h: 130,
+      desc: 'Scrolling 60 Hz pedal trace with throttle, brake and optional clutch, bar ' +
+            'gauges, a steering indicator and gear / speed. ABS activation is drawn ' +
+            'over the brake trace in yellow.',
+      opts: ['seconds=6', 'bars=0', 'trace=0', 'clutch=1', 'speed=mph', 'h=130']
+    },
+    {
+      file: 'fuel.html',
+      name: 'Fuel & stint',
+      w: 270, h: 205,
+      desc: 'How much fuel to put in to finish, plus burn rate, laps left in the tank ' +
+            'against laps left in the race, stint length and tyre wear and temps. Turns ' +
+            'red the moment the tank will not reach the flag.',
+      opts: ['units=gal', 'tyres=0', 'margin=1', 'w=270']
+    },
+    {
+      file: 'delta.html',
+      name: 'Delta',
+      w: 320, h: 112,
+      desc: 'Live lap delta as a centre-zero bar — green left when you are up, red ' +
+            'right when you are down — with the last lap broken into sectors against ' +
+            'your personal best for each.',
+      opts: ['ref=best', 'ref=optimal', 'bar=0', 'range=2', 'sectors=0']
+    },
+    {
+      file: 'flags.html',
+      name: 'Flags & status',
+      w: 440, h: 58,
+      desc: 'Flag, position, incidents against the limit, laps to go, black flag and ' +
+            'meatball, engine warnings, and the spotter’s left / right proximity bars ' +
+            'down each edge.',
+      opts: ['spotter=0', 'warnings=0', 'h=58']
+    }
+  ];
+
+  var base = location.origin + location.pathname.replace(/index\.html$/, '');
+  var cards = document.getElementById('cards');
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (ch) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch];
+    });
+  }
+
+  WIDGETS.forEach(function (wgt) {
+    var url = base + wgt.file;
+    var card = PW.el('div', 'card');
+    card.innerHTML =
+      '<header>' +
+        '<h2>' + esc(wgt.name) + '<span class="size">' + wgt.w + ' × ' + wgt.h + '</span></h2>' +
+        '<p>' + esc(wgt.desc) + '</p>' +
+      '</header>' +
+      '<div class="prev" style="height:' + Math.min(240, wgt.h + 26) + 'px">' +
+        '<iframe title="' + esc(wgt.name) + ' preview" ' +
+        'width="' + wgt.w + '" height="' + wgt.h + '" ' +
+        'style="width:' + wgt.w + 'px;height:' + wgt.h + 'px" ' +
+        'src="' + esc(wgt.file) + '"></iframe></div>' +
+      '<div class="opts">' + wgt.opts.map(function (o) {
+        return '<code>' + esc(o) + '</code>';
+      }).join(' ') + '</div>' +
+      '<div class="urlrow">' +
+        '<input readonly value="' + esc(url) + '">' +
+        '<button type="button">Copy</button>' +
+      '</div>';
+    cards.appendChild(card);
+
+    var box = card.querySelector('.prev');
+    var frame = card.querySelector('iframe');
+    var input = card.querySelector('input');
+    var btn = card.querySelector('button');
+
+    function fit() {
+      var s = Math.min(1, (box.clientWidth - 20) / wgt.w, (box.clientHeight - 20) / wgt.h);
+      frame.style.transform = 'scale(' + s.toFixed(3) + ')';
+    }
+    fit();
+    window.addEventListener('resize', fit);
+
+    btn.addEventListener('click', function () {
+      var done = function () {
+        btn.textContent = 'Copied';
+        btn.classList.add('done');
+        setTimeout(function () { btn.textContent = 'Copy'; btn.classList.remove('done'); }, 1400);
+      };
+      // execCommand is the fallback for file:// and for browsers that refuse
+      // the async clipboard without a secure context. If both fail the URL is
+      // left selected so it can be copied by hand.
+      var legacy = function () {
+        input.focus();
+        input.select();
+        var ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        if (ok) done();
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(done, legacy);
+      } else {
+        legacy();
+      }
+    });
+  });
+
+  var st = document.getElementById('st');
+  function status() {
+    if (!PW.connected) {
+      st.innerHTML = '<b class="off">Offline</b> — start PitWall, then reload.';
+      return;
+    }
+    var track = PW.meta && PW.meta.track ? (PW.meta.track.shortName || PW.meta.track.name) : null;
+    st.innerHTML = '<b>Connected</b>' + (PW.demo ? ' · demo feed' : '') +
+      (track ? ' · ' + esc(track) : ' · waiting for a session');
+  }
+  PW.on('open', status);
+  PW.on('close', status);
+  PW.on('meta', status);
+  PW.on('tick', status);
+  PW.start({ sub: ['meta', 'tick'], rate: 1, name: 'hud-index' });
+})();
+</script>
+</body>
+</html>

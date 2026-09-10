@@ -1,0 +1,1573 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PitWall — Live Timing</title>
+<link rel="stylesheet" href="../shared/base.css">
+<!--
+  PitWall — second-screen live timing.
+  ---------------------------------------------------------------------------
+  A dense race-control timing monitor. Opened on a laptop, tablet or phone on
+  the same network as the machine running PitWall. Not a broadcast graphic:
+  this page is solid, scrolls, and is meant to be read close up.
+
+  Query string options
+    cols=pos,num,name,gap,last   force the visible columns (otherwise the
+                 column picker's saved choice in localStorage is used)
+    car=N        pre-select car index N and follow it
+    names=full|short|surname|abbrev   name style (handled by pitwall.js)
+    scale=1.1    overall scale          (PW.applyChrome)
+    accent=%23ff8800  accent colour     (PW.applyChrome)
+    server=URL   point at a PitWall on another machine (pitwall.js)
+
+  Everything else is a UI control, because this page has a keyboard and a
+  mouse in front of it: click a header to sort, click a row to select a car,
+  use the column picker to choose columns (saved per browser).
+
+  Below 700px the table becomes a card list keeping position, number, name,
+  gap and last lap, and the detail panel becomes a bottom sheet.
+-->
+<style>
+  html, body { height: 100%; }
+  body.solid {
+    background: var(--bg);
+    overflow: hidden;
+    font-size: 13px;
+  }
+
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  /* =========================================================== top strip */
+
+  .topbar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    border-bottom: 1px solid var(--line);
+    background: rgba(var(--panel-2), 0.55);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .topbar::-webkit-scrollbar { display: none; }
+
+  .tb {
+    flex: 0 0 auto;
+    padding: 7px 14px;
+    border-right: 1px solid var(--line);
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    white-space: nowrap;
+  }
+  .tb .k {
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    font-weight: 700;
+  }
+  .tb .v { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+  .tb .v small { font-size: 11px; color: var(--text-dim); font-weight: 500; margin-left: 4px; }
+
+  .tb.brand { gap: 0; padding-left: 12px; padding-right: 12px; }
+  .tb.brand .mark {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 15px; font-weight: 800; letter-spacing: -0.02em;
+  }
+  .tb.brand .mark i {
+    width: 4px; height: 18px; background: var(--accent); border-radius: 2px;
+    display: inline-block;
+  }
+  .tb.brand .sub { font-size: 9px; letter-spacing: 0.16em; color: var(--text-faint); text-transform: uppercase; }
+
+  .tb.track { flex: 1 1 auto; max-width: 40vw; }
+  .tb.track .v { overflow: hidden; text-overflow: ellipsis; }
+
+  .flagchip {
+    align-self: center;
+    display: inline-flex; align-items: center;
+    height: 26px; padding: 0 12px;
+    border-radius: 3px;
+    font-size: 11px; font-weight: 800; letter-spacing: 0.16em;
+  }
+
+  .conn { margin-left: auto; border-right: none; border-left: 1px solid var(--line); }
+  .conn .v { display: flex; align-items: center; gap: 7px; font-size: 12px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); flex: 0 0 8px; }
+  .dot.live { background: var(--green); box-shadow: 0 0 8px rgba(53,208,127,0.7); }
+  .dot.demo { background: var(--blue); }
+
+  /* ============================================== fastest lap + battles */
+
+  .strip {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(0,0,0,0.25);
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .flbanner {
+    flex: 0 0 auto;
+    display: flex; align-items: center; gap: 10px;
+    padding: 4px 12px 4px 10px;
+    border-radius: 4px;
+    border: 1px solid rgba(176,108,255,0.4);
+    background: rgba(176,108,255,0.12);
+    white-space: nowrap;
+  }
+  .flbanner .lbl {
+    font-size: 9px; font-weight: 800; letter-spacing: 0.14em;
+    color: var(--purple); text-transform: uppercase;
+    line-height: 1.25;
+  }
+  .flbanner .who { font-size: 13px; font-weight: 700; }
+  .flbanner .tm { font-size: 15px; font-weight: 700; color: var(--purple); }
+  .flbanner .lp { font-size: 11px; color: var(--text-dim); }
+
+  .battles { display: flex; align-items: center; gap: 7px; min-width: 0; }
+  .battles .bl {
+    font-size: 9px; letter-spacing: 0.14em; color: var(--text-faint);
+    text-transform: uppercase; font-weight: 700; flex: 0 0 auto;
+  }
+  .battle {
+    flex: 0 0 auto;
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 9px;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+    background: rgba(var(--panel), 0.9);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .battle:hover { border-color: var(--line-strong); }
+  .battle .p { font-size: 10px; color: var(--text-faint); font-weight: 700; }
+  .battle .n { font-size: 12px; font-weight: 600; }
+  .battle .g { font-size: 12px; font-weight: 700; color: var(--yellow); }
+  .battle.tight .g { color: var(--red); }
+  .battle .vs { color: var(--text-faint); font-size: 10px; }
+  .battle .xc { font-size: 9px; color: var(--text-faint); letter-spacing: 0.1em; }
+  .strip .none { font-size: 12px; color: var(--text-faint); align-self: center; }
+
+  /* ================================================================ tools */
+
+  .toolbar {
+    flex: 0 0 auto;
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+  .toolbar button { padding: 5px 10px; font-size: 12px; }
+  .chipbtn {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+    padding: 5px 10px; border-radius: 4px;
+    border: 1px solid var(--line-strong);
+    background: transparent; color: var(--text-dim);
+    cursor: pointer;
+  }
+  .chipbtn:hover { background: rgba(255,255,255,0.07); }
+  .chipbtn.on { color: var(--text); background: rgba(255,255,255,0.10); border-color: var(--line-strong); }
+  .chipbtn i.sw { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+  .tspacer { flex: 1 1 auto; }
+  .tcount { font-size: 11px; color: var(--text-faint); font-family: var(--mono); }
+
+  /* column picker */
+  .picker { position: relative; }
+  .pickpanel {
+    position: absolute; right: 0; top: calc(100% + 6px);
+    z-index: 40;
+    width: 300px; max-height: 62vh; overflow: auto;
+    padding: 12px;
+    border-radius: 6px;
+    border: 1px solid var(--line-strong);
+    background: #12161c;
+    box-shadow: 0 18px 44px rgba(0,0,0,0.6);
+    display: none;
+  }
+  .pickpanel.open { display: block; }
+  .pickpanel h4 {
+    margin: 0 0 8px; font-size: 10px; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--text-faint);
+  }
+  .pickgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; }
+  .pickgrid label {
+    display: flex; align-items: center; gap: 7px;
+    margin: 0; padding: 4px 4px; border-radius: 3px;
+    font-size: 12px; color: var(--text); cursor: pointer;
+  }
+  .pickgrid label:hover { background: rgba(255,255,255,0.06); }
+  .pickgrid input { width: auto; margin: 0; accent-color: var(--accent); }
+  .pickfoot { display: flex; gap: 8px; margin-top: 10px; }
+  .pickfoot button { flex: 1; padding: 5px 8px; font-size: 11px; }
+
+  /* ================================================================ table */
+
+  main { flex: 1 1 auto; display: flex; min-height: 0; }
+
+  .tablewrap {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: auto;
+    position: relative;
+  }
+
+  .thead, .row {
+    display: grid;
+    grid-template-columns: var(--cols);
+    align-items: center;
+    column-gap: 8px;
+    padding: 0 10px;
+  }
+
+  .thead {
+    position: sticky; top: 0; z-index: 5;
+    height: 26px;
+    background: #10141a;
+    border-bottom: 1px solid var(--line-strong);
+    font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--text-faint); font-weight: 700;
+  }
+  .thead .th { cursor: pointer; user-select: none; overflow: hidden; text-overflow: ellipsis; }
+  .thead .th:hover { color: var(--text); }
+  .thead .th.sorted { color: var(--accent); }
+  .thead .th .ar { font-size: 8px; margin-left: 2px; }
+
+  .row {
+    height: var(--row-h);
+    border-bottom: 1px solid rgba(255,255,255,0.045);
+    cursor: pointer;
+    contain: layout style;
+  }
+  .row:hover { background: rgba(255,255,255,0.05); }
+  .row.is-sel { background: rgba(255,255,255,0.12); box-shadow: inset 3px 0 0 var(--accent); }
+  .row.is-cam { box-shadow: inset 3px 0 0 var(--secondary); }
+  .row.is-sel.is-cam { box-shadow: inset 3px 0 0 var(--accent), inset 6px 0 0 var(--secondary); }
+
+  .cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+  .cell.r { text-align: right; }
+  .cell.c { text-align: center; }
+  .cell.empty { color: var(--text-faint); }
+  .cell.strong { font-weight: 600; }
+  .cell.pb { color: var(--pb); }
+  .cell.fastest { color: var(--purple) !important; }
+  .cell.up { color: var(--green); }
+  .cell.down { color: var(--red); }
+  .cell.st-pit { color: var(--yellow); }
+  .cell.st-stall { color: var(--yellow); font-weight: 700; }
+  .cell.dimv { color: var(--text-dim); }
+
+  .row .car-num { font-size: 11.5px; line-height: 17px; height: 17px; min-width: 30px; }
+  .row .cell.nm { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+  .row .cell.nm .dn { overflow: hidden; text-overflow: ellipsis; }
+  .row .class-chip { font-size: 9px; }
+  .fl { font-size: 12px; line-height: 1; }
+
+  .row.is-pit { background: rgba(255,204,51,0.09); }
+  .row.is-stall { background: rgba(255,204,51,0.16); }
+  .row.is-out { opacity: 0.42; }
+
+  .grouphead {
+    display: flex; align-items: center; gap: 8px;
+    height: 22px; padding: 0 10px;
+    background: rgba(255,255,255,0.05);
+    border-bottom: 1px solid var(--line);
+    font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--text-faint); font-weight: 700;
+  }
+
+  /* ======================================================= mobile cards */
+
+  .card-row {
+    display: flex; align-items: center; gap: 11px;
+    padding: 9px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    cursor: pointer;
+  }
+  .card-row .cpos {
+    flex: 0 0 30px; text-align: right;
+    font-size: 20px; font-weight: 700; font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .card-row .cbar { width: 3px; align-self: stretch; border-radius: 2px; background: var(--text-faint); }
+  .card-row .cmid { flex: 1 1 auto; min-width: 0; }
+  .card-row .l1 { display: flex; align-items: center; gap: 7px; }
+  .card-row .l1 .dn { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card-row .l2 { font-size: 11px; color: var(--text-dim); margin-top: 3px; display: flex; gap: 8px; }
+  .card-row .cright { flex: 0 0 auto; text-align: right; }
+  .card-row .cright .last { font-size: 15px; font-weight: 600; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .card-row .cright .gap { font-size: 12px; color: var(--text-dim); font-family: var(--mono); font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .card-row.is-sel { background: rgba(255,255,255,0.11); box-shadow: inset 3px 0 0 var(--accent); }
+  .card-row.is-pit { background: rgba(255,204,51,0.09); }
+  .card-row.is-out { opacity: 0.42; }
+
+  /* ========================================================= detail panel */
+
+  aside#detail {
+    flex: 0 0 372px;
+    border-left: 1px solid var(--line);
+    background: rgba(var(--panel-2), 0.5);
+    overflow: auto;
+    display: none;
+  }
+  aside#detail.open { display: block; }
+
+  .dt-head { padding: 14px 16px; border-bottom: 1px solid var(--line); position: relative; }
+  .dt-head .close {
+    position: absolute; top: 10px; right: 10px;
+    padding: 3px 9px; font-size: 12px; line-height: 1.3;
+  }
+  .dt-id { display: flex; gap: 12px; align-items: center; }
+  .shot {
+    width: 58px; height: 58px; border-radius: 50%; flex: 0 0 58px;
+    background: rgba(0,0,0,0.45);
+    box-shadow: inset 0 0 0 2px var(--pick, var(--accent));
+    display: grid; place-items: center; overflow: hidden;
+    font-family: var(--mono); font-weight: 700; font-size: 17px; color: var(--text-dim);
+  }
+  .shot img { width: 100%; height: 100%; object-fit: cover; }
+  .dt-id .who { min-width: 0; }
+  .dt-id .nm2 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; display: flex; align-items: center; gap: 7px; }
+  .dt-id .team2 { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
+  .dt-id .chips { display: flex; gap: 6px; margin-top: 7px; flex-wrap: wrap; align-items: center; }
+
+  .dt-sec { padding: 13px 16px; border-bottom: 1px solid var(--line); }
+  .dt-sec h3 {
+    margin: 0 0 10px; font-size: 10px; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--text-faint); font-weight: 800;
+  }
+  .kv { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px 8px; }
+  .kv > div { min-width: 0; }
+  .kv .k { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-faint); }
+  .kv .v {
+    font-size: 14px; font-weight: 600; margin-top: 2px;
+    font-family: var(--mono); font-variant-numeric: tabular-nums;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .kv .v.txt { font-family: var(--font); }
+  .kv .v.faint { color: var(--text-faint); font-weight: 400; }
+
+  .bio { font-size: 12.5px; line-height: 1.55; color: var(--text-dim); }
+  .socials { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .socials a {
+    font-size: 11px; padding: 3px 8px; border-radius: 3px;
+    border: 1px solid var(--line-strong); color: var(--text-dim);
+    text-decoration: none;
+  }
+  .socials a:hover { color: var(--text); border-color: rgba(255,255,255,0.35); }
+  .noprofile { font-size: 12px; color: var(--text-faint); line-height: 1.5; }
+
+  .laps { max-height: 240px; overflow: auto; }
+  .lap-r {
+    display: grid;
+    grid-template-columns: 34px 66px 1fr 1fr 1fr;
+    gap: 6px; align-items: center;
+    padding: 3px 0;
+    font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.045);
+  }
+  .lap-r .ln { color: var(--text-faint); font-size: 11px; }
+  .lap-r .lt { font-weight: 600; }
+  .lap-r .sc { text-align: right; font-size: 11px; color: var(--text-dim); }
+  .lap-r .sc.pb { color: var(--pb); }
+  .lap-r .sc.fastest { color: var(--purple); }
+  .lap-r.pitlap { opacity: 0.6; }
+
+  .chart { width: 100%; height: 96px; display: block; margin-bottom: 8px; }
+  .chart .grid { stroke: rgba(255,255,255,0.09); stroke-width: 1; }
+  .chart .line { fill: none; stroke: var(--accent); stroke-width: 1.6; }
+  .chart .pt { fill: var(--accent); }
+  .chart .pt.best { fill: var(--purple); }
+  .chart text { font-size: 8px; fill: var(--text-faint); font-family: var(--mono); }
+
+  .camrow { display: flex; gap: 8px; align-items: center; }
+  .camrow button { flex: 1 1 auto; }
+  .why { font-size: 11px; color: var(--text-faint); line-height: 1.5; margin-top: 8px; }
+
+  /* ============================================================= waiting */
+
+  #wait {
+    position: fixed; inset: 0; z-index: 100;
+    display: grid; place-items: center;
+    background: var(--bg);
+    padding: 24px;
+  }
+  #wait.hide { display: none !important; }
+  #wait .card {
+    max-width: 460px; text-align: center;
+    border: 1px solid var(--line); border-radius: 8px;
+    background: rgba(var(--panel-2), 0.6);
+    padding: 30px 28px;
+  }
+  #wait .mark2 {
+    font-size: 20px; font-weight: 800; letter-spacing: -0.02em;
+    display: flex; align-items: center; justify-content: center; gap: 9px; margin-bottom: 6px;
+  }
+  #wait .mark2 i { width: 4px; height: 22px; background: var(--accent); border-radius: 2px; }
+  #wait h2 { font-size: 15px; font-weight: 600; margin: 14px 0 8px; }
+  #wait p { font-size: 13px; line-height: 1.6; color: var(--text-dim); margin: 0 0 6px; }
+  #wait .fix { font-size: 12px; color: var(--text-faint); line-height: 1.6; margin-top: 12px; }
+  #wait .spin {
+    width: 22px; height: 22px; margin: 18px auto 0;
+    border: 2px solid var(--line-strong); border-top-color: var(--accent);
+    border-radius: 50%; animation: sp 0.9s linear infinite;
+  }
+  @keyframes sp { to { transform: rotate(360deg); } }
+
+  /* ============================================================== mobile */
+
+  @media (max-width: 700px) {
+    .tb.brand .sub, .tb.sof, .tb.temp, .tb.caut { display: none; }
+    .tb { padding: 6px 10px; }
+    .tb.track { flex: 0 0 auto; max-width: 150px; }
+    .conn { margin-left: 0; }
+    /* the card list has a fixed set of columns, so the picker would do nothing */
+    .picker { display: none; }
+    .card-row { padding: 8px 11px; gap: 10px; }
+    .card-row .l1 .dn { font-size: 14.5px; }
+    .toolbar { padding: 6px 8px; }
+    .pickpanel { position: fixed; left: 8px; right: 8px; width: auto; top: auto; bottom: 8px; max-height: 70vh; }
+
+    main { position: relative; }
+    aside#detail {
+      position: fixed; left: 0; right: 0; bottom: 0; top: auto;
+      flex: none; z-index: 60;
+      max-height: 78vh;
+      border-left: none;
+      border-top: 1px solid var(--line-strong);
+      border-radius: 12px 12px 0 0;
+      background: #10141a;
+      box-shadow: 0 -18px 50px rgba(0,0,0,0.65);
+    }
+    aside#detail.open { display: block; animation: sheet 0.18s ease-out; }
+    @keyframes sheet { from { transform: translateY(30px); opacity: 0.5; } }
+    .dt-head::before {
+      content: ''; position: absolute; top: 6px; left: 50%; width: 38px; height: 3px;
+      transform: translateX(-50%); border-radius: 2px; background: var(--line-strong);
+    }
+    .kv { grid-template-columns: repeat(3, 1fr); }
+  }
+</style>
+</head>
+<body class="solid">
+<div id="pw-status"></div>
+
+<div id="app">
+  <header class="topbar" id="topbar"></header>
+  <div class="strip" id="strip"></div>
+
+  <div class="toolbar">
+    <div id="classfilters" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+    <button class="chipbtn" id="myclass" title="Show only the cars in my own class">MY CLASS</button>
+    <span class="tspacer"></span>
+    <span class="tcount" id="carcount"></span>
+    <div class="picker">
+      <button id="pickbtn" class="chipbtn">COLUMNS</button>
+      <div class="pickpanel" id="pickpanel">
+        <h4>Visible columns</h4>
+        <div class="pickgrid" id="pickgrid"></div>
+        <div class="pickfoot">
+          <button id="pickall">All</button>
+          <button id="pickdef">Defaults</button>
+          <button id="pickclose" class="primary">Done</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <main>
+    <div class="tablewrap" id="tablewrap">
+      <div class="thead" id="thead"></div>
+      <div id="tbody"></div>
+    </div>
+    <aside id="detail"></aside>
+  </main>
+</div>
+
+<div id="wait">
+  <div class="card">
+    <div class="mark2"><i></i>PitWall</div>
+    <div style="font-size:10px;letter-spacing:0.18em;color:var(--text-faint);text-transform:uppercase">Live timing</div>
+    <h2 id="wait-h">Waiting for iRacing</h2>
+    <p id="wait-p">Connecting to the PitWall server…</p>
+    <div class="fix" id="wait-fix"></div>
+    <div class="spin"></div>
+  </div>
+</div>
+
+<script src="../shared/pitwall.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  PW.applyChrome();
+
+  /* ==================================================== column definitions */
+
+  function pbLap(c) {
+    return c.last != null && c.best != null && Math.abs(c.last - c.best) < 0.0005;
+  }
+
+  var ctx = {
+    lapsToAhead: {},   // car index -> laps down to the car directly ahead
+    bestSec: [],       // field-best sector time per sector index
+    fastIdx: null,
+    caution: false
+  };
+
+  function tyreName(n) {
+    if (n == null || n < 0) return '';
+    return ({ 0: 'PRI', 1: 'ALT', 2: 'WET' })[n] || ('#' + n);
+  }
+
+  /** Purple for the field's best, green for a personal best, plain otherwise. */
+  function secCell(c, j) {
+    var v = c.sec && c.sec[j];
+    if (v == null) return { t: '–', c: 'empty' };
+    var txt = PW.fmtLap(v);
+    var overall = ctx.bestSec[j];
+    if (overall != null && Math.abs(v - overall) < 1e-6) return { t: txt, c: 'fastest' };
+    if ((c.lc || 0) > 1 && c.secb && c.secb[j]) return { t: txt, c: 'pb' };
+    return { t: txt, c: 'dimv' };
+  }
+
+  function dash(t, cls) { return t ? { t: t, c: cls || '' } : { t: '–', c: 'empty' }; }
+
+  var COLS = [
+    { k: 'pos', l: 'Position', h: 'POS', w: '38px', a: 'r', mono: 1, def: 1, lock: 1,
+      v: function (c) { return { t: c.p > 0 ? c.p : '–', c: 'strong' }; },
+      s: function (c) { return c.p > 0 ? c.p : 999; } },
+
+    { k: 'cpos', l: 'Class position', h: 'CPOS', w: '40px', a: 'r', mono: 1, def: 1, mc: 1,
+      v: function (c) { return { t: c.cp > 0 ? c.cp : '–', c: c.cp > 0 ? '' : 'empty' }; },
+      s: function (c) { return c.cp > 0 ? c.cp : 999; } },
+
+    { k: 'class', l: 'Class', h: 'CLASS', w: '46px', a: 'l', def: 1, mc: 1, html: 1,
+      v: function (c) {
+        var d = PW.driver(c.i) || {};
+        return { chip: d.classShort || '', color: d.classColor };
+      },
+      s: function (c) { return (PW.driver(c.i) || {}).classShort || ''; } },
+
+    { k: 'num', l: 'Car number', h: 'CAR', w: '44px', a: 'l', def: 1, html: 1,
+      v: function (c) {
+        var d = PW.driver(c.i) || {};
+        return { num: d.num == null ? '' : d.num, color: d.classColor };
+      },
+      s: function (c) { return (PW.driver(c.i) || {}).numRaw || 0; } },
+
+    { k: 'flag', l: 'Country', h: '', w: '20px', a: 'c', def: 1,
+      v: function (c) { return { t: PW.flag(countryOf(c.i)), c: 'fl' }; },
+      s: function (c) { return countryOf(c.i) || 'zz'; } },
+
+    { k: 'name', l: 'Driver', h: 'DRIVER', w: 'minmax(110px, 1.5fr)', a: 'l', def: 1, html: 1,
+      v: function (c) { return { name: PW.displayName(c.i), fast: c.i === ctx.fastIdx }; },
+      s: function (c) { return PW.surname((PW.driver(c.i) || {}).name || ''); } },
+
+    { k: 'team', l: 'Team', h: 'TEAM', w: 'minmax(80px, 1fr)', a: 'l',
+      v: function (c) {
+        var d = PW.driver(c.i) || {}, p = d.profile || {};
+        return dash(p.team || d.team || '', 'dimv');
+      },
+      s: function (c) { var d = PW.driver(c.i) || {}; return ((d.profile || {}).team || d.team || ''); } },
+
+    { k: 'gap', l: 'Gap to leader', h: 'GAP', w: '58px', a: 'r', mono: 1, def: 1,
+      v: function (c) {
+        if (c.p === 1) return { t: '', c: '' };
+        return dash(PW.fmtGap(c.gl, c.ld));
+      },
+      s: function (c) { return c.ld > 0 ? 1e6 * c.ld : (c.gl == null ? 1e9 : c.gl); } },
+
+    { k: 'int', l: 'Interval', h: 'INT', w: '58px', a: 'r', mono: 1, def: 1,
+      v: function (c) {
+        if (c.p === 1) return { t: '', c: '' };
+        return dash(PW.fmtGap(c.iv, ctx.lapsToAhead[c.i] || 0));
+      },
+      s: function (c) { return c.iv == null ? 1e9 : c.iv; } },
+
+    { k: 'last', l: 'Last lap', h: 'LAST', w: '66px', a: 'r', mono: 1, def: 1,
+      v: function (c) {
+        return dash(PW.fmtLap(c.last), c.fast && pbLap(c) ? 'fastest' : (pbLap(c) ? 'pb' : ''));
+      },
+      s: function (c) { return c.last == null ? 1e9 : c.last; } },
+
+    { k: 'best', l: 'Best lap', h: 'BEST', w: '66px', a: 'r', mono: 1, def: 1,
+      v: function (c) { return dash(PW.fmtLap(c.best), c.fast ? 'fastest' : ''); },
+      s: function (c) { return c.best == null ? 1e9 : c.best; } },
+
+    { k: 'cur', l: 'Current lap', h: 'CURRENT', w: '62px', a: 'r', mono: 1, def: 1,
+      v: function (c) {
+        if (c.st === 'pit') return { t: 'PIT', c: 'st-pit' };
+        if (c.st === 'stall') return { t: 'BOX', c: 'st-stall' };
+        if (c.st === 'out') return { t: 'OUT', c: 'empty' };
+        return dash(PW.fmtLap(c.cur, 1), 'dimv');
+      },
+      s: function (c) { return c.cur == null ? 1e9 : c.cur; } },
+
+    { k: 's1', l: 'Sector 1', h: 'S1', w: '62px', a: 'r', mono: 1, def: 1, sector: 0,
+      v: function (c) { return secCell(c, 0); }, s: function (c) { return sSort(c, 0); } },
+    { k: 's2', l: 'Sector 2', h: 'S2', w: '62px', a: 'r', mono: 1, def: 1, sector: 1,
+      v: function (c) { return secCell(c, 1); }, s: function (c) { return sSort(c, 1); } },
+    { k: 's3', l: 'Sector 3', h: 'S3', w: '62px', a: 'r', mono: 1, def: 1, sector: 2,
+      v: function (c) { return secCell(c, 2); }, s: function (c) { return sSort(c, 2); } },
+
+    { k: 'delta', l: 'Delta', h: 'DELTA', w: '54px', a: 'r', mono: 1, def: 1,
+      v: function (c) {
+        if (c.delta == null) return { t: '–', c: 'empty' };
+        return { t: PW.fmtDelta(c.delta), c: c.delta < 0 ? 'up' : 'down' };
+      },
+      s: function (c) { return c.delta == null ? 1e9 : c.delta; } },
+
+    { k: 'stops', l: 'Pit stops', h: 'STOPS', w: '44px', a: 'r', mono: 1, def: 1,
+      v: function (c) { return { t: c.stops || 0, c: c.stops ? '' : 'empty' }; },
+      s: function (c) { return c.stops || 0; } },
+
+    { k: 'pitdur', l: 'Last stop', h: 'LAST STOP', w: '62px', a: 'r', mono: 1,
+      v: function (c) { return dash(c.pitdur != null ? c.pitdur.toFixed(1) : '', 'dimv'); },
+      s: function (c) { return c.pitdur == null ? 1e9 : c.pitdur; } },
+
+    { k: 'stint', l: 'Stint laps', h: 'STINT', w: '46px', a: 'r', mono: 1,
+      v: function (c) { return { t: c.stint != null ? c.stint : '–', c: 'dimv' }; },
+      s: function (c) { return c.stint || 0; } },
+
+    { k: 'inc', l: 'Incidents', h: 'INC', w: '38px', a: 'r', mono: 1, def: 1,
+      v: function (c) { return { t: c.inc || 0, c: c.inc ? (c.inc >= 8 ? 'down' : '') : 'empty' }; },
+      s: function (c) { return c.inc || 0; } },
+
+    { k: 'ir', l: 'iRating', h: 'IR', w: '50px', a: 'r', mono: 1,
+      v: function (c) {
+        var ir = (PW.driver(c.i) || {}).irating;
+        return dash(ir ? (ir >= 1000 ? (ir / 1000).toFixed(1) + 'k' : String(ir)) : '', 'dimv');
+      },
+      s: function (c) { return (PW.driver(c.i) || {}).irating || 0; } },
+
+    { k: 'lic', l: 'Licence', h: 'LIC', w: '52px', a: 'l', mono: 1,
+      v: function (c) {
+        var d = PW.driver(c.i) || {};
+        return dash(d.license || '', 'dimv');
+      },
+      s: function (c) { return (PW.driver(c.i) || {}).license || ''; } },
+
+    { k: 'tyre', l: 'Tyre', h: 'TYRE', w: '46px', a: 'c', mono: 1,
+      v: function (c) { return dash(tyreName(c.tyre), 'dimv'); },
+      s: function (c) { return c.tyre == null ? 99 : c.tyre; } },
+
+    { k: 'fr', l: 'Fast repairs', h: 'FR', w: '32px', a: 'r', mono: 1,
+      v: function (c) { return { t: c.fr || 0, c: c.fr ? 'st-pit' : 'empty' }; },
+      s: function (c) { return c.fr || 0; } }
+  ];
+
+  function sSort(c, j) {
+    var v = c.sec && c.sec[j];
+    return v == null ? 1e9 : v;
+  }
+
+  function countryOf(idx) {
+    var d = PW.driver(idx) || {}, p = d.profile || {};
+    var cc = p.country || d.club || '';
+    return /^[A-Za-z]{2}$/.test(cc) ? cc.toUpperCase() : '';
+  }
+
+  var COLBY = {};
+  COLS.forEach(function (c) { COLBY[c.k] = c; });
+
+  var MOBILE_COLS = ['pos', 'num', 'name', 'gap', 'last'];
+  var LS_COLS = 'pw.timing.cols';
+
+  function defaultCols() {
+    return COLS.filter(function (c) { return c.def; }).map(function (c) { return c.k; });
+  }
+
+  var chosen = (function () {
+    var fromUrl = PW.optList('cols', null);
+    if (fromUrl) return fromUrl.filter(function (k) { return COLBY[k]; });
+    try {
+      var saved = localStorage.getItem(LS_COLS);
+      if (saved) {
+        var list = saved.split(',').filter(function (k) { return COLBY[k]; });
+        if (list.length) return list;
+      }
+    } catch (e) {}
+    return defaultCols();
+  })();
+
+  function saveCols() {
+    try { localStorage.setItem(LS_COLS, chosen.join(',')); } catch (e) {}
+  }
+
+  /** Columns actually drawn right now: user choice minus what makes no sense. */
+  function visibleCols() {
+    var mc = PW.multiclass();
+    var nSec = (PW.meta && PW.meta.sectors ? PW.meta.sectors.length : 3);
+    return COLS.filter(function (c) {
+      if (chosen.indexOf(c.k) < 0) return false;
+      if (c.mc && !mc) return false;
+      if (c.sector !== undefined && c.sector >= nSec) return false;
+      return true;
+    });
+  }
+
+  /* ============================================================== state */
+
+  var sel = null;                 // selected car index
+  var sortKey = null;             // null = official running order
+  var sortDir = 1;
+  var classFilter = '';           // class id as string, '' = all
+  var myClassOnly = false;
+  var narrow = false;
+  var history = {};               // car index -> [{lap, time, sec[], stop}]
+  var lastLc = {};
+  var lastStops = {};
+  var statusInfo = null;
+
+  var elTop = document.getElementById('topbar');
+  var elStrip = document.getElementById('strip');
+  var elHead = document.getElementById('thead');
+  var elBody = document.getElementById('tbody');
+  var elDetail = document.getElementById('detail');
+  var elWait = document.getElementById('wait');
+  var elFilters = document.getElementById('classfilters');
+  var elCount = document.getElementById('carcount');
+
+  var forced = PW.optNum('car', NaN);
+  if (!isNaN(forced)) sel = forced;
+
+  /* ============================================================ helpers */
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (ch) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch];
+    });
+  }
+  function setText(node, t) {
+    t = t == null ? '' : String(t);
+    if (node.textContent !== t) node.textContent = t;
+  }
+  function setCls(node, cls) { if (node.className !== cls) node.className = cls; }
+
+  /* ======================================================== lap history */
+
+  function trackHistory(cars) {
+    cars.forEach(function (c) {
+      var lc = c.lc || 0;
+      var prev = lastLc[c.i];
+      if (prev === undefined) {
+        // Seed with the lap the car had already completed when this page
+        // opened, so the panel is not empty for the first two minutes.
+        lastLc[c.i] = lc;
+        lastStops[c.i] = c.stops || 0;
+        if (lc > 0 && c.last != null && c.last > 0) {
+          history[c.i] = [{
+            lap: lc, time: c.last,
+            sec: (c.sec || []).slice(), secb: (c.secb || []).slice(), stop: false
+          }];
+        }
+        return;
+      }
+      if (lc > prev) {
+        lastLc[c.i] = lc;
+        if (c.last != null && c.last > 0) {
+          var h = history[c.i] || (history[c.i] = []);
+          h.push({
+            lap: lc,
+            time: c.last,
+            sec: (c.sec || []).slice(),
+            secb: (c.secb || []).slice(),
+            stop: (c.stops || 0) > (lastStops[c.i] || 0)
+          });
+          if (h.length > 80) h.shift();
+        }
+      }
+      lastStops[c.i] = c.stops || 0;
+    });
+  }
+
+  /* ============================================================ top bar */
+
+  function remainText(s) {
+    if (s.lapsTotal) {
+      var done = Math.min(s.lapsTotal, Math.max(0, s.raceLaps || 0));
+      return { k: 'Lap', v: done + ' <small>/ ' + s.lapsTotal + '</small>' };
+    }
+    if (s.timeRemain != null) return { k: 'Remaining', v: PW.fmtClock(s.timeRemain) };
+    if (s.lapsRemain != null) return { k: 'To go', v: s.lapsRemain + ' <small>laps</small>' };
+    if (s.time != null) return { k: 'Elapsed', v: PW.fmtClock(s.time) };
+    return { k: 'Time', v: '–' };
+  }
+
+  var FLAGNAME = {
+    green: 'GREEN', yellow: 'YELLOW', red: 'RED', white: 'WHITE',
+    checkered: 'CHEQUERED', blue: 'BLUE', black: 'BLACK', none: 'TRACK'
+  };
+
+  function renderTop(s) {
+    var t = (PW.meta && PW.meta.track) || {};
+    var flag = s.caution ? 'yellow' : (s.flag || 'none');
+    var flagName = s.caution ? 'CAUTION' : (FLAGNAME[flag] || String(flag).toUpperCase());
+    var rem = remainText(s);
+    var conn = PW.connected ? (PW.demo ? 'demo' : 'live') : '';
+    var connTxt = PW.connected ? (PW.demo ? 'Demo data' : 'Live') : 'Disconnected';
+
+    var h = '';
+    h += '<div class="tb brand"><span class="mark"><i></i>PitWall</span>' +
+         '<span class="sub">Live timing</span></div>';
+    h += '<div class="tb track"><span class="k">Track</span><span class="v">' +
+         esc(t.name || 'Unknown circuit') +
+         (t.config ? ' <small>' + esc(t.config) + '</small>' : '') + '</span></div>';
+    h += '<div class="tb"><span class="k">Session</span><span class="v">' +
+         esc(s.name || s.type || '–') +
+         (s.state ? ' <small>' + esc(s.state) + '</small>' : '') + '</span></div>';
+    h += '<div class="tb" style="padding-left:10px;padding-right:10px"><span class="flagchip flag-' + flag +
+         (flag === 'red' ? ' flashing' : '') + '">' + esc(flagName) + '</span></div>';
+    h += '<div class="tb"><span class="k">' + esc(rem.k) + '</span><span class="v num">' + rem.v + '</span></div>';
+    h += '<div class="tb caut"><span class="k">Cautions</span><span class="v num">' +
+         (s.cautions || 0) + (s.cautionLaps ? ' <small>' + s.cautionLaps + ' laps</small>' : '') + '</span></div>';
+    h += '<div class="tb sof"><span class="k">Strength of field</span><span class="v num">' +
+         ((PW.meta && PW.meta.sof) ? PW.meta.sof : '–') + '</span></div>';
+    h += '<div class="tb temp"><span class="k">Air / Track</span><span class="v num">' +
+         (s.airTemp != null ? s.airTemp.toFixed(1) + '°' : '–') + ' <small>/ ' +
+         (s.trackTemp != null ? s.trackTemp.toFixed(1) + '°' : '–') + '</small>' +
+         (s.trackWetness ? ' <small>' + esc(s.trackWetness) + '</small>' : '') + '</span></div>';
+    h += '<div class="tb conn"><span class="k">Connection</span><span class="v">' +
+         '<i class="dot ' + conn + '"></i>' + esc(connTxt) + '</span></div>';
+
+    if (elTop._h !== h) { elTop.innerHTML = h; elTop._h = h; }
+  }
+
+  /* ============================================ fastest lap and battles */
+
+  // The battle gaps change every tick, so this strip is built once and then
+  // patched. Rewriting it would make the chips flicker and un-clickable.
+  function buildStrip() {
+    elStrip.innerHTML =
+      '<div class="flbanner" id="flb" data-car="">' +
+        '<div><div class="lbl">Fastest lap</div><div class="who"></div></div>' +
+        '<div class="tm num"></div><div class="lp num"></div>' +
+      '</div>' +
+      '<div class="battles"><span class="bl">Battles</span>' +
+        '<span class="none">Field is spread out.</span>' +
+        '<div id="battlelist" style="display:contents"></div>' +
+      '</div>';
+  }
+
+  function makeBattle() {
+    var n = PW.el('div', 'battle');
+    n.innerHTML = '<span class="p num"></span><span class="n a"></span>' +
+                  '<span class="vs">v</span><span class="n b"></span>' +
+                  '<span class="g num"></span><span class="xc"></span>';
+    return n;
+  }
+
+  function renderStrip(t) {
+    var f = t.fastest || {};
+    var fl = document.getElementById('flb');
+    if (f.idx != null && f.time) {
+      var d = PW.driver(f.idx) || {};
+      fl.style.display = '';
+      fl.dataset.car = f.idx;
+      setText(fl.children[0].children[1], PW.displayName(f.idx) || f.name || '');
+      setText(fl.children[1], PW.fmtLap(f.time));
+      setText(fl.children[2], (f.lap ? 'lap ' + f.lap : '') + (d.num != null ? ' · #' + d.num : ''));
+    } else {
+      fl.style.display = 'none';
+    }
+
+    var bs = t.battles || [];
+    elStrip.querySelector('.battles .none').style.display = bs.length ? 'none' : '';
+    PW.reconcile(document.getElementById('battlelist'), bs,
+      function (b) { return b.ahead + '-' + b.behind; },
+      makeBattle,
+      function (node, b) {
+        node.dataset.car = b.ahead;
+        node.classList.toggle('tight', b.gap != null && b.gap < 0.4);
+        setText(node.children[0], 'P' + b.pos);
+        setText(node.children[1], PW.displayName(b.ahead));
+        setText(node.children[3], PW.displayName(b.behind));
+        setText(node.children[4], b.gap != null ? b.gap.toFixed(3) : '–');
+        setText(node.children[5], b.sameClass ? '' : 'CLASS');
+      });
+  }
+
+  elStrip.addEventListener('click', function (ev) {
+    var n = ev.target.closest('[data-car]');
+    if (n) select(parseInt(n.dataset.car, 10));
+  });
+
+  /* ====================================================== class filters */
+
+  function renderFilters() {
+    var cls = (PW.meta && PW.meta.classes) || [];
+    var mc = cls.length > 1;
+    var h = '';
+    if (mc) {
+      h += '<button class="chipbtn' + (classFilter === '' ? ' on' : '') + '" data-cls="">ALL</button>';
+      cls.forEach(function (c) {
+        h += '<button class="chipbtn' + (classFilter === String(c.id) ? ' on' : '') +
+             '" data-cls="' + c.id + '"><i class="sw" style="background:' + esc(c.color) + '"></i>' +
+             esc(c.short) + ' <span class="faint">' + (c.count || 0) + '</span></button>';
+      });
+    }
+    if (elFilters._h !== h) { elFilters.innerHTML = h; elFilters._h = h; }
+    document.getElementById('myclass').style.display = mc ? '' : 'none';
+  }
+
+  elFilters.addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-cls]');
+    if (!b) return;
+    classFilter = b.dataset.cls;
+    if (classFilter) myClassOnly = false;
+    elFilters._h = null;
+    syncToggles();
+    render();
+  });
+
+  var elMy = document.getElementById('myclass');
+  elMy.addEventListener('click', function () {
+    myClassOnly = !myClassOnly;
+    if (myClassOnly) classFilter = '';
+    elFilters._h = null;
+    syncToggles();
+    render();
+  });
+  function syncToggles() { elMy.classList.toggle('on', myClassOnly); }
+
+  function myClassId() {
+    var idx = (PW.tick && PW.tick.player && PW.tick.player.idx);
+    if (idx == null || idx < 0) idx = PW.focusIdx();
+    var d = idx == null ? null : PW.driver(idx);
+    return d ? d.classId : null;
+  }
+
+  /* ======================================================= column picker */
+
+  var elPickPanel = document.getElementById('pickpanel');
+  var elPickBtn = document.getElementById('pickbtn');
+
+  function renderPicker() {
+    var h = '';
+    COLS.forEach(function (c) {
+      var label = c.l || c.h || c.k;
+      h += '<label><input type="checkbox" data-col="' + c.k + '"' +
+           (chosen.indexOf(c.k) >= 0 ? ' checked' : '') +
+           (c.lock ? ' disabled' : '') + '>' + esc(label) + '</label>';
+    });
+    document.getElementById('pickgrid').innerHTML = h;
+  }
+
+  document.getElementById('pickgrid').addEventListener('change', function (ev) {
+    var k = ev.target.dataset.col;
+    if (!k) return;
+    var at = chosen.indexOf(k);
+    if (ev.target.checked && at < 0) {
+      // keep the canonical column order rather than click order
+      chosen = COLS.filter(function (c) {
+        return c.k === k || chosen.indexOf(c.k) >= 0;
+      }).map(function (c) { return c.k; });
+    } else if (!ev.target.checked && at >= 0) {
+      chosen.splice(at, 1);
+    }
+    saveCols();
+    rebuild();
+  });
+
+  elPickBtn.addEventListener('click', function (ev) {
+    ev.stopPropagation();
+    elPickPanel.classList.toggle('open');
+    elPickBtn.classList.toggle('on', elPickPanel.classList.contains('open'));
+  });
+  document.addEventListener('click', function (ev) {
+    if (!elPickPanel.contains(ev.target) && ev.target !== elPickBtn) {
+      elPickPanel.classList.remove('open');
+      elPickBtn.classList.remove('on');
+    }
+  });
+  document.getElementById('pickclose').addEventListener('click', function () {
+    elPickPanel.classList.remove('open');
+    elPickBtn.classList.remove('on');
+  });
+  document.getElementById('pickall').addEventListener('click', function () {
+    chosen = COLS.map(function (c) { return c.k; });
+    saveCols(); renderPicker(); rebuild();
+  });
+  document.getElementById('pickdef').addEventListener('click', function () {
+    chosen = defaultCols();
+    saveCols(); renderPicker(); rebuild();
+  });
+
+  /* ================================================================ head */
+
+  var colSig = '';
+
+  function renderHeadRow(cols) {
+    var tpl = cols.map(function (c) { return c.w; }).join(' ');
+    elHead.style.setProperty('--cols', tpl);
+    elBody.style.setProperty('--cols', tpl);
+    var h = '';
+    cols.forEach(function (c) {
+      h += '<div class="th ' + (c.a === 'r' ? 'right' : (c.a === 'c' ? 'center' : '')) +
+           '" data-sort="' + c.k + '" title="' + esc(c.l || c.h) + '">' + esc(c.h) +
+           '<span class="ar"></span></div>';
+    });
+    elHead.innerHTML = h;
+    markSort();
+  }
+
+  /** The sort arrow moves without rebuilding the header or the rows. */
+  function markSort() {
+    Array.prototype.forEach.call(elHead.children, function (th) {
+      var on = th.dataset.sort === sortKey;
+      th.classList.toggle('sorted', on);
+      var ar = th.lastChild;
+      if (ar && ar.className === 'ar') ar.textContent = on ? (sortDir > 0 ? '\u25b2' : '\u25bc') : '';
+    });
+  }
+
+  elHead.addEventListener('click', function (ev) {
+    var th = ev.target.closest('[data-sort]');
+    if (!th) return;
+    var k = th.dataset.sort;
+    if (k === 'pos') { sortKey = null; sortDir = 1; }
+    else if (sortKey === k) {
+      if (sortDir === 1) sortDir = -1; else { sortKey = null; sortDir = 1; }
+    } else { sortKey = k; sortDir = 1; }
+    markSort();
+    render();
+  });
+
+  /* ================================================================ rows */
+
+  function makeRow(cols) {
+    var r = PW.el('div', 'row');
+    cols.forEach(function (c) {
+      var cell = PW.el('div', 'cell');
+      if (c.k === 'num') cell.innerHTML = '<span class="car-num"></span>';
+      else if (c.k === 'class') cell.innerHTML = '<span class="class-chip"></span>';
+      else if (c.k === 'name') cell.innerHTML = '<span class="dn"></span>';
+      r.appendChild(cell);
+    });
+    return r;
+  }
+
+  function updateRow(node, c, cols) {
+    for (var i = 0; i < cols.length; i++) {
+      var col = cols[i], cell = node.children[i];
+      if (!cell) continue;
+      var v = col.v(c);
+      var base = 'cell' + (col.a === 'r' ? ' r' : (col.a === 'c' ? ' c' : '')) + (col.mono ? ' num' : '');
+      if (col.k === 'num') {
+        var chip = cell.firstChild;
+        setText(chip, v.num);
+        chip.style.background = v.color || 'var(--text)';
+        chip.style.color = '#0b0d10';
+        setCls(cell, base);
+      } else if (col.k === 'class') {
+        var cc = cell.firstChild;
+        setText(cc, v.chip);
+        cc.style.background = v.color || 'var(--text-faint)';
+        setCls(cell, base);
+      } else if (col.k === 'name') {
+        var dn = cell.firstChild;
+        setText(dn, v.name);
+        setCls(cell, base + ' nm' + (v.fast ? ' fastest' : ''));
+      } else {
+        setText(cell, v.t);
+        setCls(cell, base + (v.c ? ' ' + v.c : ''));
+      }
+    }
+    node.classList.toggle('is-pit', c.st === 'pit');
+    node.classList.toggle('is-stall', c.st === 'stall');
+    node.classList.toggle('is-out', c.st === 'out');
+    node.classList.toggle('is-sel', sel === c.i);
+    node.classList.toggle('is-cam', camIdx() === c.i);
+  }
+
+  function makeCard() {
+    var r = PW.el('div', 'card-row');
+    r.innerHTML =
+      '<div class="cpos"></div>' +
+      '<div class="cbar"></div>' +
+      '<div class="cmid">' +
+        '<div class="l1"><span class="car-num"></span><span class="dn"></span></div>' +
+        '<div class="l2"><span class="t"></span><span class="s faint"></span></div>' +
+      '</div>' +
+      '<div class="cright"><div class="last"></div><div class="gap"></div></div>';
+    return r;
+  }
+
+  function updateCard(node, c) {
+    var d = PW.driver(c.i) || {}, p = d.profile || {};
+    setText(node.children[0], c.p > 0 ? c.p : '–');
+    node.children[1].style.background = d.classColor || 'var(--text-faint)';
+    var mid = node.children[2];
+    var chip = mid.children[0].children[0];
+    setText(chip, d.num == null ? '' : d.num);
+    chip.style.background = d.classColor || 'var(--text)';
+    setText(mid.children[0].children[1], PW.displayName(c.i, 'full'));
+    setText(mid.children[1].children[0], p.team || d.team || '');
+    setText(mid.children[1].children[1],
+      (PW.multiclass() && d.classShort ? d.classShort + ' · ' : '') +
+      (c.st === 'pit' ? 'IN PIT' : c.st === 'stall' ? 'IN BOX' : c.st === 'out' ? 'OUT' : 'L' + (c.lap || 0)));
+    var right = node.children[3];
+    var lastTxt = PW.fmtLap(c.last);
+    setText(right.children[0], lastTxt || '–');
+    right.children[0].className = 'last' + (c.fast ? ' fastest' : (pbLap(c) ? ' pb' : ''));
+    setText(right.children[1], c.p === 1 ? 'LEADER' : (PW.fmtGap(c.gl, c.ld) || '–'));
+    node.classList.toggle('is-pit', c.st === 'pit');
+    node.classList.toggle('is-out', c.st === 'out');
+    node.classList.toggle('is-sel', sel === c.i);
+  }
+
+  elBody.addEventListener('click', function (ev) {
+    var r = ev.target.closest('[data-key]');
+    if (!r) return;
+    var idx = parseInt(r.dataset.key, 10);
+    select(sel === idx ? null : idx);
+  });
+
+  function camIdx() {
+    var t = PW.tick;
+    return (t && t.cam && typeof t.cam.idx === 'number' && t.cam.idx >= 0) ? t.cam.idx : null;
+  }
+
+  /* ============================================================== FLIP */
+
+  function capture() {
+    var m = {};
+    Array.prototype.forEach.call(elBody.children, function (n) {
+      m[n.dataset.key] = n.offsetTop;
+    });
+    return m;
+  }
+  var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function play(before) {
+    if (reduceMotion) return;
+    Array.prototype.forEach.call(elBody.children, function (n) {
+      var was = before[n.dataset.key];
+      if (was === undefined) return;
+      var dy = was - n.offsetTop;
+      if (!dy || Math.abs(dy) > 900) return;
+      n.style.transition = 'none';
+      n.style.transform = 'translateY(' + dy + 'px)';
+      requestAnimationFrame(function () {
+        n.style.transition = 'transform 0.34s cubic-bezier(0.22,0.61,0.36,1)';
+        n.style.transform = '';
+      });
+    });
+  }
+
+  /* ============================================================= render */
+
+  function rebuild() {
+    colSig = '';
+    elBody.innerHTML = '';
+    render();
+  }
+
+  function filteredCars() {
+    var cars = PW.cars().filter(function (c) { return c.p > 0 || c.lp > 0; });
+    var wantClass = null;
+    if (myClassOnly) wantClass = myClassId();
+    else if (classFilter) wantClass = parseInt(classFilter, 10);
+    if (wantClass != null && !isNaN(wantClass)) {
+      cars = cars.filter(function (c) {
+        var d = PW.driver(c.i);
+        return d && d.classId === wantClass;
+      });
+    }
+    return cars;
+  }
+
+  function render() {
+    if (!PW.meta || !PW.tick || !PW.tick.cars) return;
+    elWait.classList.add('hide');
+
+    var t = PW.tick;
+    var s = t.session || {};
+    ctx.caution = !!s.caution;
+    ctx.fastIdx = (t.fastest || {}).idx;
+
+    renderTop(s);
+    renderStrip(t);
+    renderFilters();
+
+    var all = PW.cars();
+    trackHistory(all);
+
+    // field-best sector times, for the purple sector colouring
+    var nSec = (PW.meta.sectors || []).length || 3;
+    var best = [];
+    for (var j = 0; j < nSec; j++) {
+      var bv = null;
+      for (var a = 0; a < all.length; a++) {
+        var pv = all[a].pbsec && all[a].pbsec[j];
+        if (pv != null && pv > 0 && (bv == null || pv < bv)) bv = pv;
+      }
+      best.push(bv);
+    }
+    ctx.bestSec = best;
+
+    // laps down to the car directly ahead, for the interval column
+    ctx.lapsToAhead = {};
+    var order = all.slice().sort(function (x, y) { return (x.p || 99) - (y.p || 99); });
+    for (var oi = 1; oi < order.length; oi++) {
+      ctx.lapsToAhead[order[oi].i] =
+        Math.max(0, (order[oi].ld || 0) - (order[oi - 1].ld || 0));
+    }
+
+    var cars = filteredCars();
+    setText(elCount, cars.length + (cars.length === 1 ? ' car' : ' cars'));
+
+    if (sortKey && COLBY[sortKey]) {
+      var f = COLBY[sortKey].s;
+      cars = cars.slice().sort(function (x, y) {
+        var a = f(x), b = f(y);
+        if (typeof a === 'string' || typeof b === 'string') {
+          a = String(a).toLowerCase(); b = String(b).toLowerCase();
+          return a < b ? -sortDir : (a > b ? sortDir : 0);
+        }
+        return (a - b) * sortDir;
+      });
+    }
+
+    var wasNarrow = narrow;
+    narrow = window.innerWidth <= 700;
+    if (wasNarrow !== narrow) { elBody.innerHTML = ''; colSig = ''; }
+
+    if (narrow) {
+      elHead.style.display = 'none';
+      var before = capture();
+      PW.reconcile(elBody, cars,
+        function (c) { return c.i; }, makeCard,
+        function (node, c) { updateCard(node, c); });
+      play(before);
+    } else {
+      elHead.style.display = '';
+      var cols = visibleCols();
+      var sig = cols.map(function (c) { return c.k; }).join(',');
+      if (sig !== colSig) {
+        colSig = sig;
+        renderHeadRow(cols);
+        elBody.innerHTML = '';
+      }
+      var before2 = capture();
+      PW.reconcile(elBody, cars,
+        function (c) { return c.i; },
+        function () { return makeRow(cols); },
+        function (node, c) { updateRow(node, c, cols); });
+      play(before2);
+    }
+
+    renderDetail();
+  }
+
+  /* ======================================================= detail panel */
+
+  function select(idx) {
+    sel = idx;
+    elDetail._sig = null;
+    render();
+    if (sel != null) elDetail.scrollTop = 0;
+  }
+
+  function statLine(k, v, cls) {
+    return '<div><div class="k">' + esc(k) + '</div><div class="v ' + (cls || '') + '">' +
+           (v === '' || v == null ? '<span class="faint">–</span>' : esc(v)) + '</div></div>';
+  }
+
+  function chart(hist, bestTime) {
+    if (hist.length < 2) return '';
+    var pts = hist.slice(-30);
+    var times = pts.map(function (p) { return p.time; });
+    var lo = Math.min.apply(null, times), hi = Math.max.apply(null, times);
+    // ignore an outlier pit lap when scaling, or the chart is a flat line
+    var med = times.slice().sort(function (a, b) { return a - b; })[Math.floor(times.length / 2)];
+    if (hi > med * 1.35) hi = med * 1.35;
+    if (hi - lo < 0.35) { hi = lo + 0.35; }
+    var W = 330, H = 96, PADL = 4, PADR = 4, PADT = 10, PADB = 14;
+    var iw = W - PADL - PADR, ih = H - PADT - PADB;
+    var x = function (i) { return PADL + (pts.length === 1 ? iw / 2 : i * iw / (pts.length - 1)); };
+    var y = function (v) { return PADT + ih - ((Math.min(v, hi) - lo) / (hi - lo)) * ih; };
+    var d = pts.map(function (p, i) { return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(p.time).toFixed(1); }).join(' ');
+    var h = '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">';
+    h += '<line class="grid" x1="0" y1="' + (PADT + ih) + '" x2="' + W + '" y2="' + (PADT + ih) + '"/>';
+    h += '<line class="grid" x1="0" y1="' + PADT + '" x2="' + W + '" y2="' + PADT + '"/>';
+    h += '<path class="line" d="' + d + '"/>';
+    pts.forEach(function (p, i) {
+      var isBest = bestTime != null && Math.abs(p.time - bestTime) < 0.0005;
+      h += '<circle class="pt' + (isBest ? ' best' : '') + '" cx="' + x(i).toFixed(1) +
+           '" cy="' + y(p.time).toFixed(1) + '" r="' + (isBest ? 2.8 : 1.8) + '"/>';
+    });
+    h += '<text x="2" y="8">' + esc(PW.fmtLap(hi)) + '</text>';
+    h += '<text x="2" y="' + (H - 2) + '">' + esc(PW.fmtLap(lo)) + '</text>';
+    h += '<text x="' + (W - 2) + '" y="' + (H - 2) + '" text-anchor="end">lap ' + pts[pts.length - 1].lap + '</text>';
+    h += '</svg>';
+    return h;
+  }
+
+  function socialLinks(p) {
+    var out = [];
+    function add(label, val, base) {
+      if (!val) return;
+      var v = String(val).trim().replace(/^@/, '');
+      var url = /^https?:/i.test(v) ? v : base + encodeURIComponent(v);
+      out.push('<a href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(label) + ' ' + esc(v) + '</a>');
+    }
+    add('Twitch', p.twitch, 'https://twitch.tv/');
+    add('YouTube', p.youtube, 'https://youtube.com/@');
+    add('Instagram', p.instagram, 'https://instagram.com/');
+    add('X', p.x, 'https://x.com/');
+    if (p.discord) out.push('<a>Discord ' + esc(p.discord) + '</a>');
+    return out.length ? '<div class="socials">' + out.join('') + '</div>' : '';
+  }
+
+  function renderDetail() {
+    if (sel == null) {
+      if (elDetail.classList.contains('open')) {
+        elDetail.classList.remove('open');
+        elDetail.innerHTML = '';
+        elDetail._sig = null;
+      }
+      return;
+    }
+    var c = PW.carByIdx(sel);
+    var d = PW.driver(sel);
+    if (!c || !d) { elDetail.classList.remove('open'); return; }
+    elDetail.classList.add('open');
+
+    var p = d.profile || null;
+    var hist = history[sel] || [];
+    var controlOK = !!(PW.hello && PW.hello.controlAvailable);
+
+    // Full redraw only when something structural changes; the numbers are
+    // patched in place below so the panel does not flicker every tick.
+    var sig = [sel, hist.length, controlOK, p ? 1 : 0, PW.multiclass()].join('|');
+    if (elDetail._sig !== sig) {
+      elDetail._sig = sig;
+      var name = (p && p.displayName) || d.name || '';
+      var initials = d.initials || (name ? name.split(/\s+/).map(function (w) { return w[0]; }).join('').slice(0, 2) : '');
+      var cc = countryOf(sel);
+      var h = '';
+
+      h += '<div class="dt-head" style="--pick:' + esc((p && p.accentColor) || d.classColor || 'var(--accent)') + '">';
+      h += '<button class="close" id="dtclose">✕</button>';
+      h += '<div class="dt-id">';
+      h += '<div class="shot">' + (p && p.headshot
+            ? '<img src="' + esc(p.headshot) + '" alt="">'
+            : esc(initials)) + '</div>';
+      h += '<div class="who"><div class="nm2">' +
+           (cc ? '<span class="fl">' + PW.flag(cc) + '</span>' : '') + esc(name) + '</div>';
+      h += '<div class="team2">' + esc((p && p.team) || d.team || d.car || '') + '</div>';
+      h += '<div class="chips"><span class="car-num" style="background:' +
+           esc(d.classColor || 'var(--text)') + '">' + esc(d.num) + '</span>';
+      if (PW.multiclass() && d.classShort) {
+        h += '<span class="class-chip" style="background:' + esc(d.classColor) + '">' + esc(d.classShort) + '</span>';
+      }
+      h += '<span class="faint" style="font-size:11px">' + esc(d.car || '') + '</span>';
+      h += '</div></div></div></div>';
+
+      h += '<div class="dt-sec"><h3>Race</h3><div class="kv" id="dt-race"></div></div>';
+      h += '<div class="dt-sec"><h3>Pit and incidents</h3><div class="kv" id="dt-pit"></div></div>';
+      h += '<div class="dt-sec"><h3>Driver</h3><div class="kv" id="dt-drv"></div>';
+      if (p && (p.bio || p.hometown || p.pronouns || p.sponsor)) {
+        h += '<div style="margin-top:12px">';
+        if (p.bio) h += '<div class="bio">' + esc(p.bio) + '</div>';
+        var extra = [];
+        if (p.hometown) extra.push(p.hometown);
+        if (p.pronouns) extra.push(p.pronouns);
+        if (p.sponsor) extra.push(p.sponsor);
+        if (extra.length) h += '<div class="bio" style="margin-top:8px;color:var(--text-faint)">' + esc(extra.join(' · ')) + '</div>';
+        h += '</div>';
+      }
+      if (p) h += socialLinks(p);
+      if (!p) {
+        h += '<div class="noprofile" style="margin-top:10px">No driver-submitted profile. ' +
+             'Everything above comes from iRacing. Send this driver the sign-up link ' +
+             'from the control panel to add a headshot, country, bio and socials.</div>';
+      }
+      h += '</div>';
+
+      h += '<div class="dt-sec"><h3>Lap history</h3><div id="dt-chart"></div>' +
+           '<div class="laps" id="dt-laps"></div></div>';
+
+      h += '<div class="dt-sec"><h3>Camera</h3><div class="camrow">' +
+           '<button ' + (controlOK ? 'class="primary"' : 'disabled') + ' id="dtcam"' +
+           (controlOK ? '' : ' title="Sim control needs PitWall to be running on the Windows PC that runs iRacing."') +
+           '>Focus camera on this car</button></div>' +
+           '<div class="why" id="dtwhy">' +
+           (controlOK
+             ? 'Sends the iRacing broadcast camera to this car.'
+             : 'Unavailable: the server reports controlAvailable = false. Camera control is a Windows broadcast message, so PitWall has to be running on the same PC as iRacing.') +
+           '</div></div>';
+
+      elDetail.innerHTML = h;
+      document.getElementById('dtclose').addEventListener('click', function () { select(null); });
+      var camBtn = document.getElementById('dtcam');
+      if (camBtn && controlOK) {
+        camBtn.addEventListener('click', function () {
+          var dd = PW.driver(sel) || {};
+          var why = document.getElementById('dtwhy');
+          camBtn.disabled = true;
+          PW.control('camera.car', { carNumber: dd.num }).then(function (r) {
+            camBtn.disabled = false;
+            why.textContent = r && r.ok
+              ? 'Camera sent to car #' + dd.num + '.'
+              : 'iRacing did not accept that: ' + ((r && r.error) || 'unknown error');
+          }).catch(function (e) {
+            camBtn.disabled = false;
+            why.textContent = 'Could not reach the server: ' + e.message;
+          });
+        });
+      }
+      renderLaps(hist, c);
+      document.getElementById('dt-chart').innerHTML = chart(hist, c.best);
+    }
+
+    // live values
+    var race = document.getElementById('dt-race');
+    if (race) {
+      race.innerHTML =
+        statLine('Position', c.p > 0 ? c.p : '') +
+        statLine(PW.multiclass() ? 'In class' : 'Live pos', PW.multiclass() ? (c.cp || '') : (c.lp || '')) +
+        statLine('Lap', c.lap || '') +
+        statLine('Gap', c.p === 1 ? 'LEADER' : (PW.fmtGap(c.gl, c.ld) || '')) +
+        statLine('Interval', PW.fmtGap(c.iv, ctx.lapsToAhead[c.i] || 0)) +
+        statLine('Delta', PW.fmtDelta(c.delta)) +
+        statLine('Last', PW.fmtLap(c.last)) +
+        statLine('Best', PW.fmtLap(c.best)) +
+        statLine('Current', c.st === 'run' ? PW.fmtLap(c.cur, 1) : c.st.toUpperCase(), c.st === 'run' ? '' : 'txt') +
+        statLine('S1', PW.fmtLap(c.sec && c.sec[0])) +
+        statLine('S2', PW.fmtLap(c.sec && c.sec[1])) +
+        statLine('S3', PW.fmtLap(c.sec && c.sec[2]));
+    }
+    var pit = document.getElementById('dt-pit');
+    if (pit) {
+      pit.innerHTML =
+        statLine('Stops', c.stops || 0) +
+        statLine('Last stop', c.pitdur != null ? c.pitdur.toFixed(1) + 's' : '') +
+        statLine('Stint laps', c.stint != null ? c.stint : '') +
+        statLine('Incidents', c.inc || 0) +
+        statLine('Fast repairs', c.fr || 0) +
+        statLine('Tyre', tyreName(c.tyre), 'txt');
+    }
+    var drv = document.getElementById('dt-drv');
+    if (drv) {
+      drv.innerHTML =
+        statLine('iRating', d.irating || '') +
+        statLine('Licence', d.license || '', 'txt') +
+        statLine('Club', d.club || '', 'txt') +
+        statLine('Customer ID', d.userId || '') +
+        statLine('Division', d.division || '', 'txt') +
+        statLine('Class', d.classShort || '', 'txt');
+    }
+
+    // append new laps without redrawing the list
+    var laps = document.getElementById('dt-laps');
+    if (laps && laps._n !== hist.length) renderLaps(hist, c);
+  }
+
+  function renderLaps(hist, c) {
+    var laps = document.getElementById('dt-laps');
+    if (!laps) return;
+    laps._n = hist.length;
+    if (!hist.length) {
+      laps.innerHTML = '<div class="noprofile">No completed laps recorded yet. ' +
+        'Lap history is collected by this page from the moment it was opened.</div>';
+      return;
+    }
+    var h = '';
+    hist.slice().reverse().slice(0, 40).forEach(function (l) {
+      var isBest = c.best != null && Math.abs(l.time - c.best) < 0.0005;
+      h += '<div class="lap-r' + (l.stop ? ' pitlap' : '') + '">' +
+           '<span class="ln">' + l.lap + '</span>' +
+           '<span class="lt' + (isBest ? ' fastest' : '') + '">' + esc(PW.fmtLap(l.time)) + '</span>';
+      for (var j = 0; j < 3; j++) {
+        var v = l.sec[j];
+        var cls = 'sc';
+        if (v != null && ctx.bestSec[j] != null && Math.abs(v - ctx.bestSec[j]) < 1e-6) cls += ' fastest';
+        else if (v != null && l.secb && l.secb[j]) cls += ' pb';
+        h += '<span class="' + cls + '">' + esc(PW.fmtLap(v)) + '</span>';
+      }
+      h += '</div>';
+    });
+    laps.innerHTML = h;
+  }
+
+  /* ============================================================ waiting */
+
+  function showWaiting() {
+    elWait.classList.remove('hide');
+    var h = document.getElementById('wait-h');
+    var p = document.getElementById('wait-p');
+    var f = document.getElementById('wait-fix');
+    if (!PW.connected) {
+      h.textContent = 'Cannot reach PitWall';
+      p.textContent = 'The timing server at ' + PW.serverBase() + ' is not answering. ' +
+        'It retries automatically.';
+      f.textContent = 'If PitWall is running on another machine, open this page from ' +
+        'that machine’s address, or add ?server=http://its-address:8099 to this URL.';
+      return;
+    }
+    var s = statusInfo;
+    if (!s) {
+      h.textContent = 'Waiting for iRacing';
+      p.textContent = 'Connected to PitWall. Asking it what the sim is doing…';
+      f.textContent = '';
+      return;
+    }
+    if (s.connected) {
+      h.textContent = 'Waiting for the first timing data';
+      p.textContent = (s.demo ? 'Demo mode is running. ' : 'PitWall is reading iRacing. ') +
+        'No cars have been reported yet — this normally clears the moment a session loads.';
+      f.textContent = '';
+    } else {
+      h.textContent = 'Waiting for iRacing';
+      p.textContent = s.error || 'PitWall is running but is not receiving telemetry from iRacing.';
+      f.textContent = 'Start iRacing and join a session, a test drive or a replay. ' +
+        'The control panel’s diagnostics page explains anything else that could be in the way.';
+    }
+  }
+
+  function pollStatus() {
+    PW.api('/api/status').then(function (s) {
+      statusInfo = s;
+      if (!PW.meta || !PW.tick) showWaiting();
+    }).catch(function () {
+      statusInfo = null;
+      if (!PW.meta || !PW.tick) showWaiting();
+    });
+  }
+
+  /* =============================================================== boot */
+
+  buildStrip();
+  renderPicker();
+  syncToggles();
+  showWaiting();
+  pollStatus();
+  setInterval(function () { if (!PW.meta || !PW.tick) pollStatus(); }, 3000);
+
+  window.addEventListener('resize', function () { render(); });
+  PW.on('meta', function () { colSig = ''; elFilters._h = null; elDetail._sig = null; render(); });
+  PW.on('tick', render);
+  PW.on('hello', function () { elDetail._sig = null; });
+  PW.on('close', function () { elTop._h = null; if (!PW.tick) showWaiting(); });
+  PW.on('open', function () { elTop._h = null; });
+  PW.start({ sub: ['meta', 'tick'], rate: 10, name: 'timing' });
+})();
+</script>
+</body>
+</html>

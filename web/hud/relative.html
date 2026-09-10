@@ -1,0 +1,361 @@
+<!doctype html>
+<!--
+  PitWall — Relative (in-car HUD)
+  ---------------------------------------------------------------------------
+  The cars physically around you on track, with the time gap to each. This is
+  not the standings: a car a lap down sitting 0.4s behind you appears right
+  next to you here, which is the whole point — you need to know whether the
+  car in your mirrors is racing you or lapping you.
+
+  Sign convention: a car AHEAD of you on track reads a small POSITIVE number
+  (that is how many seconds you are behind it), a car BEHIND you reads a small
+  NEGATIVE number. Your own row is centred and highlighted, and the block
+  keeps a fixed height so nothing jumps when the field around you thins out.
+
+  Gaps come from the engine's own gap-to-leader maths (`gl`), which is already
+  a track-position projection wrapped to one lap, so subtracting two cars' `gl`
+  gives the true track-relative gap regardless of how many laps apart they are.
+  Under caution `gl` is null by design, so we fall back to the lap-distance
+  difference scaled by a reference lap time.
+
+  Recommended window: 300 x 162 (default 3 ahead + 3 behind; each extra
+  row either way adds 22px).
+
+  Query string options
+    ahead=N      cars ahead on track      (default 3)
+    behind=N     cars behind on track     (default 3)
+    car=N        force the reference car to car index N (else camera/player)
+    w=PX         widget width             (default 300)
+    names=full|short|surname|abbrev       name style (pitwall.js)
+    class=0      hide the class chips in a multiclass field (default on)
+    irating=1    show each driver's iRating
+    inc=1        show each driver's incident count
+    scale=1.2    overall scale            (PW.applyChrome)
+    accent=%23ff8800   accent colour      (PW.applyChrome)
+    opacity=0.8  panel opacity            (PW.applyChrome)
+    server=URL   point at a PitWall on another machine (pitwall.js)
+
+  Colour is information only: class colour on the bar, red for a car that is a
+  lap or more UP on you (it is about to lap you — let it through), blue for a
+  car a lap or more DOWN (you are lapping it), yellow for pit lane.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PitWall — Relative</title>
+<link rel="stylesheet" href="../shared/base.css">
+<style>
+  :root { --row-h: 22px; }
+
+  #root { width: var(--w, 300px); }
+  #wrap { display: none; padding: 2px 0; }
+  body.ready #wrap { display: block; }
+
+  .row {
+    height: var(--row-h);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0 6px 0 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    font-size: 12px;
+  }
+  .row:last-child { border-bottom: 0; }
+
+  .row.pad { visibility: hidden; }
+
+  .class-bar { margin: 3px 0; width: 3px; flex: 0 0 3px; }
+  .single-class .class-bar { visibility: hidden; flex: 0 0 2px; width: 2px; }
+
+  .car-num {
+    flex: 0 0 auto;
+    min-width: 26px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 15px;
+    height: 15px;
+    padding: 0 4px;
+  }
+
+  .nm {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .chip {
+    flex: 0 0 auto;
+    font-size: 8.5px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    padding: 1px 3px;
+    border-radius: 2px;
+    color: #05070a;
+    text-transform: uppercase;
+  }
+
+  .ir, .ic {
+    flex: 0 0 auto;
+    font-size: 10px;
+    color: var(--text-faint);
+    white-space: nowrap;
+  }
+  .ic.hot { color: var(--yellow); }
+
+  .ld {
+    flex: 0 0 20px;
+    text-align: right;
+    font-size: 10px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .gap {
+    flex: 0 0 46px;
+    text-align: right;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .gap.empty { color: var(--text-faint); }
+
+  /* laps up: this car is about to lap you. laps down: you are lapping it. */
+  .row.up   .nm, .row.up   .ld { color: var(--red); }
+  .row.down .nm, .row.down .ld { color: var(--blue); }
+
+  .row.is-pit { opacity: 0.5; }
+  .row.is-pit .gap { color: var(--yellow); font-size: 11px; letter-spacing: 0.08em; }
+  .row.is-out { opacity: 0.32; }
+
+  .row.me {
+    background: rgba(255, 255, 255, 0.14);
+    box-shadow: inset 3px 0 0 var(--accent);
+  }
+  .row.me .nm { font-weight: 800; color: var(--text); }
+  .row.me .gap { color: var(--text-dim); font-size: 11px; letter-spacing: 0.08em; }
+</style>
+</head>
+<body class="overlay">
+  <div id="pw-status"></div>
+  <div id="root" class="scale-root">
+    <div id="wrap" class="panel"></div>
+  </div>
+
+<script src="../shared/pitwall.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  PW.applyChrome();
+
+  var OPT = {
+    ahead:   Math.max(0, Math.min(12, PW.optNum('ahead', 3))),
+    behind:  Math.max(0, Math.min(12, PW.optNum('behind', 3))),
+    width:   PW.optNum('w', 300),
+    chips:   PW.optBool('class', true),
+    irating: PW.optBool('irating', false),
+    inc:     PW.optBool('inc', false)
+  };
+  document.getElementById('root').style.setProperty('--w', OPT.width + 'px');
+
+  var wrap = document.getElementById('wrap');
+
+  /* ------------------------------------------------------------- gap maths */
+
+  /** A lap time to scale lap-distance differences by when `gl` is missing. */
+  function refLap(me) {
+    if (me) {
+      if (me.best > 0) return me.best;
+      if (me.last > 0) return me.last;
+    }
+    var best = null;
+    PW.cars().forEach(function (c) {
+      if (c.best > 0 && (best === null || c.best < best)) best = c.best;
+    });
+    if (best) return best;
+    var f = PW.tick && PW.tick.fastest;
+    if (f && f.time > 0) return f.time;
+    return 90;
+  }
+
+  /** Track position as a continuous "laps completed" number. */
+  function trackPos(c) {
+    var lc = (c.lc != null) ? c.lc : Math.max(0, (c.lap || 1) - 1);
+    return lc + (c.pct || 0);
+  }
+
+  /**
+   * Seconds from this car's track position to the reference car's: positive
+   * when the other car is ahead on track, negative when it is behind.
+   */
+  function relativeTo(me, c, ref) {
+    var v = null;
+    if (me.gl != null && c.gl != null) {
+      // `gl` is already wrapped into [0, lap): the further round the lap a car
+      // is from the leader, the bigger it is. Ahead of me => smaller gl.
+      v = me.gl - c.gl;
+    } else if (me.pct != null && c.pct != null) {
+      var dp = c.pct - me.pct;
+      if (dp > 0.5) dp -= 1; else if (dp < -0.5) dp += 1;
+      return dp * ref;
+    } else {
+      return null;
+    }
+    var half = ref / 2;
+    if (v > half) v -= ref;
+    else if (v < -half) v += ref;
+    return v;
+  }
+
+  /** Whole laps this car is up (+) or down (-) on the reference car. */
+  function lapDiff(me, c) {
+    var d = trackPos(c) - trackPos(me);
+    return Math.round(d);
+  }
+
+  /* -------------------------------------------------------------- selection */
+
+  function build(meIdx) {
+    var all = PW.relative(meIdx, 999, 999);   // every car in world, lp order
+    var me = null;
+    for (var i = 0; i < all.length; i++) if (all[i].i === meIdx) me = all[i];
+    if (!me) return null;
+
+    var ref = refLap(me);
+    var ahead = [], behind = [];
+    all.forEach(function (c) {
+      if (c.i === meIdx) return;
+      var rel = relativeTo(me, c, ref);
+      if (rel === null) return;
+      var e = { car: c, rel: rel, ld: lapDiff(me, c) };
+      if (rel >= 0) ahead.push(e); else behind.push(e);
+    });
+    ahead.sort(function (a, b) { return a.rel - b.rel; });
+    behind.sort(function (a, b) { return b.rel - a.rel; });
+
+    var rows = [];
+    var pick = ahead.slice(0, OPT.ahead);
+    // nearest-first above, so reverse into track order (furthest ahead on top)
+    for (var p = OPT.ahead - pick.length; p > 0; p--) rows.push({ pad: true });
+    pick.reverse().forEach(function (e) { rows.push(e); });
+    rows.push({ car: me, rel: 0, ld: 0, me: true });
+    var pb = behind.slice(0, OPT.behind);
+    pb.forEach(function (e) { rows.push(e); });
+    for (var q = OPT.behind - pb.length; q > 0; q--) rows.push({ pad: true });
+    return rows;
+  }
+
+  /* ----------------------------------------------------------------- render */
+
+  function makeRow() {
+    var r = PW.el('div', 'row');
+    r.innerHTML =
+      '<div class="class-bar"></div>' +
+      '<div class="car-num num"></div>' +
+      '<div class="nm"></div>' +
+      '<div class="chip"></div>' +
+      '<div class="ir num"></div>' +
+      '<div class="ic num"></div>' +
+      '<div class="ld num"></div>' +
+      '<div class="gap num"></div>';
+    return r;
+  }
+
+  function setText(node, t) {
+    t = (t == null) ? '' : String(t);
+    if (node.textContent !== t) node.textContent = t;
+  }
+
+  function show(node, on) {
+    if (node.style.display !== (on ? '' : 'none')) node.style.display = on ? '' : 'none';
+  }
+
+  function updateRow(node, e) {
+    if (e.pad) {
+      node.className = 'row pad';
+      return;
+    }
+    var c = e.car;
+    var d = PW.driver(c.i) || {};
+    var q = node.children;
+    var mc = PW.multiclass();
+
+    q[0].style.background = d.classColor || 'var(--text-faint)';
+    setText(q[1], d.num != null ? d.num : '');
+    setText(q[2], PW.displayName(c.i));
+
+    var chipOn = mc && OPT.chips && !!d.classShort;
+    show(q[3], chipOn);
+    if (chipOn) {
+      setText(q[3], d.classShort);
+      q[3].style.background = d.classColor || 'var(--text-faint)';
+    }
+
+    show(q[4], OPT.irating);
+    if (OPT.irating) setText(q[4], d.irating ? (d.irating >= 1000 ? (d.irating / 1000).toFixed(1) + 'k' : d.irating) : '');
+
+    show(q[5], OPT.inc);
+    if (OPT.inc) {
+      var n = (c.inc != null && c.inc >= 0) ? c.inc : null;
+      setText(q[5], n === null ? '' : n + 'x');
+      q[5].className = 'ic num' + (n !== null && n >= 8 ? ' hot' : '');
+    }
+
+    setText(q[6], e.me ? '' : (e.ld > 0 ? '+' + e.ld + 'L' : (e.ld < 0 ? e.ld + 'L' : '')));
+
+    var gap = q[7];
+    if (e.me) {
+      setText(gap, 'YOU');
+      gap.className = 'gap num';
+    } else if (c.st === 'pit' || c.st === 'stall') {
+      setText(gap, 'PIT');
+      gap.className = 'gap num';
+    } else if (e.rel === null || e.rel === undefined) {
+      setText(gap, '–');
+      gap.className = 'gap num empty';
+    } else {
+      var s = e.rel;
+      // -0.0 reads as a bug; clamp the sign at the display resolution.
+      var txt = (Math.abs(s) < 0.05 ? '0.0' : (s > 0 ? '+' : '-') + Math.abs(s).toFixed(1));
+      setText(gap, txt);
+      gap.className = 'gap num';
+    }
+
+    var cls = 'row';
+    if (e.me) cls += ' me';
+    if (e.ld > 0) cls += ' up';
+    else if (e.ld < 0) cls += ' down';
+    if (c.st === 'pit' || c.st === 'stall') cls += ' is-pit';
+    if (c.st === 'out') cls += ' is-out';
+    if (node.className !== cls) node.className = cls;
+  }
+
+  function render() {
+    if (!PW.meta || !PW.tick) { document.body.classList.remove('ready'); return; }
+    var meIdx = PW.focusIdx();
+    if (meIdx == null) { document.body.classList.remove('ready'); return; }
+    var rows = build(meIdx);
+    if (!rows) { document.body.classList.remove('ready'); return; }
+
+    document.body.classList.add('ready');
+    document.body.classList.toggle('single-class', !PW.multiclass());
+
+    var padN = 0;
+    PW.reconcile(wrap, rows,
+      function (e) { return e.pad ? ('p' + (padN++)) : ('c' + e.car.i); },
+      makeRow,
+      updateRow);
+  }
+
+  PW.on('meta', render);
+  PW.on('tick', render);
+  PW.start({ sub: ['meta', 'tick'], rate: 12, name: 'relative' });
+})();
+</script>
+</body>
+</html>

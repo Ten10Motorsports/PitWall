@@ -1,0 +1,683 @@
+<!doctype html>
+<!--
+  PitWall — Timing Tower
+  ---------------------------------------------------------------------------
+  OBS browser source, designed at 460 x 1080. Fills whatever height it is given
+  and shows as many rows as fit.
+
+  Query string options
+    rows=N       number of car rows (default: as many as fit the window)
+    col=WHAT     right-hand data column: gap | int | last | best | delta
+                 (default gap). "gap" is to the leader, "int" is to the car
+                 ahead. When the tower is grouped or filtered by class these
+                 become the in-class gap / in-class interval.
+    col2=WHAT    optional second data column, same values (default: none)
+    group=none|class   break the tower into class blocks with class headers
+                 (default none)
+    class=SHORT  filter to one class by short name, e.g. ?class=GT3
+                 Grouping or filtering by class switches the position column
+                 to the class position and the gap columns to in-class gaps.
+    names=full|short|surname|abbrev   name style (handled by pitwall.js)
+    focus=1      follow the broadcast camera car: when it would fall off the
+                 bottom of the visible rows the tower scrolls to keep it in
+                 view, and the row is highlighted
+    top=N        always pin the top N positions and scroll the rest around the
+                 focus car (implies focus following)
+    header=0     hide the header block (session, flag, remaining, legend)
+    scale=1.2    overall scale          (PW.applyChrome)
+    accent=%23ff8800  accent colour     (PW.applyChrome)
+    opacity=0.8  panel opacity          (PW.applyChrome)
+    car=N        force the focus car to car index N (pitwall.js)
+    server=URL   point at a PitWall on another machine (pitwall.js)
+
+  Colour is information only: class colour on the bar, purple for the car
+  holding the overall fastest lap, green for a personal best lap or sector,
+  yellow for pit lane.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PitWall — Timing Tower</title>
+<link rel="stylesheet" href="../shared/base.css">
+<style>
+  :root { --head-h: 22px; --sep-h: 9px; }
+
+  #root { width: 100%; }
+
+  /* nothing at all until there is real data to show */
+  #head, #rows { display: none; }
+  body.ready #head, body.ready #rows { display: block; }
+  body.ready #head.hidden { display: none; }
+
+  /* ------------------------------------------------------------- header */
+  .head {
+    padding: 7px 8px 0;
+    margin-bottom: 4px;
+    overflow: hidden;
+  }
+
+  .hrow {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .sess {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .sess::before {
+    content: '';
+    display: inline-block;
+    width: 3px;
+    height: 12px;
+    margin-right: 7px;
+    background: var(--accent);
+    vertical-align: baseline;
+  }
+  .rem {
+    margin-left: auto;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .rem .rem-lbl { font-size: 10px; color: var(--text-dim); margin-right: 4px; letter-spacing: 0.10em; }
+
+  .flagbar {
+    height: 22px;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    border-radius: 2px;
+  }
+  .flagbar .fb-sub {
+    margin-left: auto;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    opacity: 0.75;
+  }
+  .caution-strip {
+    margin-top: 4px;
+    height: 4px;
+    border-radius: 2px;
+    background: repeating-linear-gradient(
+      -45deg, var(--yellow) 0 8px, rgba(255, 204, 51, 0.35) 8px 16px);
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 6px;
+  }
+  .legend .class-chip { font-size: 9px; }
+  .legend .class-chip .cnt { opacity: 0.65; margin-left: 4px; }
+
+  .collabels {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 16px;
+    margin-top: 6px;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    border-top: 1px solid var(--line);
+    padding-top: 3px;
+  }
+
+  /* --------------------------------------------------------------- rows */
+  .rows {
+    position: relative;
+    overflow: hidden;
+    padding: 0;
+    border-radius: var(--radius);
+  }
+
+  .row, .chead, .sep {
+    position: absolute;
+    left: 0;
+    right: 0;
+    transition: transform 0.38s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.25s linear;
+    will-change: transform;
+  }
+  .row.noanim, .chead.noanim, .sep.noanim { transition: none; }
+
+  .row {
+    height: var(--row-h);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 7px 0 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .pos {
+    width: 26px;
+    flex: 0 0 26px;
+    text-align: right;
+    font-size: 14px;
+    font-weight: 700;
+    padding-left: 2px;
+  }
+  .class-bar { margin: 4px 0; }
+  .single-class .class-bar { display: none; }
+  .single-class .pos { padding-left: 6px; }
+
+  .car-num {
+    flex: 0 0 auto;
+    font-size: 12px;
+    line-height: 18px;
+    height: 18px;
+    min-width: 30px;
+  }
+
+  .nm {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+  .nm .fl { font-size: 12px; line-height: 1; flex: 0 0 auto; }
+  .nm .dn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .secs {
+    flex: 0 0 26px;
+    display: flex;
+    gap: 2px;
+    height: 3px;
+  }
+  .secs i { flex: 1 1 0; background: rgba(255, 255, 255, 0.14); border-radius: 1px; }
+  .secs i.pbs { background: var(--pb); }
+
+  .cell {
+    flex: 0 0 56px;
+    text-align: right;
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .cell.c2 { color: var(--text-dim); }
+  .cell.empty { color: var(--text-faint); }
+  /* colour beats column rank: PB green and pit yellow must win over .c2 */
+  .cell.pb { color: var(--pb); }
+  .cell.st-pit { color: var(--yellow); }
+  .cell.st-stall { color: var(--yellow); font-weight: 700; }
+
+  /* class block header */
+  .chead {
+    height: var(--head-h);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 7px;
+    background: rgba(255, 255, 255, 0.045);
+    border-bottom: 1px solid var(--line);
+  }
+  .chead .class-chip { font-size: 9px; }
+  .chead .cn { font-size: 9px; letter-spacing: 0.12em; color: var(--text-faint); text-transform: uppercase; }
+  .chead .cf { margin-left: auto; font-size: 10px; }
+
+  .sep { height: var(--sep-h); display: flex; align-items: center; padding: 0 7px; }
+  .sep i {
+    flex: 1;
+    height: 1px;
+    background: repeating-linear-gradient(90deg,
+      var(--line-strong) 0 4px, transparent 4px 9px);
+  }
+
+  /* column label alignment mirrors the row grid */
+  .collabels .l-name { flex: 1 1 auto; min-width: 0; }
+  .collabels .l-pos  { width: 26px; flex: 0 0 26px; text-align: right; }
+  .collabels .l-num  { flex: 0 0 30px; }
+  .collabels .l-cell { flex: 0 0 56px; text-align: right; }
+  .collabels .l-secs { flex: 0 0 26px; }
+  .collabels .l-bar  { flex: 0 0 4px; }
+  .single-class .collabels .l-bar { display: none; }
+</style>
+</head>
+<body class="overlay">
+  <div id="pw-status"></div>
+  <div id="root" class="scale-root">
+    <div id="head" class="head panel"></div>
+    <div id="rows" class="rows panel"></div>
+  </div>
+
+<script src="../shared/pitwall.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  PW.applyChrome();
+
+  var COLS = { gap: 'GAP', int: 'INT', last: 'LAST', best: 'BEST', delta: 'DELTA' };
+
+  var OPT = {
+    rows:   PW.optNum('rows', 0),
+    col:    (COLS[PW.opt('col', 'gap')] ? PW.opt('col', 'gap') : 'gap'),
+    col2:   (COLS[PW.opt('col2', '')] ? PW.opt('col2', '') : ''),
+    group:  PW.opt('group', 'none') === 'class' ? 'class' : 'none',
+    klass:  PW.opt('class', ''),
+    focus:  PW.optBool('focus', false),
+    top:    Math.max(0, PW.optNum('top', 0)),
+    header: PW.optBool('header', true)
+  };
+
+  var elHead = document.getElementById('head');
+  var elRows = document.getElementById('rows');
+  var stallStart = {};          // car index -> tick time the car stopped in its box
+  var HEAD_H = 22, SEP_H = 9;
+
+  function rowH() {
+    var v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--row-h'));
+    return v || 30;
+  }
+
+  /* ------------------------------------------------------------ helpers */
+
+  function classGaps() { return OPT.group === 'class' || !!OPT.klass; }
+
+  var lapsToAhead = {};     // car index -> laps down to the car directly ahead
+
+  function gapCell(c, which, caution) {
+    var cg = classGaps();
+    var v = which === 'int' ? (cg ? c.civ : c.iv) : (cg ? c.gcl : c.gl);
+    // Laps down is measured to the overall leader, so it belongs on the gap
+    // column only. The interval column reports laps down to the car ahead.
+    var ld = cg ? 0 : (which === 'int' ? (lapsToAhead[c.i] || 0) : c.ld);
+    var txt = PW.fmtGap(v, ld);
+    // the leader has no gap; anyone else without one (caution, no data yet)
+    // gets a dash rather than a hole in the column
+    var lead = cg ? (c.cp === 1) : (c.p === 1);
+    if (!txt && !lead) txt = '–';
+    return { t: txt, c: txt === '–' ? 'empty' : '' };
+  }
+
+  /** No value is a dash, never a hole and never a raw sentinel. */
+  function dash(txt, cls) {
+    return txt ? { t: txt, c: cls } : { t: '–', c: 'empty' };
+  }
+
+  function lapIsPB(c) {
+    return c.last != null && c.best != null && Math.abs(c.last - c.best) < 0.0005;
+  }
+
+  function cellFor(c, kind, caution) {
+    switch (kind) {
+      case 'int':
+      case 'gap':
+        return gapCell(c, kind, caution);
+      case 'last':
+        return dash(PW.fmtLap(c.last), c.fast && lapIsPB(c) ? 'fastest' : (lapIsPB(c) ? 'pb' : ''));
+      case 'best':
+        return dash(PW.fmtLap(c.best), c.fast ? 'fastest' : '');
+      case 'delta':
+        return dash(PW.fmtDelta(c.delta), (c.delta != null && c.delta < 0) ? 'pb' : '');
+      default:
+        return { t: '', c: 'empty' };
+    }
+  }
+
+  /** Pit lane (and retirement) override the primary data column. */
+  function pitCell(c, now) {
+    if (c.st === 'out') return { t: 'OUT', c: 'empty' };
+    if (c.st === 'stall') {
+      if (stallStart[c.i] == null) stallStart[c.i] = now;
+      var d = Math.max(0, now - stallStart[c.i]);
+      return { t: d.toFixed(1), c: 'st-stall' };
+    }
+    if (c.st === 'pit') return { t: 'PIT', c: 'st-pit' };
+    return null;
+  }
+
+  function pruneStalls(cars) {
+    var live = {};
+    cars.forEach(function (c) { if (c.st === 'stall') live[c.i] = 1; });
+    Object.keys(stallStart).forEach(function (k) { if (!live[k]) delete stallStart[k]; });
+  }
+
+  /* ------------------------------------------------------------- header */
+
+  function remainText(s) {
+    if (s.lapsTotal) {
+      var done = Math.min(s.lapsTotal, Math.max(0, s.raceLaps || 0));
+      return { lbl: 'LAP', txt: done + '/' + s.lapsTotal };
+    }
+    if (s.timeRemain != null) return { lbl: 'REM', txt: PW.fmtClock(s.timeRemain) };
+    if (s.lapsRemain != null) return { lbl: 'TO GO', txt: s.lapsRemain + 'L' };
+    if (s.time != null) return { lbl: 'TIME', txt: PW.fmtClock(s.time) };
+    return { lbl: '', txt: '' };
+  }
+
+  var FLAGNAME = {
+    green: 'GREEN', yellow: 'YELLOW', red: 'RED', white: 'WHITE',
+    checkered: 'CHEQUERED', blue: 'BLUE', black: 'BLACK', none: 'TRACK'
+  };
+
+  function renderHead(s) {
+    if (!OPT.header) { elHead.classList.add('hidden'); return; }
+    var caution = !!s.caution;
+    var flag = caution ? 'yellow' : (s.flag || 'none');
+    var name = caution ? 'CAUTION' : (FLAGNAME[flag] || String(flag).toUpperCase());
+    var rem = remainText(s);
+    var cls = document.documentElement.classList.contains('mc') ? (PW.meta.classes || []) : [];
+    if (OPT.klass) {
+      cls = cls.filter(function (c) {
+        return String(c.short).toLowerCase() === OPT.klass.toLowerCase();
+      });
+    }
+
+    var h = '';
+    h += '<div class="hrow">';
+    h += '<span class="sess">' + esc(s.name || s.type || 'SESSION') + '</span>';
+    h += '<span class="rem num"><span class="rem-lbl">' + esc(rem.lbl) + '</span>' + esc(rem.txt) + '</span>';
+    h += '</div>';
+    h += '<div class="flagbar flag-' + flag + (flag === 'red' ? ' flashing' : '') + '">' + esc(name);
+    h += '<span class="fb-sub">' + esc(s.state === 'Racing' ? '' : (s.state || '')) + '</span></div>';
+    if (caution) h += '<div class="caution-strip"></div>';
+    if (cls.length > 1 || (OPT.klass && cls.length)) {
+      h += '<div class="legend">';
+      cls.forEach(function (c) {
+        h += '<span class="class-chip" style="background:' + esc(c.color) + '">' +
+             esc(c.short) + '<span class="cnt">' + (c.count || 0) + '</span></span>';
+      });
+      h += '</div>';
+    }
+    h += '<div class="collabels">';
+    h += '<span class="l-pos">POS</span><span class="l-bar"></span><span class="l-num">CAR</span>';
+    h += '<span class="l-name">DRIVER</span><span class="l-secs"></span>';
+    h += '<span class="l-cell">' + esc(COLS[OPT.col]) + '</span>';
+    if (OPT.col2) h += '<span class="l-cell">' + esc(COLS[OPT.col2]) + '</span>';
+    h += '</div>';
+    if (elHead._h !== h) { elHead.innerHTML = h; elHead._h = h; }
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (ch) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch];
+    });
+  }
+
+  /* ------------------------------------------------------- entry building */
+
+  function entriesFor(cars) {
+    var mc = PW.multiclass();
+    var out = [];
+    if (OPT.klass) {
+      cars = cars.filter(function (c) {
+        var d = PW.driver(c.i);
+        return d && String(d.classShort).toLowerCase() === OPT.klass.toLowerCase();
+      });
+    }
+    if (mc && OPT.group === 'class') {
+      var order = (PW.meta.classes || []);
+      order.forEach(function (cl) {
+        var inClass = cars.filter(function (c) {
+          var d = PW.driver(c.i);
+          return d && d.classId === cl.id;
+        }).sort(function (a, b) { return (a.cp || 99) - (b.cp || 99); });
+        if (!inClass.length) return;
+        out.push({ type: 'head', key: 'h' + cl.id, cl: cl, h: HEAD_H, cost: HEAD_H / rowH() });
+        inClass.forEach(function (c) {
+          out.push({ type: 'car', key: 'c' + c.i, car: c, h: rowH(), cost: 1 });
+        });
+      });
+    } else {
+      cars.forEach(function (c) {
+        out.push({ type: 'car', key: 'c' + c.i, car: c, h: rowH(), cost: 1 });
+      });
+    }
+    return out;
+  }
+
+  function take(list, start, budget) {
+    var out = [], used = 0;
+    for (var i = start; i < list.length; i++) {
+      if (used + list[i].cost > budget + 0.001) break;
+      // never end a block on a dangling class header
+      out.push(list[i]);
+      used += list[i].cost;
+    }
+    while (out.length && out[out.length - 1].type === 'head') out.pop();
+    return out;
+  }
+
+  function indexOfCar(list, idx) {
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].type === 'car' && list[i].car.i === idx) return i;
+    }
+    return -1;
+  }
+
+  /** Pinned top block + a window that keeps the focus car on screen. */
+  function layout(entries, capacity, focusIdx) {
+    var following = OPT.focus || OPT.top > 0;
+    var pinCount = 0;
+    if (OPT.top > 0) {
+      var seen = 0;
+      while (pinCount < entries.length && seen < OPT.top) {
+        if (entries[pinCount].type === 'car') seen++;
+        pinCount++;
+      }
+    }
+    var pinned = entries.slice(0, pinCount);
+    var rest = entries.slice(pinCount);
+    var budget = capacity;
+    pinned.forEach(function (e) { budget -= e.cost; });
+
+    if (!following || focusIdx == null) return pinned.concat(take(rest, 0, budget));
+
+    var fi = indexOfCar(rest, focusIdx);
+    if (fi < 0) return pinned.concat(take(rest, 0, budget));
+
+    var head = take(rest, 0, budget);
+    if (fi < head.length) return pinned.concat(head);
+
+    // Scroll: put the focus car one row above the bottom edge where possible.
+    var end = Math.min(rest.length, fi + 2);
+    var start = end, used = 0;
+    var sepCost = pinned.length ? SEP_H / rowH() : 0;
+    while (start > 0 && used + rest[start - 1].cost <= budget - sepCost + 0.001) {
+      used += rest[start - 1].cost;
+      start--;
+    }
+    var win = rest.slice(start, end);
+    while (win.length && win[0].type === 'head') win.shift();
+    var out = pinned.slice();
+    if (pinned.length && start > 0) out.push({ type: 'sep', key: 'sep', h: SEP_H, cost: sepCost });
+    return out.concat(win);
+  }
+
+  /* -------------------------------------------------------------- render */
+
+  function makeRow() {
+    var r = PW.el('div', 'row noanim');
+    r.innerHTML =
+      '<div class="pos num"></div>' +
+      '<div class="class-bar"></div>' +
+      '<div class="car-num num"></div>' +
+      '<div class="nm"><span class="fl"></span><span class="dn"></span></div>' +
+      '<div class="secs"></div>' +
+      '<div class="cell num c1"></div>';
+    if (OPT.col2) {
+      var c2 = PW.el('div', 'cell num c2');
+      r.appendChild(c2);
+    }
+    return r;
+  }
+
+  function makeHead(e) {
+    var h = PW.el('div', 'chead noanim');
+    h.innerHTML = '<span class="class-chip"></span><span class="cn"></span><span class="cf num"></span>';
+    return h;
+  }
+
+  function makeSep() {
+    var s = PW.el('div', 'sep noanim');
+    s.innerHTML = '<i></i>';
+    return s;
+  }
+
+  function place(node, y) {
+    if (node._y !== y) {
+      node.style.transform = 'translateY(' + y + 'px)';
+      node._y = y;
+    }
+    if (node.classList.contains('noanim')) {
+      // let the browser paint the initial position before enabling motion
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () { node.classList.remove('noanim'); });
+      });
+    }
+  }
+
+  function updateRow(node, e, now, caution, focusIdx, fastIdx) {
+    var c = e.car;
+    var d = PW.driver(c.i) || {};
+    var p = d.profile || null;
+    var q = node.children;
+
+    var pos = (classGaps() && c.cp) ? c.cp : c.p;
+    setText(q[0], pos > 0 ? pos : '');
+    q[1].style.background = d.classColor || 'var(--text-faint)';
+    setText(q[2], d.num != null ? d.num : '');
+
+    var nm = q[3];
+    var flagTxt = p && p.country ? PW.flag(p.country) : '';
+    setText(nm.children[0], flagTxt);
+    nm.children[0].style.display = flagTxt ? '' : 'none';
+    setText(nm.children[1], PW.displayName(c.i));
+
+    // sector pips: green where the last lap's sector was a personal best
+    var secs = q[4];
+    var n = (PW.meta.sectors || []).length || (c.sec || []).length;
+    if (secs.children.length !== n) {
+      secs.innerHTML = '';
+      for (var k = 0; k < n; k++) secs.appendChild(document.createElement('i'));
+    }
+    for (var j = 0; j < secs.children.length; j++) {
+      // a car's very first timed lap is trivially "all personal bests"
+      var pb = (c.lc || 0) > 1 && !!(c.secb && c.secb[j]) && c.sec && c.sec[j] != null;
+      secs.children[j].className = pb ? 'pbs' : '';
+    }
+
+    var pit = pitCell(c, now);
+    var v1 = pit || cellFor(c, OPT.col, caution);
+    cell(q[5], v1);
+    if (OPT.col2) cell(q[6], cellFor(c, OPT.col2, caution));
+
+    // purple on the name unless a BEST column is already carrying the purple
+    var bestCol = OPT.col === 'best' || OPT.col2 === 'best';
+    nm.children[1].className = 'dn' + (c.fast && !bestCol ? ' fastest' : '');
+
+    node.classList.toggle('is-pit', c.st === 'pit');
+    node.classList.toggle('is-stall', c.st === 'stall');
+    node.classList.toggle('is-out', c.st === 'out');
+    node.classList.toggle('is-focus', (OPT.focus || OPT.top > 0) && focusIdx != null && c.i === focusIdx);
+  }
+
+  function cell(node, v) {
+    setText(node, v.t);
+    var cls = 'cell num ' + (node.classList.contains('c2') ? 'c2 ' : 'c1 ') + (v.c || '');
+    if (node.className !== cls) node.className = cls;
+  }
+
+  function setText(node, t) {
+    t = t == null ? '' : String(t);
+    if (node.textContent !== t) node.textContent = t;
+  }
+
+  function capacity() {
+    var scale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--scale')) || 1;
+    var avail = (window.innerHeight / scale) - (OPT.header ? (elHead.offsetHeight + 6) : 0) - 2;
+    return Math.max(1, Math.floor(avail / rowH()));
+  }
+
+  function render() {
+    if (!PW.meta || !PW.tick) { document.body.classList.remove('ready'); return; }
+    document.body.classList.add('ready');
+    var s = PW.tick.session || {};
+    document.documentElement.classList.toggle('mc', !!PW.multiclass());
+    document.body.classList.toggle('single-class', !PW.multiclass());
+    renderHead(s);
+
+    var cars = PW.cars().filter(function (c) { return c.p > 0 || c.lp > 0; });
+    pruneStalls(cars);
+
+    lapsToAhead = {};
+    var order = cars.slice().sort(function (a, b) { return (a.p || 99) - (b.p || 99); });
+    for (var oi = 1; oi < order.length; oi++) {
+      lapsToAhead[order[oi].i] = Math.max(0, (order[oi].ld || 0) - (order[oi - 1].ld || 0));
+    }
+
+    var entries = entriesFor(cars);
+    var cap = OPT.rows > 0 ? OPT.rows : capacity();
+    var focusIdx = (OPT.focus || OPT.top > 0) ? PW.focusIdx() : null;
+    var items = layout(entries, cap, focusIdx);
+
+    var now = PW.tick.t || (Date.now() / 1000);
+    var caution = !!s.caution;
+    var fastIdx = (PW.tick.fastest || {}).idx;
+
+    // Rows are placed by transform, so DOM order is free. Reconcile in a
+    // stable key order instead of running order: re-inserting a node cancels
+    // its running transition, and the car being overtaken would snap rather
+    // than slide. Membership changes still create and remove rows normally.
+    var stable = items.slice().sort(function (a, b) {
+      return a.key < b.key ? -1 : (a.key > b.key ? 1 : 0);
+    });
+
+    PW.reconcile(elRows, stable,
+      function (e) { return e.key; },
+      function (e) {
+        return e.type === 'car' ? makeRow() : (e.type === 'head' ? makeHead(e) : makeSep());
+      },
+      function (node, e) {
+        if (e.type === 'car') updateRow(node, e, now, caution, focusIdx, fastIdx);
+        else if (e.type === 'head') {
+          var chip = node.children[0];
+          chip.textContent = e.cl.short || '';
+          chip.style.background = e.cl.color;
+          node.children[1].textContent = (e.cl.count || 0) + ' cars';
+          var f = (PW.tick.fastestByClass || {})[String(e.cl.id)];
+          node.children[2].textContent = f && f.time ? PW.fmtLap(f.time) : '';
+          node.children[2].className = 'cf num fastest';
+        }
+      });
+
+    var byKey = {};
+    Array.prototype.forEach.call(elRows.children, function (n) { byKey[n.dataset.key] = n; });
+
+    var y = 0;
+    for (var i = 0; i < items.length; i++) {
+      var node = byKey[items[i].key];
+      if (!node) continue;
+      place(node, y);
+      y += items[i].h;
+    }
+    elRows.style.height = y + 'px';
+  }
+
+  window.addEventListener('resize', render);
+  PW.on('meta', render);
+  PW.on('tick', render);
+  PW.start({ sub: ['meta', 'tick'], rate: 10, name: 'tower' });
+})();
+</script>
+</body>
+</html>

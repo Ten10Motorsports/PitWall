@@ -1,0 +1,1698 @@
+<title>PitWall Broadcast Showroom</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+
+<style>
+/* ---------------------------------------------------------------------------
+   PitWall — broadcast showroom.
+
+   A whole race, simulated in this page. No server, no install, no iRacing.
+   The graphics below are the real designs at real broadcast scale: the stage
+   is a true 1920x1080 canvas that gets scaled down to fit, so a tower that is
+   460px wide here is 460px wide in OBS.
+
+   Committed single dark theme on purpose — these graphics are built to sit on
+   dark video, and previewing them on white would misrepresent them.
+--------------------------------------------------------------------------- */
+:root {
+  /* showroom chrome */
+  --room:      #0c0d10;
+  --room-2:    #14161b;
+  --room-3:    #1c1f26;
+  --edge:      #262a33;
+  --edge-2:    #363c48;
+  --room-ink:  #e7eaee;
+  --room-ink2: #9aa3b0;
+  --room-ink3: #626b78;
+
+  /* the product's own palette — this is what ships */
+  --accent:    #e8443a;
+  --secondary: #12b8ff;
+  --panel:     12, 15, 19;
+  --panel-op:  .92;
+  --line:      rgba(255,255,255,.10);
+  --line-2:    rgba(255,255,255,.20);
+  --ink:       #f2f5f8;
+  --ink-dim:   #9aa6b4;
+  --ink-faint: #5f6b7a;
+  --green:     #35d07f;
+  --yellow:    #ffcc33;
+  --red:       #ff4d4d;
+  --purple:    #b06cff;
+
+  --chrome: 'Archivo', system-ui, sans-serif;
+  --ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--room);
+  color: var(--room-ink);
+  font-family: var(--ui);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap { max-width: 1500px; margin: 0 auto; padding: 0 24px 96px; }
+
+/* ------------------------------------------------------------------ header */
+
+header.top {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 34px 0 18px;
+  border-bottom: 2px solid var(--edge);
+  margin-bottom: 26px;
+}
+.brand { display: flex; align-items: center; gap: 13px; }
+.brand .bars { display: flex; flex-direction: column; gap: 3px; }
+.brand .bars i { display: block; height: 4px; border-radius: 1px; background: var(--room-ink3); }
+.brand .bars i:first-child { background: var(--accent); width: 30px; }
+.brand .bars i:nth-child(2) { width: 21px; }
+.brand .bars i:nth-child(3) { width: 26px; }
+.brand h1 {
+  font-family: var(--chrome); font-weight: 700; font-size: 27px;
+  letter-spacing: -.02em; margin: 0; line-height: 1;
+}
+.brand p {
+  margin: 4px 0 0; font-size: 11px; letter-spacing: .15em;
+  text-transform: uppercase; color: var(--room-ink3); font-weight: 600;
+}
+.livepill {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--chrome); font-size: 11px; font-weight: 600;
+  letter-spacing: .12em; text-transform: uppercase;
+  color: var(--room-ink2);
+  border: 1px solid var(--edge-2); border-radius: 100px;
+  padding: 6px 13px 6px 10px;
+}
+.livepill i {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent); display: block;
+  animation: pulse 2.4s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .35 } }
+
+.lede { max-width: 74ch; color: var(--room-ink2); margin: 0 0 24px; }
+.lede strong { color: var(--room-ink); font-weight: 600; }
+
+/* ------------------------------------------------------------------ layout */
+
+.room { display: grid; grid-template-columns: minmax(0,1fr) 268px; gap: 24px; align-items: start; }
+@media (max-width: 1080px) { .room { grid-template-columns: 1fr; } }
+
+/* ------------------------------------------------------------------- stage */
+
+.screen {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: #05070a;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 26px 60px -30px rgba(0,0,0,.9);
+}
+#feed { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#stage {
+  position: absolute; top: 0; left: 0;
+  width: 1920px; height: 1080px;
+  transform-origin: top left;
+  font-family: var(--ui);
+  color: var(--ink);
+}
+.feednote {
+  position: absolute; left: 14px; bottom: 12px; z-index: 40;
+  font-family: var(--chrome); font-size: 10px; letter-spacing: .12em;
+  text-transform: uppercase; color: rgba(255,255,255,.34);
+  pointer-events: none;
+}
+
+.caption {
+  display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  font-size: 12.5px; color: var(--room-ink3); margin: 10px 2px 0;
+}
+.caption .num { font-family: var(--mono); color: var(--room-ink2); }
+
+/* ------------------------------------------------------------------- rail */
+
+.rail { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 20px; }
+@media (max-width: 1080px) { .rail { position: static; } }
+
+.card {
+  background: var(--room-2);
+  border: 1px solid var(--edge);
+  border-radius: 7px;
+  padding: 15px 16px 17px;
+}
+.card h2 {
+  font-family: var(--chrome); font-size: 10.5px; font-weight: 600;
+  letter-spacing: .14em; text-transform: uppercase;
+  color: var(--room-ink3); margin: 0 0 12px;
+}
+
+.seg { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; }
+.seg button {
+  font-family: var(--ui); font-size: 12px; font-weight: 600;
+  color: var(--room-ink2); background: var(--room-3);
+  border: 1px solid var(--edge-2); border-radius: 5px;
+  padding: 8px 4px; cursor: pointer; transition: .12s;
+}
+.seg button:hover { color: var(--room-ink); border-color: #4b5462; }
+.seg button[aria-pressed="true"] { background: var(--accent); border-color: transparent; color: #fff; }
+
+.toggles { display: flex; flex-direction: column; gap: 2px; }
+.tg {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 8px; border-radius: 5px; cursor: pointer;
+  font-size: 13.5px; color: var(--room-ink2); user-select: none;
+}
+.tg:hover { background: var(--room-3); color: var(--room-ink); }
+.tg input { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; flex: none; }
+.tg .sz { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--room-ink3); }
+
+.row { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; font-size: 13px; color: var(--room-ink2); }
+.row:last-child { margin-bottom: 0; }
+.row label { flex: none; width: 62px; color: var(--room-ink3); font-size: 12px; }
+select, input[type=range] {
+  flex: 1; font: inherit; font-size: 12.5px;
+  color: var(--room-ink); background: var(--room-3);
+  border: 1px solid var(--edge-2); border-radius: 5px; padding: 6px 8px;
+}
+input[type=range] { padding: 0; accent-color: var(--accent); }
+
+.swatches { display: flex; gap: 7px; }
+.swatches button {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 2px solid transparent; cursor: pointer; padding: 0;
+}
+.swatches button[aria-pressed="true"] { border-color: var(--room-ink); }
+
+.acts { display: flex; flex-direction: column; gap: 7px; }
+.acts button {
+  font-family: var(--ui); font-size: 13px; font-weight: 500;
+  text-align: left; color: var(--room-ink2);
+  background: var(--room-3); border: 1px solid var(--edge-2);
+  border-radius: 5px; padding: 9px 11px; cursor: pointer; transition: .12s;
+}
+.acts button:hover { color: var(--room-ink); border-color: #4b5462; }
+.acts button.hot { color: var(--yellow); border-color: rgba(255,204,51,.4); }
+
+/* ---------------------------------------------------------------- hud strip */
+
+.hudroom { margin-top: 40px; }
+.hudroom > h2 {
+  font-family: var(--chrome); font-size: 19px; font-weight: 700;
+  letter-spacing: -.01em; margin: 0 0 4px;
+}
+.hudroom > p { color: var(--room-ink2); margin: 0 0 18px; max-width: 74ch; font-size: 14.5px; }
+.hudgrid {
+  display: grid; gap: 22px 26px;
+  grid-template-columns: repeat(2, 1fr);
+  background:
+    radial-gradient(120% 100% at 30% 0%, #17222c 0%, #0b1116 55%, #080b0e 100%);
+  border: 1px solid var(--edge); border-radius: 8px; padding: 20px;
+}
+.hudcell { display: flex; flex-direction: column; gap: 8px; }
+/* These are small widgets. Show them at the size they actually are rather
+   than stretching them across the cell. */
+.hudcell .hud { max-width: 330px; }
+.hudcell.wide .hud { max-width: 470px; }
+@media (max-width: 860px) { .hudgrid { grid-template-columns: 1fr; } }
+.hudcell .tagline {
+  font-family: var(--chrome); font-size: 10px; letter-spacing: .13em;
+  text-transform: uppercase; color: rgba(255,255,255,.38);
+}
+
+/* ================================ GRAPHICS ================================
+   Everything below is the shipped overlay design.
+=========================================================================== */
+
+.gfx { position: absolute; }
+.num, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.pnl {
+  background: rgba(var(--panel), var(--panel-op));
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  backdrop-filter: blur(6px);
+}
+
+/* ---- session bar ---- */
+#bar { top: 0; left: 0; width: 1920px; height: 96px; display: flex; align-items: stretch; }
+#bar .seg2 {
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 0 26px; border-right: 1px solid var(--line);
+  background: rgba(var(--panel), var(--panel-op));
+}
+#bar .seg2:first-child { border-left: 5px solid var(--accent); }
+#bar .k {
+  font-size: 10px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 600; margin-bottom: 3px;
+}
+#bar .v { font-size: 25px; font-weight: 600; line-height: 1.1; letter-spacing: -.01em; }
+#bar .v small { font-size: 15px; font-weight: 400; color: var(--ink-dim); margin-left: 6px; }
+#bar .flagblock {
+  display: flex; align-items: center; justify-content: center;
+  min-width: 210px; font-family: var(--chrome);
+  font-size: 24px; font-weight: 700; letter-spacing: .1em;
+}
+/* The panel background on .seg2 out-specifies the .f-* colour classes, so the
+   flag block has to reclaim it at matching specificity. */
+#bar .flagblock.f-green    { background: var(--green);  color: #04120a; }
+#bar .flagblock.f-yellow   { background: var(--yellow); color: #191204; }
+#bar .flagblock.f-red      { background: var(--red);    color: #fff; }
+#bar .flagblock.f-checkered{ background: repeating-conic-gradient(#fff 0% 25%, #111 0% 50%) 0 0 / 13px 13px; color: #fff; text-shadow: 0 0 4px #000; }
+#bar .grow { flex: 1; }
+#bar .fast { color: var(--purple); }
+
+/* ---- tower ---- */
+#tower { top: 116px; left: 0; width: 460px; }
+#tower .head {
+  background: rgba(var(--panel), .96); border: 1px solid var(--line);
+  border-bottom: none; border-radius: 4px 4px 0 0; padding: 11px 14px 10px;
+}
+#tower .head .r1 { display: flex; align-items: baseline; justify-content: space-between; }
+#tower .head .t { font-family: var(--chrome); font-size: 19px; font-weight: 700; letter-spacing: .01em; }
+#tower .head .laps { font-family: var(--mono); font-size: 17px; font-weight: 700; }
+#tower .head .laps small { font-size: 11px; color: var(--ink-faint); font-weight: 400; }
+#tower .strip {
+  margin-top: 9px; height: 22px; border-radius: 3px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--chrome); font-size: 12px; font-weight: 700; letter-spacing: .16em;
+}
+#tower .legend { display: flex; gap: 7px; margin-top: 9px; }
+#tower .chip {
+  font-size: 10px; font-weight: 700; letter-spacing: .07em;
+  padding: 2px 6px; border-radius: 3px; color: #05070a;
+}
+#tower .chip b { opacity: .62; margin-left: 4px; font-weight: 700; }
+#tower .cols {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 14px; font-size: 9.5px; letter-spacing: .13em;
+  text-transform: uppercase; color: var(--ink-faint); font-weight: 600;
+  background: rgba(var(--panel), .96);
+  border-left: 1px solid var(--line); border-right: 1px solid var(--line);
+}
+#tower .body {
+  position: relative;
+  background: rgba(var(--panel), var(--panel-op));
+  border: 1px solid var(--line); border-top: none;
+  border-radius: 0 0 4px 4px; overflow: hidden;
+}
+.trow {
+  position: absolute; left: 0; right: 0; height: 32px;
+  display: flex; align-items: center; gap: 8px; padding: 0 14px;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+  transition: transform .4s cubic-bezier(.4,0,.2,1);
+  font-size: 14px;
+}
+.trow.pit { background: rgba(255,204,51,.10); }
+.trow.stall { background: rgba(255,204,51,.19); }
+.trow.gone { opacity: .38; }
+.trow .p { width: 22px; text-align: right; font-family: var(--mono); font-size: 13.5px; color: var(--ink-dim); }
+.trow .cbar { width: 4px; height: 19px; border-radius: 2px; flex: none; }
+.trow .n {
+  min-width: 34px; text-align: center; font-family: var(--mono);
+  font-weight: 700; font-size: 12.5px; border-radius: 3px;
+  padding: 1px 5px; color: #0b0d10;
+}
+.trow .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.trow .nm .fl { margin-right: 5px; }
+.trow .d {
+  font-family: var(--mono); font-size: 13px; text-align: right;
+  width: 74px; flex: none; color: var(--ink);
+}
+.trow .d2 { width: 66px; color: var(--ink-dim); font-size: 12.5px; }
+.trow .pips { display: flex; gap: 2px; width: 26px; flex: none; }
+.trow .pips i { width: 6px; height: 3px; border-radius: 1px; background: rgba(255,255,255,.16); display: block; }
+.trow.fastest .nm { color: var(--purple); }
+.trow .d.yellow { color: var(--yellow); font-weight: 600; }
+.grouphdr {
+  position: absolute; left: 0; right: 0; height: 24px;
+  display: flex; align-items: center; gap: 8px; padding: 0 14px;
+  background: rgba(255,255,255,.05);
+  font-family: var(--chrome); font-size: 10.5px; font-weight: 600; letter-spacing: .14em;
+  transition: transform .4s cubic-bezier(.4,0,.2,1);
+}
+
+/* ---- driver card ---- */
+#card {
+  left: 520px; bottom: 64px; width: 700px;
+  display: flex; border-radius: 5px; overflow: hidden;
+  background: rgba(var(--panel), .95);
+  border: 1px solid var(--line);
+  transition: transform .38s cubic-bezier(.2,.8,.3,1), opacity .34s;
+}
+#card.out { transform: translateY(26px); opacity: 0; }
+#card .accentbar { width: 6px; flex: none; }
+#card .photo {
+  width: 118px; height: 118px; flex: none; margin: 16px 0 16px 16px;
+  border-radius: 5px; display: grid; place-items: center;
+  font-family: var(--chrome); font-size: 39px; font-weight: 700; color: #fff;
+}
+#card .info { padding: 16px 20px; flex: 1; min-width: 0; }
+#card .l1 { display: flex; align-items: center; gap: 11px; }
+#card .l1 .n {
+  font-family: var(--mono); font-weight: 700; font-size: 17px;
+  border-radius: 3px; padding: 2px 8px; color: #0b0d10;
+}
+#card .l1 h3 {
+  font-size: 31px; font-weight: 700; letter-spacing: -.015em;
+  margin: 0; text-transform: uppercase; line-height: 1.05;
+}
+#card .l2 { display: flex; align-items: center; gap: 9px; margin-top: 5px; font-size: 16px; color: var(--ink-dim); }
+#card .l2 .cls { font-size: 10px; font-weight: 700; letter-spacing: .07em; padding: 2px 6px; border-radius: 3px; color: #05070a; }
+#card .l3 { font-size: 12.5px; color: var(--ink-faint); margin-top: 3px; }
+#card .stats { display: flex; gap: 0; margin-top: 13px; border-top: 1px solid var(--line); padding-top: 11px; }
+#card .stat { padding-right: 22px; margin-right: 22px; border-right: 1px solid var(--line); }
+#card .stat:last-child { border: none; margin: 0; padding: 0; }
+#card .stat .k { font-size: 9.5px; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; }
+#card .stat .v { font-family: var(--mono); font-size: 17px; font-weight: 500; margin-top: 1px; }
+#card .bio { font-size: 13.5px; color: var(--ink-dim); margin-top: 11px; line-height: 1.45; }
+#card .lic { display: flex; gap: 9px; align-items: center; margin-top: 9px; font-size: 12px; color: var(--ink-faint); }
+#card .lic .b { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius: 3px; background: rgba(18,184,255,.16); color: var(--secondary); }
+
+/* ---- battle box ---- */
+#battle {
+  right: 60px; bottom: 70px; width: 470px;
+  border-radius: 5px; overflow: hidden;
+  background: rgba(var(--panel), .95); border: 1px solid var(--line);
+  transition: opacity .3s;
+}
+#battle .hd {
+  padding: 8px 14px; font-family: var(--chrome); font-size: 10.5px;
+  font-weight: 600; letter-spacing: .15em; color: var(--ink-faint);
+  border-bottom: 1px solid var(--line);
+  display: flex; justify-content: space-between;
+}
+#battle .b {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 14px; font-size: 15px;
+}
+#battle .b .p { font-family: var(--mono); font-size: 13px; color: var(--ink-dim); width: 22px; }
+#battle .b .n { min-width: 34px; text-align: center; font-family: var(--mono); font-weight: 700; font-size: 12.5px; border-radius: 3px; padding: 1px 5px; color: #0b0d10; }
+#battle .b .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#battle .gap {
+  padding: 7px 14px 11px; display: flex; align-items: center; gap: 12px;
+  border-top: 1px solid var(--line);
+}
+#battle .gap .v { font-family: var(--mono); font-size: 27px; font-weight: 700; letter-spacing: -.02em; }
+#battle .gap .t { font-family: var(--chrome); font-size: 10px; letter-spacing: .13em; color: var(--ink-faint); font-weight: 600; }
+#battle svg { flex: 1; height: 30px; }
+
+/* ---- track map ---- */
+#map { right: 60px; top: 130px; width: 380px; height: 380px; }
+#map svg { width: 100%; height: 100%; overflow: visible; }
+
+/* ---- standings board ---- */
+#board {
+  inset: 0; display: flex; flex-direction: column;
+  background: rgba(8,10,13,.93); padding: 54px 66px;
+}
+#board .bh { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 3px solid var(--accent); padding-bottom: 15px; }
+#board .bh h2 { font-family: var(--chrome); font-size: 46px; font-weight: 700; letter-spacing: -.02em; margin: 0; }
+#board .bh .sub { text-align: right; color: var(--ink-dim); font-size: 16px; line-height: 1.4; }
+#board .podium { display: flex; gap: 16px; margin: 22px 0 18px; }
+#board .pod { flex: 1; display: flex; align-items: center; gap: 13px; padding: 14px 17px; background: rgba(255,255,255,.05); border-radius: 5px; border-left: 4px solid var(--accent); }
+#board .pod .pl { font-family: var(--chrome); font-size: 34px; font-weight: 700; color: var(--ink-faint); }
+#board .pod .n { min-width: 40px; text-align: center; font-family: var(--mono); font-weight: 700; font-size: 15px; border-radius: 3px; padding: 2px 6px; color: #0b0d10; }
+#board .pod .who { min-width: 0; }
+#board .pod .who .a { font-size: 19px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#board .pod .who .b { font-size: 13px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#board .cols3 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 44px; flex: 1; align-content: start; }
+#board .brow { display: flex; align-items: center; gap: 11px; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,.07); font-size: 15px; }
+#board .brow .p { width: 26px; text-align: right; font-family: var(--mono); color: var(--ink-dim); font-size: 14px; }
+#board .brow .cbar { width: 4px; height: 17px; border-radius: 2px; }
+#board .brow .n { min-width: 34px; text-align: center; font-family: var(--mono); font-weight: 700; font-size: 12px; border-radius: 3px; padding: 1px 5px; color: #0b0d10; }
+#board .brow .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#board .brow .tm { color: var(--ink-faint); font-size: 12.5px; width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#board .brow .g { font-family: var(--mono); font-size: 13px; color: var(--ink-dim); width: 76px; text-align: right; }
+
+/* ---- HUD widgets ---- */
+.hud { border-radius: 4px; border: 1px solid var(--line); background: rgba(var(--panel), .93); overflow: hidden; }
+.hud .hh {
+  padding: 5px 10px; font-family: var(--chrome); font-size: 9.5px;
+  letter-spacing: .14em; color: var(--ink-faint); font-weight: 600;
+  border-bottom: 1px solid var(--line);
+}
+.rrow { display: flex; align-items: center; gap: 7px; padding: 4px 9px; font-size: 13px; border-bottom: 1px solid rgba(255,255,255,.04); }
+.rrow.me { background: rgba(18,184,255,.14); box-shadow: inset 3px 0 0 var(--secondary); }
+.rrow .cbar { width: 3px; height: 15px; border-radius: 2px; }
+.rrow .n { min-width: 30px; text-align: center; font-family: var(--mono); font-weight: 700; font-size: 11.5px; border-radius: 2px; padding: 0 4px; color: #0b0d10; }
+.rrow .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rrow .g { font-family: var(--mono); font-size: 12.5px; width: 48px; text-align: right; }
+.rrow.up .nm { color: var(--secondary); }
+.rrow.down .nm { color: var(--yellow); }
+
+.fuel { padding: 11px 12px 12px; }
+.fuel .big { font-family: var(--chrome); font-size: 34px; font-weight: 700; line-height: 1; letter-spacing: -.02em; }
+.fuel .big span { font-size: 15px; color: var(--ink-dim); font-weight: 500; }
+.fuel .cap { font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; margin-bottom: 4px; }
+.fuel .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 9px; margin-top: 12px; }
+.fuel .grid .k { font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; }
+.fuel .grid .v { font-family: var(--mono); font-size: 15px; margin-top: 1px; }
+.fuel .warnv { color: var(--red); }
+.tyres { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--line); }
+.ty { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--ink-faint); }
+.ty .bars { display: flex; gap: 2px; }
+.ty .bars i { width: 7px; height: 13px; border-radius: 1px; display: block; }
+
+.delta { padding: 11px 12px 13px; }
+.delta .v { font-family: var(--mono); font-size: 33px; font-weight: 700; text-align: center; letter-spacing: -.02em; line-height: 1; }
+.delta .track { position: relative; height: 9px; border-radius: 2px; background: rgba(255,255,255,.09); margin: 11px 0 9px; }
+.delta .track .mid { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: rgba(255,255,255,.4); }
+.delta .track .fill { position: absolute; top: 0; bottom: 0; border-radius: 2px; }
+.delta .secs { display: flex; gap: 5px; }
+.delta .secs i { flex: 1; height: 5px; border-radius: 1px; display: block; }
+.delta .laps { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--ink-faint); margin-top: 9px; }
+.delta .laps b { font-family: var(--mono); color: var(--ink-dim); font-weight: 500; }
+
+.inputs { padding: 0; }
+.inputs canvas { display: block; width: 100%; height: 96px; }
+.inputs .foot { display: flex; align-items: center; gap: 12px; padding: 7px 11px; border-top: 1px solid var(--line); }
+.inputs .gear { font-family: var(--chrome); font-size: 26px; font-weight: 700; line-height: 1; width: 26px; }
+.inputs .sp { font-family: var(--mono); font-size: 16px; }
+.inputs .sp small { font-size: 10px; color: var(--ink-faint); }
+.inputs .bars { display: flex; gap: 4px; margin-left: auto; height: 30px; align-items: flex-end; }
+.inputs .bars i { width: 9px; border-radius: 1px; display: block; }
+
+.flags { display: flex; align-items: stretch; height: 54px; }
+.flags .fl {
+  min-width: 128px; display: grid; place-items: center;
+  font-family: var(--chrome); font-size: 15px; font-weight: 700; letter-spacing: .13em;
+}
+.flags .cell { display: flex; flex-direction: column; justify-content: center; padding: 0 15px; border-right: 1px solid var(--line); }
+.flags .cell .k { font-size: 8.5px; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; }
+.flags .cell .v { font-family: var(--mono); font-size: 17px; }
+.flags .spot { margin-left: auto; display: flex; align-items: center; gap: 4px; padding: 0 12px; }
+.flags .spot i { width: 6px; height: 30px; border-radius: 2px; background: rgba(255,255,255,.12); display: block; }
+
+/* flag colours */
+.f-green { background: var(--green); color: #04120a; }
+.f-yellow { background: var(--yellow); color: #191204; }
+.f-red { background: var(--red); color: #fff; }
+.f-checkered { background: repeating-conic-gradient(#fff 0% 25%, #111 0% 50%) 0 0 / 13px 13px; color: #fff; text-shadow: 0 0 4px #000; }
+@keyframes fl { 0%,100% { opacity: 1 } 50% { opacity: .48 } }
+.flashing { animation: fl 1s ease-in-out infinite; }
+
+/* ------------------------------------------------------------------ notes */
+
+.footnote {
+  margin-top: 46px; padding-top: 20px; border-top: 2px solid var(--edge);
+  color: var(--room-ink3); font-size: 13.5px; max-width: 82ch;
+}
+.footnote code {
+  font-family: var(--mono); font-size: .9em; background: var(--room-3);
+  border: 1px solid var(--edge); border-radius: 3px; padding: 1px 5px; color: var(--room-ink2);
+}
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+@media (prefers-reduced-motion: reduce) { * { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+</style>
+
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <div class="bars"><i></i><i></i><i></i></div>
+      <div>
+        <h1>PitWall</h1>
+        <p>Broadcast Showroom</p>
+      </div>
+    </div>
+    <div class="livepill"><i></i> Simulated race &middot; running now</div>
+  </header>
+
+  <p class="lede">A full race is running inside this page right now &mdash; twenty-four cars in two classes, pit stops, a safety car, a fight for the lead. <strong>No server, no iRacing, nothing installed.</strong> The graphics below are the shipped designs at true broadcast scale: the stage is a real 1920&times;1080 canvas scaled to fit, so a tower that is 460px wide here is 460px wide in OBS.</p>
+
+  <div class="room">
+    <div>
+      <div class="screen">
+        <canvas id="feed"></canvas>
+        <div id="stage">
+
+          <!-- session bar -->
+          <div class="gfx" id="bar">
+            <div class="seg2"><div class="k">Track</div><div class="v" id="bTrack">&mdash;</div></div>
+            <div class="seg2"><div class="k">Session</div><div class="v" id="bSess">&mdash;</div></div>
+            <div class="seg2 flagblock" id="bFlag">GREEN</div>
+            <div class="seg2"><div class="k">Lap</div><div class="v" id="bLap">&mdash;</div></div>
+            <div class="seg2 grow"><div class="k">Fastest lap</div><div class="v fast" id="bFast">&mdash;</div></div>
+            <div class="seg2"><div class="k">Air / Track</div><div class="v" id="bTemp">&mdash;</div></div>
+            <div class="seg2"><div class="k">Field</div><div class="v" id="bSof">&mdash;</div></div>
+          </div>
+
+          <!-- tower -->
+          <div class="gfx" id="tower">
+            <div class="head">
+              <div class="r1">
+                <div class="t" id="tTitle">RACE</div>
+                <div class="laps" id="tLaps"></div>
+              </div>
+              <div class="strip f-green" id="tStrip">GREEN FLAG</div>
+              <div class="legend" id="tLegend"></div>
+            </div>
+            <div class="cols">
+              <span style="width:22px;text-align:right">Pos</span>
+              <span style="width:4px"></span>
+              <span style="min-width:34px;text-align:center">Car</span>
+              <span style="flex:1">Driver</span>
+              <span style="width:26px"></span>
+              <span style="width:74px;text-align:right" id="tColA">Gap</span>
+              <span style="width:66px;text-align:right;display:none" id="tColB">Last</span>
+            </div>
+            <div class="body" id="tBody"></div>
+          </div>
+
+          <!-- driver card -->
+          <div class="gfx out" id="card">
+            <div class="accentbar" id="cAccent"></div>
+            <div class="photo" id="cPhoto">AF</div>
+            <div class="info">
+              <div class="l1"><span class="n" id="cNum">00</span><h3 id="cName">&mdash;</h3></div>
+              <div class="l2"><span id="cFlag"></span><span id="cTeam"></span><span class="cls" id="cCls"></span></div>
+              <div class="l3" id="cMeta"></div>
+              <div class="stats" id="cStats"></div>
+              <div class="bio" id="cBio"></div>
+              <div class="lic"><span class="b" id="cLic"></span><span id="cIr"></span></div>
+            </div>
+          </div>
+
+          <!-- battle box -->
+          <div class="gfx" id="battle">
+            <div class="hd"><span>Battle for the lead</span><span id="btPos"></span></div>
+            <div class="b" id="btA"></div>
+            <div class="b" id="btB"></div>
+            <div class="gap">
+              <div><div class="t">Gap</div><div class="v" id="btGap">0.000</div></div>
+              <svg id="btSpark" viewBox="0 0 200 30" preserveAspectRatio="none"><polyline id="btLine" fill="none" stroke-width="2" points=""></polyline></svg>
+              <div style="text-align:right"><div class="t" id="btTrend">Holding</div></div>
+            </div>
+          </div>
+
+          <!-- track map -->
+          <div class="gfx" id="map">
+            <svg viewBox="0 0 100 100" id="mapSvg">
+              <path id="mapPath" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="1.6" stroke-linecap="round"></path>
+              <g id="mapTicks"></g>
+              <g id="mapCars"></g>
+            </svg>
+          </div>
+
+          <!-- standings board -->
+          <div class="gfx" id="board" style="display:none">
+            <div class="bh">
+              <h2 id="boTitle">CLASSIFICATION</h2>
+              <div class="sub" id="boSub"></div>
+            </div>
+            <div class="podium" id="boPodium"></div>
+            <div class="cols3" id="boRows"></div>
+          </div>
+
+        </div>
+        <div class="feednote">Programme feed &mdash; stand-in for your iRacing capture</div>
+      </div>
+
+      <div class="caption">
+        <span>Stage rendered at 1920&times;1080, scaled to fit &mdash; positions and sizes are exact.</span>
+        <span class="num" id="capLap"></span>
+      </div>
+    </div>
+
+    <aside class="rail">
+      <div class="card">
+        <h2>Scene</h2>
+        <div class="seg" id="sceneSeg">
+          <button data-scene="race" aria-pressed="true">Race</button>
+          <button data-scene="results" aria-pressed="false">Board</button>
+          <button data-scene="clean" aria-pressed="false">Clean</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Graphics</h2>
+        <div class="toggles" id="toggles">
+          <label class="tg"><input type="checkbox" data-gfx="bar" checked> Session bar <span class="sz">1920&times;120</span></label>
+          <label class="tg"><input type="checkbox" data-gfx="tower" checked> Timing tower <span class="sz">460&times;1080</span></label>
+          <label class="tg"><input type="checkbox" data-gfx="card" checked> Driver card <span class="sz">auto</span></label>
+          <label class="tg"><input type="checkbox" data-gfx="battle" checked> Battle box <span class="sz">auto</span></label>
+          <label class="tg"><input type="checkbox" data-gfx="map" checked> Track map <span class="sz">600&times;600</span></label>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Tower options</h2>
+        <div class="row"><label for="optCol">Column</label>
+          <select id="optCol">
+            <option value="gap">Gap to leader</option>
+            <option value="int">Interval</option>
+            <option value="last">Last lap</option>
+            <option value="best">Best lap</option>
+          </select>
+        </div>
+        <div class="row"><label for="optCol2">Second</label>
+          <select id="optCol2">
+            <option value="">None</option>
+            <option value="last">Last lap</option>
+            <option value="best">Best lap</option>
+            <option value="int">Interval</option>
+          </select>
+        </div>
+        <div class="row"><label for="optGroup">Group</label>
+          <select id="optGroup"><option value="none">Overall</option><option value="class">By class</option></select>
+        </div>
+        <div class="row"><label for="optNames">Names</label>
+          <select id="optNames">
+            <option value="short">A. Fenwick</option>
+            <option value="full">Alex Fenwick</option>
+            <option value="surname">FENWICK</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>League accent</h2>
+        <div class="swatches" id="swatches">
+          <button data-c="#e8443a" style="background:#e8443a" aria-pressed="true" title="Red"></button>
+          <button data-c="#12b8ff" style="background:#12b8ff" aria-pressed="false" title="Blue"></button>
+          <button data-c="#35d07f" style="background:#35d07f" aria-pressed="false" title="Green"></button>
+          <button data-c="#ff8800" style="background:#ff8800" aria-pressed="false" title="Orange"></button>
+          <button data-c="#b06cff" style="background:#b06cff" aria-pressed="false" title="Violet"></button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Race control</h2>
+        <div class="acts">
+          <button id="actCaution" class="hot">Throw a caution</button>
+          <button id="actFinish">Jump to the finish</button>
+          <button id="actRestart">Restart the race</button>
+        </div>
+        <div class="row" style="margin-top:12px"><label for="optSpeed">Speed</label>
+          <input type="range" id="optSpeed" min="1" max="30" value="10">
+          <span class="num" id="speedV" style="width:34px;text-align:right;font-size:12px">10&times;</span>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ============================= HUD ============================= -->
+  <section class="hudroom">
+    <h2>In-game HUD</h2>
+    <p>These are the widgets that sit over iRacing on the driver's screen, driven by the same race. In use they are transparent, always on top, and click-through, so they can never swallow a click meant for the sim. They also work as OBS sources on a second monitor.</p>
+    <div class="hudgrid">
+      <div class="hudcell">
+        <div class="tagline">Relative</div>
+        <div class="hud"><div class="hh">Relative</div><div id="hRel"></div></div>
+      </div>
+      <div class="hudcell">
+        <div class="tagline">Fuel &amp; tyres</div>
+        <div class="hud"><div class="hh">Fuel</div>
+          <div class="fuel">
+            <div class="cap">Add to finish</div>
+            <div class="big" id="fAdd">&mdash; <span>L</span></div>
+            <div class="grid">
+              <div><div class="k">In tank</div><div class="v" id="fTank">&mdash;</div></div>
+              <div><div class="k">Per lap</div><div class="v" id="fPer">&mdash;</div></div>
+              <div><div class="k">Laps left</div><div class="v" id="fLeft">&mdash;</div></div>
+              <div><div class="k">Race left</div><div class="v" id="fRace">&mdash;</div></div>
+              <div><div class="k">Stint</div><div class="v" id="fStint">&mdash;</div></div>
+              <div><div class="k">Spare</div><div class="v" id="fSpare">&mdash;</div></div>
+            </div>
+            <div class="tyres" id="fTyres"></div>
+          </div>
+        </div>
+      </div>
+      <div class="hudcell">
+        <div class="tagline">Delta</div>
+        <div class="hud"><div class="hh">Delta to best</div>
+          <div class="delta">
+            <div class="v" id="dV">&mdash;</div>
+            <div class="track"><div class="fill" id="dFill"></div><div class="mid"></div></div>
+            <div class="secs" id="dSecs"><i></i><i></i><i></i></div>
+            <div class="laps"><span>Last <b id="dLast">&mdash;</b></span><span>Best <b id="dBest">&mdash;</b></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="hudcell wide">
+        <div class="tagline">Inputs</div>
+        <div class="hud"><div class="hh">Inputs</div>
+          <div class="inputs">
+            <canvas id="inCanvas"></canvas>
+            <div class="foot">
+              <div class="gear" id="inGear">4</div>
+              <div class="sp"><span id="inSpd">0</span><small> km/h</small></div>
+              <div class="bars"><i id="inThr" style="background:var(--green)"></i><i id="inBrk" style="background:var(--red)"></i></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="hudcell wide">
+        <div class="tagline">Flags &amp; spotter</div>
+        <div class="hud">
+          <div class="flags">
+            <div class="fl f-green" id="hFlag">GREEN</div>
+            <div class="cell"><div class="k">Pos</div><div class="v" id="hPos">&mdash;</div></div>
+            <div class="cell"><div class="k">Inc</div><div class="v" id="hInc">&mdash;</div></div>
+            <div class="cell"><div class="k">To go</div><div class="v" id="hToGo">&mdash;</div></div>
+            <div class="spot"><i id="hL"></i><i id="hR"></i></div>
+          </div>
+        </div>
+      </div>
+      <div class="hudcell">
+        <div class="tagline">Standings</div>
+        <div class="hud"><div class="hh">Standings</div><div id="hStand"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <p class="footnote">
+    Everything here is generated in the browser from a simulated race, so the drivers, teams and times are invented. Against real telemetry the numbers come from iRacing and the layouts are identical. The one thing this preview cannot show is the self-building track map: on real data it reconstructs the actual circuit from the sim's GPS output, whereas the shape above is a synthetic circuit. To see the graphics on real data, run <code>run-demo.bat</code> for a synthetic race with the full engine, or <code>run.bat</code> with iRacing open.
+  </p>
+</div>
+
+<script>
+'use strict';
+/* ===========================================================================
+   A small race, simulated. Same model as the Python demo engine that ships
+   with PitWall: per-corner speed variation so lap distance is not linear in
+   time, tyre degradation, fuel burn, pit windows, one caution, and a finish.
+   =========================================================================== */
+
+var FIRST = ['Alex','Jamie','Morgan','Casey','Riley','Jordan','Taylor','Cameron','Devon','Quinn',
+             'Rowan','Sasha','Marco','Luca','Niels','Emil','Piet','Tomas','Ana','Ines','Kenji','Hiro','Diego','Mateo'];
+var LAST  = ['Whitcombe','Arkwright','Delacroix','Van Rijn','Okonkwo','Halvorsen','Mbeki','Rosetti','Fairbanks',
+             'Nakamura','Olsen','Petrov','Castellanos','Bergqvist','Dunmore','Kaczmarek','Sorrentino','Ferreira',
+             'Lindqvist','Achterberg','Novak','Ilves','Barlow','Renard'];
+var TEAMS = ['Ashgrove Motorsport','Northgate Racing','Vireo Competition','Kestrel Autosport','Blackwater GP',
+             'Ardent Racing Team','Meridian Sport','Fenwick Racing','Solstice Motorsport','Ravenline',
+             'Highfield Racing','Corvid Performance'];
+var CC = ['GB','US','DE','FR','IT','NL','ES','SE','AU','BR','JP','PL','BE','FI','CA','NZ'];
+
+var CLASSES = [
+  { id: 1, short: 'GT3', color: '#fe3b1f', est: 138, count: 14 },
+  { id: 2, short: 'GT4', color: '#33c9ff', est: 156, count: 10 }
+];
+
+var PROFILE = [1.00,1.28,1.34,0.62,0.70,1.15,1.30,1.32,0.55,0.68,0.95,1.10,
+               1.22,0.72,0.60,0.88,1.18,1.30,1.36,0.65,0.75,1.05,1.20,1.10];
+(function normalise() {
+  var m = 0, i;
+  for (i = 0; i < PROFILE.length; i++) m += 1 / PROFILE[i];
+  m /= PROFILE.length;
+  for (i = 0; i < PROFILE.length; i++) PROFILE[i] *= m;
+}());
+var PROF_TOTAL = (function () { var t = 0; for (var i = 0; i < PROFILE.length; i++) t += 1 / PROFILE[i]; return t; }());
+
+var SECTORS = [0, 0.3153, 0.6944];
+var RACE_LAPS = 34;
+
+/* Deterministic RNG so the same race runs for everyone who opens this page. */
+function rng(seed) {
+  var s = seed >>> 0;
+  return function () {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+var R = rng(20260909);
+function pick(a) { return a[Math.floor(R() * a.length)]; }
+function gauss(mu, sd) {
+  var u = 1 - R(), v = R();
+  return mu + sd * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+/* ------------------------------------------------------------------- cars */
+
+var cars = [], sim, playerIdx;
+
+function buildField() {
+  cars = [];
+  var num = 2;
+  CLASSES.forEach(function (cls) {
+    for (var i = 0; i < cls.count; i++) {
+      var name = pick(FIRST) + ' ' + pick(LAST);
+      cars.push({
+        cls: cls,
+        num: String(num),
+        name: name,
+        initials: name.split(' ').map(function (w) { return w[0]; }).join(''),
+        team: pick(TEAMS),
+        cc: pick(CC),
+        ir: Math.max(700, Math.round(gauss(cls.short === 'GT3' ? 2500 : 1700, 650))),
+        pace: gauss(1, 0.008),
+        cons: Math.abs(gauss(0.004, 0.002)),
+        pct: 0, lap: 1, lapStart: 0,
+        last: null, best: null,
+        sec: [null, null, null], pbsec: [null, null, null], secMark: [0, null, null],
+        onPit: false, stall: false, pitUntil: 0, stops: 0,
+        nextPit: 9 + Math.floor(R() * 7),
+        fuel: 100, tyreAge: 0, inc: 0, retired: false,
+        est: 0, pos: 0, cpos: 0, gl: null, iv: null, ld: 0, stintStart: 1
+      });
+      num += 1 + Math.floor(R() * 4);
+    }
+  });
+  cars.sort(function (a, b) {
+    var ci = CLASSES.indexOf(a.cls) - CLASSES.indexOf(b.cls);
+    return ci !== 0 ? ci : a.pace - b.pace;
+  });
+  cars.forEach(function (c, i) { c.idx = i; c.pct = 1 - i * 0.0016; c.lap = 0; });
+  playerIdx = 5;
+
+  /* A handful of drivers have submitted a profile. Everything degrades to the
+     iRacing data when one is absent — that is the point of showing both. */
+  var bios = [
+    'Third season in the league. Two poles this year, still cannot get out of the last chicane cleanly.',
+    'Came over from karting last winter. Quickest in the wet, by some distance.',
+    'Runs the team as well as driving for it. Has never once pitted on the lap the strategist asked for.',
+    'Endurance specialist. Has done more double stints this season than anyone in the field.',
+    'Rookie. Qualified third at the last round and nobody has stopped talking about it since.',
+    'Won the title two seasons ago and has been chasing the second one ever since.'
+  ];
+  [0, 2, 4, 5, 7, 11].forEach(function (i, k) {
+    if (!cars[i]) return;
+    cars[i].profile = {
+      bio: bios[k % bios.length],
+      pronouns: k % 2 ? 'she/her' : 'he/him',
+      hometown: 'Example City',
+      accent: cars[i].cls.color
+    };
+  });
+}
+
+function estTime(pct, lapTime) {
+  var n = PROFILE.length, full = pct * n, i = 0, acc = 0;
+  while (i < Math.floor(full)) { acc += 1 / PROFILE[i % n]; i++; }
+  acc += (full - Math.floor(full)) / PROFILE[Math.floor(full) % n];
+  return (acc / PROF_TOTAL) * lapTime;
+}
+
+function newSim() {
+  buildField();
+  return {
+    t: 0, flag: 'green', cautionUntil: -1, nextCaution: 260 + R() * 260,
+    finished: false, fastest: null, fuelLaps: [], lastFuel: 100, lastFuelLap: 0
+  };
+}
+
+function step(dt) {
+  if (sim.finished) { dt = 0; }
+  sim.t += dt;
+
+  if (sim.flag === 'yellow' && sim.t > sim.cautionUntil) sim.flag = 'green';
+  if (sim.flag === 'green' && sim.t > sim.nextCaution && !sim.finished) {
+    sim.flag = 'yellow';
+    sim.cautionUntil = sim.t + 60 + R() * 50;
+    sim.nextCaution = sim.t + 400 + R() * 500;
+  }
+  var caution = sim.flag === 'yellow';
+
+  cars.forEach(function (c) {
+    if (c.retired) return;
+    if (sim.t < c.pitUntil) { c.stall = true; c.onPit = true; return; }
+    if (c.stall) { c.stall = false; c.fuel = 100; c.tyreAge = 0; c.stops++; c.stintStart = c.lap; }
+
+    var lt = c.cls.est * c.pace;
+    lt *= 1 + gauss(0, c.cons);
+    lt *= 1 + c.tyreAge * 0.0011;
+    if (caution) lt *= 1.9;
+    if (c.onPit) lt *= 1.24;
+
+    var seg = Math.floor(c.pct * PROFILE.length) % PROFILE.length;
+    var rel = (caution || c.onPit) ? 1 : PROFILE[seg];
+
+    var prev = c.pct;
+    c.pct += (dt / lt) * rel;
+    c.fuel = Math.max(0, c.fuel - (dt / lt) * 3.1);
+    if (R() < 0.00006) c.inc += 1;
+
+    /* sector crossings */
+    for (var s = 1; s < SECTORS.length; s++) {
+      if (prev < SECTORS[s] && c.pct >= SECTORS[s] && c.secMark[s] == null) {
+        c.secMark[s] = sim.t;
+        c.sec[s - 1] = sim.t - c.secMark[s - 1];
+      }
+    }
+
+    if (c.pct >= 1) {
+      c.pct -= 1;
+      c.lap++;
+      c.tyreAge++;
+      if (c.secMark[SECTORS.length - 1] != null) c.sec[SECTORS.length - 1] = sim.t - c.secMark[SECTORS.length - 1];
+      var wasPit = c.onPit;
+      if (c.lapStart > 0) {
+        var t = sim.t - c.lapStart;
+        c.last = t;
+        if (!wasPit && !caution) {
+          if (c.best == null || t < c.best) c.best = t;
+          for (var k = 0; k < 3; k++) {
+            if (c.sec[k] != null && (c.pbsec[k] == null || c.sec[k] < c.pbsec[k])) c.pbsec[k] = c.sec[k];
+          }
+        }
+      }
+      c.lapStart = sim.t;
+      c.secMark = [sim.t, null, null];
+      c.sec = [c.sec[0], c.sec[1], c.sec[2]];
+      if (c.onPit) c.onPit = false;
+      if (c.lap >= c.nextPit && !caution && !sim.finished) {
+        c.onPit = true; c.stall = true;
+        c.pitUntil = sim.t + 22 + R() * 12;
+        c.nextPit = c.lap + 12 + Math.floor(R() * 6);
+      }
+    }
+  });
+
+  score();
+
+  var leader = order[0];
+  if (leader && leader.lap > RACE_LAPS && !sim.finished) { sim.finished = true; sim.flag = 'checkered'; }
+}
+
+var order = [];
+function score() {
+  var live = cars.filter(function (c) { return !c.retired; });
+  live.forEach(function (c) { c.est = estTime(c.pct, c.cls.est * c.pace); c.tp = c.lap + c.pct; });
+  live.sort(function (a, b) { return b.tp - a.tp; });
+  order = live;
+
+  var perClass = {};
+  live.forEach(function (c, i) {
+    c.pos = i + 1;
+    perClass[c.cls.id] = (perClass[c.cls.id] || 0) + 1;
+    c.cpos = perClass[c.cls.id];
+  });
+
+  var caution = sim.flag === 'yellow';
+  var leader = live[0];
+  live.forEach(function (c, i) {
+    c.ld = leader ? Math.max(0, Math.floor(leader.tp - c.tp)) : 0;
+    if (caution || !leader) { c.gl = null; c.iv = null; return; }
+    c.gl = c === leader ? 0 : wrap(leader.est - c.est, c.cls.est * c.pace);
+    var ahead = live[i - 1];
+    c.iv = ahead ? wrap(ahead.est - c.est, c.cls.est * c.pace) : null;
+  });
+
+  var f = null;
+  live.forEach(function (c) { if (c.best != null && (!f || c.best < f.best)) f = c; });
+  sim.fastest = f;
+
+  /* fuel model for the player's car */
+  var p = cars[playerIdx];
+  if (p && p.lap !== sim.lastFuelLap) {
+    if (sim.lastFuel > p.fuel && !p.onPit) {
+      var used = sim.lastFuel - p.fuel;
+      if (used > 0.05 && used < 30) { sim.fuelLaps.push(used); if (sim.fuelLaps.length > 8) sim.fuelLaps.shift(); }
+    }
+    sim.lastFuel = p.fuel;
+    sim.lastFuelLap = p.lap;
+  }
+}
+function wrap(d, lap) { if (d < 0) d += lap; return d; }
+
+/* ========================================================================= */
+/*                                RENDERING                                  */
+/* ========================================================================= */
+
+var $ = function (id) { return document.getElementById(id); };
+var opts = { scene: 'race', col: 'gap', col2: '', group: 'none', names: 'short', speed: 10 };
+var gfxOn = { bar: 1, tower: 1, card: 1, battle: 1, map: 1 };
+
+function fmtLap(s, p) {
+  if (s == null || s <= 0) return '';
+  p = p == null ? 3 : p;
+  var m = Math.floor(s / 60), r = s - m * 60, rs = r.toFixed(p);
+  if (r < 10) rs = '0' + rs;
+  return m > 0 ? m + ':' + rs : rs;
+}
+function fmtGap(s, ld) {
+  if (ld > 0) return '+' + ld + 'L';
+  if (s == null) return '—';
+  if (s <= 0.0005) return '';
+  return '+' + s.toFixed(s >= 100 ? 1 : 3);
+}
+function flagEmoji(cc) {
+  if (!cc || cc.length !== 2) return '';
+  return String.fromCodePoint(0x1f1e6 + cc.charCodeAt(0) - 65, 0x1f1e6 + cc.charCodeAt(1) - 65);
+}
+function nameOf(c) {
+  var p = c.name.split(' ');
+  if (opts.names === 'full') return c.name;
+  if (opts.names === 'surname') return p[p.length - 1].toUpperCase();
+  return p[0][0] + '. ' + p.slice(1).join(' ');
+}
+function sof() {
+  var br = 1600 / Math.log(2), tot = 0, n = 0;
+  cars.forEach(function (c) { if (!c.retired) { tot += Math.exp(-c.ir / br); n++; } });
+  return n && tot > 0 ? Math.round(br * Math.log(n / tot)) : 0;
+}
+
+/* ------------------------------------------------------------ session bar */
+
+function drawBar() {
+  $('bTrack').innerHTML = 'Sandmoor Park <small>Grand Prix</small>';
+  $('bSess').innerHTML = 'RACE <small>' + (sim.finished ? 'Finished' : sim.flag === 'yellow' ? 'Caution' : 'Green') + '</small>';
+  var leader = order[0];
+  var lapsDone = leader ? Math.min(leader.lap, RACE_LAPS) : 0;
+  $('bLap').innerHTML = lapsDone + ' <small>/ ' + RACE_LAPS + '</small>';
+  $('bFast').innerHTML = sim.fastest
+    ? nameOf(sim.fastest) + ' <small>' + fmtLap(sim.fastest.best) + '</small>' : '—';
+  $('bTemp').innerHTML = '21.4&deg; <small>/ 31.8&deg;</small>';
+  $('bSof').innerHTML = sof() + ' <small>SoF</small>';
+
+  var fb = $('bFlag'), name = sim.flag.toUpperCase();
+  fb.className = 'seg2 flagblock f-' + sim.flag + (sim.flag === 'yellow' || sim.flag === 'red' ? ' flashing' : '');
+  fb.textContent = sim.finished ? 'CHEQUERED' : name;
+}
+
+/* ----------------------------------------------------------------- tower */
+
+var towerRows = {};
+function drawTower() {
+  $('tTitle').textContent = 'RACE';
+  var leader = order[0];
+  $('tLaps').innerHTML = (leader ? Math.min(leader.lap, RACE_LAPS) : 0) + '<small> / ' + RACE_LAPS + '</small>';
+
+  var strip = $('tStrip');
+  strip.className = 'strip f-' + sim.flag + (sim.flag === 'yellow' ? ' flashing' : '');
+  strip.textContent = sim.finished ? 'CHEQUERED FLAG' : sim.flag === 'yellow' ? 'CAUTION — GAPS HELD' : 'GREEN FLAG';
+
+  var leg = $('tLegend');
+  if (!leg.dataset.done) {
+    leg.innerHTML = '';
+    CLASSES.forEach(function (cl) {
+      var s = document.createElement('span');
+      s.className = 'chip';
+      s.style.background = cl.color;
+      s.innerHTML = cl.short + '<b>' + cl.count + '</b>';
+      leg.appendChild(s);
+    });
+    leg.dataset.done = '1';
+  }
+
+  $('tColA').textContent = { gap: 'Gap', int: 'Int', last: 'Last', best: 'Best' }[opts.col];
+  var cb = $('tColB');
+  cb.style.display = opts.col2 ? '' : 'none';
+  if (opts.col2) cb.textContent = { last: 'Last', best: 'Best', int: 'Int' }[opts.col2];
+
+  var body = $('tBody');
+  var rows = order.slice(0, 26);
+  var y = 0, seen = {}, groups = {};
+
+  if (opts.group === 'class') {
+    var byClass = {};
+    rows.forEach(function (c) { (byClass[c.cls.id] = byClass[c.cls.id] || []).push(c); });
+    rows = [];
+    CLASSES.forEach(function (cl) {
+      if (!byClass[cl.id]) return;
+      groups[cl.id] = y;
+      y += 24;
+      byClass[cl.id].slice(0, 14).forEach(function (c) { c._y = y; y += 32; rows.push(c); });
+    });
+  } else {
+    rows = rows.slice(0, 20);
+    rows.forEach(function (c) { c._y = y; y += 32; });
+  }
+  body.style.height = y + 'px';
+
+  /* class group headers */
+  CLASSES.forEach(function (cl) {
+    var id = 'gh' + cl.id, el = document.getElementById(id);
+    if (opts.group !== 'class' || groups[cl.id] === undefined) { if (el) el.remove(); return; }
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'grouphdr';
+      el.id = id;
+      el.innerHTML = '<span style="width:4px;height:12px;border-radius:2px;background:' + cl.color +
+        ';display:block"></span><span style="color:' + cl.color + '">' + cl.short + '</span>';
+      body.appendChild(el);
+    }
+    el.style.transform = 'translateY(' + groups[cl.id] + 'px)';
+  });
+
+  rows.forEach(function (c) {
+    seen[c.idx] = 1;
+    var el = towerRows[c.idx];
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'trow';
+      el.innerHTML = '<span class="p"></span><span class="cbar"></span><span class="n"></span>' +
+        '<span class="nm"></span><span class="pips"><i></i><i></i><i></i></span>' +
+        '<span class="d"></span><span class="d d2"></span>';
+      body.appendChild(el);
+      towerRows[c.idx] = el;
+    }
+    el.style.transform = 'translateY(' + c._y + 'px)';
+    el.className = 'trow' +
+      (c.stall ? ' stall' : c.onPit ? ' pit' : '') +
+      (sim.fastest === c ? ' fastest' : '');
+    el.children[0].textContent = opts.group === 'class' ? c.cpos : c.pos;
+    el.children[1].style.background = c.cls.color;
+    var n = el.children[2];
+    n.textContent = c.num;
+    n.style.background = c.cls.color;
+    el.children[3].innerHTML = (c.profile ? '<span class="fl">' + flagEmoji(c.cc) + '</span>' : '') + nameOf(c);
+
+    var pips = el.children[4].children;
+    for (var k = 0; k < 3; k++) {
+      var isPb = c.sec[k] != null && c.pbsec[k] != null && Math.abs(c.sec[k] - c.pbsec[k]) < 1e-6;
+      pips[k].style.background = isPb ? 'var(--green)' : c.sec[k] != null ? 'rgba(255,255,255,.30)' : 'rgba(255,255,255,.10)';
+    }
+
+    var d = el.children[5];
+    d.className = 'd';
+    if (c.stall) { d.textContent = ((sim.t - (c.pitUntil - 30)) > 0 ? Math.min(30, sim.t - (c.pitUntil - 30)).toFixed(1) : '0.0'); d.className = 'd yellow'; }
+    else if (c.onPit) { d.textContent = 'PIT'; d.className = 'd yellow'; }
+    else d.textContent = cellValue(c, opts.col);
+
+    var d2 = el.children[6];
+    d2.style.display = opts.col2 ? '' : 'none';
+    if (opts.col2) d2.textContent = cellValue(c, opts.col2);
+  });
+
+  Object.keys(towerRows).forEach(function (k) {
+    if (!seen[k]) { towerRows[k].remove(); delete towerRows[k]; }
+  });
+}
+
+function cellValue(c, which) {
+  if (which === 'gap') return c.pos === 1 ? '' : fmtGap(c.gl, c.ld);
+  if (which === 'int') return c.pos === 1 ? '' : fmtGap(c.iv, 0);
+  if (which === 'last') return fmtLap(c.last) || '—';
+  if (which === 'best') return fmtLap(c.best) || '—';
+  return '';
+}
+
+/* ----------------------------------------------------------- driver card */
+
+var cardCar = null, cardUntil = 0;
+function drawCard() {
+  var el = $('card');
+  if (!gfxOn.card || opts.scene !== 'race') { el.classList.add('out'); return; }
+
+  if (!cardCar || sim.t > cardUntil) {
+    var pool = order.slice(0, 10).filter(function (c) { return c.profile; });
+    if (!pool.length) pool = order.slice(0, 6);
+    cardCar = pool[Math.floor(R() * pool.length)];
+    cardUntil = sim.t + 90;
+    el.classList.add('out');
+    setTimeout(function () { if (gfxOn.card && opts.scene === 'race') el.classList.remove('out'); }, 380);
+  }
+  var c = cardCar;
+  if (!c) return;
+
+  var accent = (c.profile && c.profile.accent) || c.cls.color;
+  $('cAccent').style.background = accent;
+  var ph = $('cPhoto');
+  ph.textContent = c.initials;
+  ph.style.background = accent;
+  $('cNum').textContent = c.num;
+  $('cNum').style.background = c.cls.color;
+  $('cName').textContent = c.name;
+  $('cFlag').textContent = flagEmoji(c.cc);
+  $('cTeam').textContent = c.team;
+  var cls = $('cCls');
+  cls.textContent = c.cls.short;
+  cls.style.background = c.cls.color;
+  $('cMeta').textContent = c.profile ? (c.profile.pronouns + ' · ' + c.profile.hometown) : '';
+  $('cBio').textContent = c.profile ? c.profile.bio : '';
+  $('cBio').style.display = c.profile ? '' : 'none';
+  $('cLic').textContent = c.ir > 2500 ? 'A 3.05' : c.ir > 1600 ? 'B 3.44' : 'C 2.87';
+  $('cIr').textContent = 'iR ' + c.ir;
+
+  var stats = [
+    ['Pos', c.pos + (CLASSES.length > 1 ? '  (' + c.cls.short + ' ' + c.cpos + ')' : '')],
+    ['Last', fmtLap(c.last) || '—'],
+    ['Best', fmtLap(c.best) || '—'],
+    ['Gap', c.pos === 1 ? 'Leader' : (fmtGap(c.gl, c.ld) || '—')],
+    ['Stops', c.stops],
+    ['Inc', c.inc + 'x']
+  ];
+  $('cStats').innerHTML = stats.map(function (s) {
+    return '<div class="stat"><div class="k">' + s[0] + '</div><div class="v">' + s[1] + '</div></div>';
+  }).join('');
+}
+
+/* ------------------------------------------------------------ battle box */
+
+var gapHist = [];
+function drawBattle() {
+  var el = $('battle');
+  var best = null;
+  for (var i = 1; i < order.length; i++) {
+    var b = order[i], a = order[i - 1];
+    if (b.iv == null || b.iv > 1.6) continue;
+    if (b.ld !== a.ld || b.onPit || a.onPit) continue;
+    if (!best || b.iv < best.b.iv) best = { a: a, b: b };
+  }
+  if (!best || opts.scene !== 'race' || !gfxOn.battle) { el.style.opacity = 0; return; }
+  el.style.opacity = 1;
+
+  $('battle').querySelector('.hd span').textContent =
+    best.a.pos === 1 ? 'Battle for the lead' : 'Battle for P' + best.a.pos;
+  $('btPos').textContent = best.a.cls.short === best.b.cls.short ? best.a.cls.short : 'Mixed class';
+
+  function row(node, c) {
+    node.innerHTML = '<span class="p">P' + c.pos + '</span>' +
+      '<span class="n" style="background:' + c.cls.color + '">' + c.num + '</span>' +
+      '<span class="nm">' + flagEmoji(c.cc) + ' ' + nameOf(c) + '</span>';
+  }
+  row($('btA'), best.a);
+  row($('btB'), best.b);
+
+  var g = best.b.iv;
+  $('btGap').textContent = g.toFixed(3);
+  $('btGap').style.color = g < 0.35 ? 'var(--red)' : g < 0.7 ? 'var(--yellow)' : 'var(--ink)';
+
+  gapHist.push(g);
+  if (gapHist.length > 60) gapHist.shift();
+  var lo = Math.min.apply(null, gapHist), hi = Math.max.apply(null, gapHist);
+  var span = Math.max(0.08, hi - lo);
+  var pts = gapHist.map(function (v, i) {
+    return (i / Math.max(1, gapHist.length - 1) * 200).toFixed(1) + ',' + (28 - (v - lo) / span * 26).toFixed(1);
+  }).join(' ');
+  var line = $('btLine');
+  line.setAttribute('points', pts);
+  line.setAttribute('stroke', g < 0.35 ? '#ff4d4d' : g < 0.7 ? '#ffcc33' : '#9aa6b4');
+
+  var trend = gapHist.length > 12 ? gapHist[gapHist.length - 1] - gapHist[gapHist.length - 12] : 0;
+  $('btTrend').textContent = trend < -0.03 ? 'Closing' : trend > 0.03 ? 'Opening' : 'Holding';
+  $('btTrend').style.color = trend < -0.03 ? 'var(--red)' : 'var(--ink-faint)';
+}
+
+/* ------------------------------------------------------------- track map */
+
+var mapPts = (function () {
+  var out = [], N = 360;
+  for (var i = 0; i < N; i++) {
+    var t = i / N * Math.PI * 2;
+    var r = 0.34 + 0.10 * Math.sin(3 * t + 0.6) + 0.05 * Math.sin(5 * t + 2.1) + 0.03 * Math.cos(7 * t);
+    out.push([50 + r * Math.cos(t) * 118, 50 + r * Math.sin(t) * 82]);
+  }
+  return out;
+}());
+
+(function initMap() {
+  var d = 'M' + mapPts.map(function (p) { return p[0].toFixed(2) + ' ' + p[1].toFixed(2); }).join(' L') + ' Z';
+  $('mapPath').setAttribute('d', d);
+  var g = $('mapTicks');
+  SECTORS.forEach(function (s, i) {
+    var idx = Math.floor(s * mapPts.length) % mapPts.length;
+    var p = mapPts[idx], q = mapPts[(idx + 3) % mapPts.length];
+    var dx = q[0] - p[0], dy = q[1] - p[1], L = Math.hypot(dx, dy) || 1;
+    var nx = -dy / L, ny = dx / L, len = i === 0 ? 3.4 : 2.1;
+    var ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    ln.setAttribute('x1', p[0] - nx * len); ln.setAttribute('y1', p[1] - ny * len);
+    ln.setAttribute('x2', p[0] + nx * len); ln.setAttribute('y2', p[1] + ny * len);
+    ln.setAttribute('stroke', i === 0 ? 'rgba(255,255,255,.85)' : 'rgba(255,255,255,.35)');
+    ln.setAttribute('stroke-width', i === 0 ? 1.5 : 0.9);
+    g.appendChild(ln);
+  });
+}());
+
+var mapNodes = {};
+function drawMap() {
+  var g = $('mapCars'), seen = {};
+  order.forEach(function (c) {
+    seen[c.idx] = 1;
+    var f = c.pct * mapPts.length, i = Math.floor(f) % mapPts.length, fr = f - Math.floor(f);
+    var a = mapPts[i], b = mapPts[(i + 1) % mapPts.length];
+    var x = a[0] + (b[0] - a[0]) * fr, y = a[1] + (b[1] - a[1]) * fr;
+
+    var node = mapNodes[c.idx];
+    if (!node) {
+      node = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      var ci = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      ci.setAttribute('r', 3.1);
+      var tx = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      tx.setAttribute('text-anchor', 'middle');
+      tx.setAttribute('dy', '1.15');
+      tx.setAttribute('font-size', '3.1');
+      tx.setAttribute('font-family', 'JetBrains Mono, monospace');
+      tx.setAttribute('font-weight', '700');
+      tx.setAttribute('fill', '#0b0d10');
+      tx.textContent = c.num;
+      node.appendChild(ci); node.appendChild(tx);
+      g.appendChild(node);
+      mapNodes[c.idx] = node;
+    }
+    node.setAttribute('transform', 'translate(' + x.toFixed(2) + ',' + y.toFixed(2) + ')');
+    var circ = node.firstChild;
+    circ.setAttribute('fill', c.onPit ? 'rgba(0,0,0,.55)' : c.cls.color);
+    circ.setAttribute('stroke', c === cardCar ? '#fff' : c.onPit ? c.cls.color : 'rgba(0,0,0,.35)');
+    circ.setAttribute('stroke-width', c === cardCar ? 1.1 : 0.5);
+    node.lastChild.setAttribute('fill', c.onPit ? c.cls.color : '#0b0d10');
+  });
+  Object.keys(mapNodes).forEach(function (k) { if (!seen[k]) { mapNodes[k].remove(); delete mapNodes[k]; } });
+}
+
+/* -------------------------------------------------------- standings board */
+
+function drawBoard() {
+  var b = $('board');
+  if (opts.scene !== 'results') { b.style.display = 'none'; return; }
+  b.style.display = 'flex';
+  $('boTitle').textContent = sim.finished ? 'RESULTS' : 'CLASSIFICATION';
+  $('boSub').innerHTML = 'Sandmoor Park &middot; Grand Prix<br>Lap ' +
+    (order[0] ? Math.min(order[0].lap, RACE_LAPS) : 0) + ' of ' + RACE_LAPS + ' &middot; ' + order.length + ' cars';
+
+  $('boPodium').innerHTML = order.slice(0, 3).map(function (c, i) {
+    return '<div class="pod" style="border-left-color:' + c.cls.color + '">' +
+      '<span class="pl">' + (i + 1) + '</span>' +
+      '<span class="n" style="background:' + c.cls.color + '">' + c.num + '</span>' +
+      '<span class="who"><span class="a">' + flagEmoji(c.cc) + ' ' + c.name + '</span>' +
+      '<span class="b">' + c.team + '</span></span></div>';
+  }).join('');
+
+  $('boRows').innerHTML = order.slice(3, 27).map(function (c) {
+    return '<div class="brow"><span class="p">' + c.pos + '</span>' +
+      '<span class="cbar" style="background:' + c.cls.color + '"></span>' +
+      '<span class="n" style="background:' + c.cls.color + '">' + c.num + '</span>' +
+      '<span class="nm">' + flagEmoji(c.cc) + ' ' + nameOf(c) + '</span>' +
+      '<span class="tm">' + c.team + '</span>' +
+      '<span class="g">' + (fmtGap(c.gl, c.ld) || '—') + '</span></div>';
+  }).join('');
+}
+
+/* ------------------------------------------------------------------- HUD */
+
+function drawHud() {
+  var me = cars[playerIdx];
+  if (!me || me.retired) return;
+
+  /* relative */
+  var byTrack = order.slice().sort(function (a, b) { return a.tp - b.tp; });
+  var mi = byTrack.indexOf(me);
+  var slice = [];
+  for (var k = mi + 3; k >= mi - 3; k--) if (k >= 0 && k < byTrack.length) slice.push(byTrack[k]);
+  $('hRel').innerHTML = slice.map(function (c) {
+    var d = c === me ? 0 : wrapSigned(c.est - me.est, me.cls.est * me.pace);
+    var lapDiff = Math.round(c.tp - me.tp);
+    var cl = c === me ? ' me' : lapDiff > 0 ? ' up' : lapDiff < 0 ? ' down' : '';
+    return '<div class="rrow' + cl + '">' +
+      '<span class="cbar" style="background:' + c.cls.color + '"></span>' +
+      '<span class="n" style="background:' + c.cls.color + '">' + c.num + '</span>' +
+      '<span class="nm">' + nameOf(c) + (lapDiff ? ' <small style="opacity:.7">' + (lapDiff > 0 ? '+' : '') + lapDiff + 'L</small>' : '') + '</span>' +
+      '<span class="g">' + (c === me ? '—' : (c.onPit ? 'PIT' : (d > 0 ? '+' : '') + d.toFixed(1))) + '</span></div>';
+  }).join('');
+
+  /* fuel */
+  var per = sim.fuelLaps.length ? sim.fuelLaps.slice().sort(function (a, b) { return a - b; })[Math.floor(sim.fuelLaps.length / 2)] : null;
+  var lapsLeft = per ? me.fuel / per : null;
+  var raceLeft = Math.max(0, RACE_LAPS - (order[0] ? order[0].lap : 0) + 1);
+  var need = per ? Math.max(0, per * raceLeft * 1.02 - me.fuel) : null;
+  $('fAdd').innerHTML = (need == null ? '—' : need.toFixed(1)) + ' <span>L</span>';
+  $('fTank').textContent = me.fuel.toFixed(1);
+  $('fPer').textContent = per == null ? '—' : per.toFixed(2);
+  $('fLeft').textContent = lapsLeft == null ? '—' : lapsLeft.toFixed(1);
+  $('fRace').textContent = raceLeft;
+  $('fStint').textContent = Math.max(0, me.lap - me.stintStart);
+  var spare = lapsLeft == null ? null : lapsLeft - raceLeft;
+  var sp = $('fSpare');
+  sp.textContent = spare == null ? '—' : (spare >= 0 ? '+' : '') + spare.toFixed(1);
+  sp.className = 'v' + (spare != null && spare < 0 ? ' warnv' : '');
+
+  var wear = Math.max(0.35, 1 - me.tyreAge * 0.012);
+  $('fTyres').innerHTML = ['LF', 'RF', 'LR', 'RR'].map(function (corner, i) {
+    var w = wear - i * 0.012;
+    return '<div class="ty"><span>' + corner + '</span><span class="bars">' +
+      [0, 1, 2].map(function (j) {
+        var v = Math.max(0, Math.min(1, w - j * 0.01));
+        var col = v > 0.6 ? 'var(--green)' : v > 0.35 ? 'var(--yellow)' : 'var(--red)';
+        return '<i style="background:' + col + ';opacity:' + (0.35 + v * 0.65).toFixed(2) + '"></i>';
+      }).join('') + '</span></div>';
+  }).join('');
+
+  /* delta */
+  var dv = me.best ? (sim.t - me.lapStart) - estTime(me.pct, me.best) : null;
+  if (me.onPit || sim.flag === 'yellow') dv = null;
+  $('dV').textContent = dv == null ? '—' : (dv >= 0 ? '+' : '−') + Math.abs(dv).toFixed(2);
+  $('dV').style.color = dv == null ? 'var(--ink-faint)' : dv <= 0 ? 'var(--green)' : 'var(--red)';
+  var fill = $('dFill'), range = 1.5;
+  if (dv == null) { fill.style.width = '0'; }
+  else {
+    var f = Math.max(-1, Math.min(1, dv / range));
+    fill.style.background = dv <= 0 ? 'var(--green)' : 'var(--red)';
+    if (f < 0) { fill.style.left = (50 + f * 50) + '%'; fill.style.width = (-f * 50) + '%'; }
+    else { fill.style.left = '50%'; fill.style.width = (f * 50) + '%'; }
+  }
+  var sEls = $('dSecs').children;
+  for (var s = 0; s < 3; s++) {
+    var pb = me.sec[s] != null && me.pbsec[s] != null && Math.abs(me.sec[s] - me.pbsec[s]) < 1e-6;
+    sEls[s].style.background = me.sec[s] == null ? 'rgba(255,255,255,.10)' : pb ? 'var(--green)' : 'rgba(255,255,255,.28)';
+  }
+  $('dLast').textContent = fmtLap(me.last, 2) || '—';
+  $('dBest').textContent = fmtLap(me.best, 2) || '—';
+
+  /* flags strip */
+  var hf = $('hFlag');
+  hf.className = 'fl f-' + sim.flag + (sim.flag === 'yellow' ? ' flashing' : '');
+  hf.textContent = sim.finished ? 'FINISH' : sim.flag.toUpperCase();
+  $('hPos').textContent = me.pos + '/' + order.length;
+  $('hInc').textContent = me.inc + 'x';
+  $('hToGo').textContent = Math.max(0, RACE_LAPS - (order[0] ? order[0].lap : 0) + 1);
+  var near = slice.filter(function (c) {
+    return c !== me && Math.abs(wrapSigned(c.est - me.est, me.cls.est * me.pace)) < 0.9;
+  });
+  $('hL').style.background = near.length ? 'var(--yellow)' : 'rgba(255,255,255,.12)';
+  $('hR').style.background = near.length > 1 ? 'var(--yellow)' : 'rgba(255,255,255,.12)';
+
+  /* standings */
+  var start = Math.max(0, Math.min(order.length - 7, me.pos - 4));
+  $('hStand').innerHTML = order.slice(start, start + 7).map(function (c) {
+    return '<div class="rrow' + (c === me ? ' me' : '') + '">' +
+      '<span class="cbar" style="background:' + c.cls.color + '"></span>' +
+      '<span class="n" style="background:' + c.cls.color + '">' + c.num + '</span>' +
+      '<span class="nm">' + nameOf(c) + '</span>' +
+      '<span class="g">' + (c.pos === 1 ? 'LEAD' : (fmtGap(c.gl, c.ld) || '—')) + '</span></div>';
+  }).join('');
+}
+function wrapSigned(d, lap) {
+  while (d > lap / 2) d -= lap;
+  while (d < -lap / 2) d += lap;
+  return d;
+}
+
+/* ------------------------------------------------------------ inputs trace */
+
+var inCv = $('inCanvas'), inCtx = inCv.getContext('2d');
+var trace = { thr: [], brk: [] }, TRACE_N = 210;
+
+function drawInputs() {
+  var me = cars[playerIdx];
+  if (!me) return;
+  var fseg = me.pct * PROFILE.length;
+  var i0 = Math.floor(fseg) % PROFILE.length;
+  var i1 = (i0 + 1) % PROFILE.length;
+  var fr = fseg - Math.floor(fseg);
+  var rel = PROFILE[i0] + (PROFILE[i1] - PROFILE[i0]) * (fr * fr * (3 - 2 * fr));
+  var thr = Math.max(0, Math.min(1, (rel - 0.62) / 0.72));
+  var brk = Math.max(0, Math.min(1, (0.98 - rel) / 0.42));
+  if (me.onPit) { thr *= 0.3; brk *= 0.4; }
+  trace.thr.push(thr); trace.brk.push(brk);
+  if (trace.thr.length > TRACE_N) { trace.thr.shift(); trace.brk.shift(); }
+
+  var w = inCv.width = inCv.clientWidth * 2;
+  var h = inCv.height = 96 * 2;
+  inCtx.clearRect(0, 0, w, h);
+
+  inCtx.strokeStyle = 'rgba(255,255,255,.07)';
+  inCtx.lineWidth = 2;
+  for (var g = 1; g < 4; g++) {
+    inCtx.beginPath(); inCtx.moveTo(0, h * g / 4); inCtx.lineTo(w, h * g / 4); inCtx.stroke();
+  }
+
+  [['thr', '#35d07f'], ['brk', '#ff4d4d']].forEach(function (pair) {
+    var arr = trace[pair[0]];
+    inCtx.strokeStyle = pair[1];
+    inCtx.lineWidth = 4;
+    inCtx.beginPath();
+    for (var i = 0; i < arr.length; i++) {
+      var x = i / (TRACE_N - 1) * w;
+      var y = h - arr[i] * (h - 8) - 4;
+      i ? inCtx.lineTo(x, y) : inCtx.moveTo(x, y);
+    }
+    inCtx.stroke();
+  });
+
+  $('inThr').style.height = (4 + thr * 26) + 'px';
+  $('inBrk').style.height = (4 + brk * 26) + 'px';
+  $('inGear').textContent = Math.max(1, Math.min(6, 1 + Math.round(rel * 4)));
+  $('inSpd').textContent = Math.round(90 + rel * 150);
+}
+
+/* ------------------------------------------------------- programme feed */
+
+var feed = $('feed'), fctx = feed.getContext('2d'), feedT = 0;
+function drawFeed() {
+  var w = feed.width = feed.clientWidth;
+  var h = feed.height = feed.clientHeight;
+  if (!w || !h) return;
+  feedT += 0.016;
+
+  var sky = fctx.createLinearGradient(0, 0, 0, h * 0.62);
+  sky.addColorStop(0, '#20323f');
+  sky.addColorStop(1, '#3d4b52');
+  fctx.fillStyle = sky;
+  fctx.fillRect(0, 0, w, h * 0.62);
+
+  /* treeline */
+  fctx.fillStyle = '#16211f';
+  fctx.beginPath();
+  fctx.moveTo(0, h * 0.62);
+  for (var x = 0; x <= w; x += 22) {
+    var yy = h * 0.62 - 18 - Math.abs(Math.sin(x * 0.031 + 1.4)) * 30 - Math.sin(x * 0.011) * 14;
+    fctx.lineTo(x, yy);
+  }
+  fctx.lineTo(w, h * 0.62);
+  fctx.closePath();
+  fctx.fill();
+
+  /* tarmac */
+  var road = fctx.createLinearGradient(0, h * 0.62, 0, h);
+  road.addColorStop(0, '#33383c');
+  road.addColorStop(1, '#1b1e21');
+  fctx.fillStyle = road;
+  fctx.fillRect(0, h * 0.62, w, h * 0.38);
+
+  /* kerb, receding */
+  var speed = sim && sim.flag === 'yellow' ? 0.5 : 1.5;
+  for (var i = 0; i < 16; i++) {
+    var p = ((i / 16) + (feedT * speed) % (1 / 16)) % 1;
+    var y = h * 0.62 + Math.pow(p, 2.2) * h * 0.38;
+    var hh = Math.max(1.5, Math.pow(p, 2.2) * 16);
+    fctx.fillStyle = (i % 2 ? 'rgba(232,68,58,.30)' : 'rgba(255,255,255,.24)');
+    fctx.fillRect(0, y, w * 0.10, hh);
+    fctx.fillRect(w * 0.90, y, w * 0.10, hh);
+  }
+  /* centre line */
+  for (var j = 0; j < 10; j++) {
+    var pp = ((j / 10) + (feedT * speed) % (1 / 10)) % 1;
+    var yy2 = h * 0.62 + Math.pow(pp, 2.2) * h * 0.38;
+    var hh2 = Math.max(1.5, Math.pow(pp, 2.2) * 22);
+    fctx.fillStyle = 'rgba(255,255,255,.14)';
+    fctx.fillRect(w / 2 - Math.max(1, pp * 4), yy2, Math.max(2, pp * 8), hh2);
+  }
+
+  /* vignette so the graphics keep their contrast */
+  var vg = fctx.createRadialGradient(w / 2, h * 0.45, h * 0.2, w / 2, h * 0.5, h * 0.95);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(0,0,0,.48)');
+  fctx.fillStyle = vg;
+  fctx.fillRect(0, 0, w, h);
+}
+
+/* ------------------------------------------------------------------ loop */
+
+function fitStage() {
+  var screen = document.querySelector('.screen');
+  var k = screen.clientWidth / 1920;
+  $('stage').style.transform = 'scale(' + k + ')';
+}
+window.addEventListener('resize', fitStage);
+
+function applyVisibility() {
+  ['bar', 'tower', 'card', 'battle', 'map'].forEach(function (g) {
+    var el = $(g);
+    var show = gfxOn[g] && opts.scene === 'race';
+    if (g === 'card') { el.style.display = show ? 'flex' : 'none'; }
+    else el.style.display = show ? '' : 'none';
+  });
+}
+
+var last = performance.now();
+function frame(now) {
+  var real = Math.min(0.1, (now - last) / 1000);
+  last = now;
+  step(real * opts.speed);
+  drawFeed();
+  if (opts.scene !== 'clean') {
+    drawBar(); drawTower(); drawCard(); drawBattle(); drawMap(); drawBoard();
+  }
+  drawHud();
+  drawInputs();
+  var leader = order[0];
+  $('capLap').textContent = 'Lap ' + (leader ? Math.min(leader.lap, RACE_LAPS) : 0) + ' / ' + RACE_LAPS +
+    '  ·  ' + order.length + ' cars  ·  ' + (sim.finished ? 'finished' : sim.flag);
+  requestAnimationFrame(frame);
+}
+
+/* --------------------------------------------------------------- controls */
+
+$('sceneSeg').addEventListener('click', function (e) {
+  var b = e.target.closest('button'); if (!b) return;
+  opts.scene = b.dataset.scene;
+  Array.prototype.forEach.call(this.children, function (x) {
+    x.setAttribute('aria-pressed', x === b ? 'true' : 'false');
+  });
+  applyVisibility();
+});
+
+$('toggles').addEventListener('change', function (e) {
+  gfxOn[e.target.dataset.gfx] = e.target.checked ? 1 : 0;
+  applyVisibility();
+});
+
+$('optCol').addEventListener('change', function () { opts.col = this.value; });
+$('optCol2').addEventListener('change', function () { opts.col2 = this.value; });
+$('optGroup').addEventListener('change', function () {
+  opts.group = this.value;
+  Object.keys(towerRows).forEach(function (k) { towerRows[k].remove(); delete towerRows[k]; });
+});
+$('optNames').addEventListener('change', function () { opts.names = this.value; });
+
+$('swatches').addEventListener('click', function (e) {
+  var b = e.target.closest('button'); if (!b) return;
+  document.documentElement.style.setProperty('--accent', b.dataset.c);
+  Array.prototype.forEach.call(this.children, function (x) {
+    x.setAttribute('aria-pressed', x === b ? 'true' : 'false');
+  });
+});
+
+$('optSpeed').addEventListener('input', function () {
+  opts.speed = +this.value;
+  $('speedV').textContent = this.value + '×';
+});
+
+$('actCaution').addEventListener('click', function () {
+  if (sim.finished) return;
+  sim.flag = 'yellow';
+  sim.cautionUntil = sim.t + 70;
+  sim.nextCaution = sim.t + 600;
+});
+$('actFinish').addEventListener('click', function () {
+  if (sim.finished) return;
+  var leader = order[0];
+  var need = RACE_LAPS - leader.lap;
+  for (var i = 0; i < 900 && !sim.finished; i++) step(need > 2 ? 6 : 1);
+  opts.scene = 'results';
+  Array.prototype.forEach.call($('sceneSeg').children, function (x) {
+    x.setAttribute('aria-pressed', x.dataset.scene === 'results' ? 'true' : 'false');
+  });
+  applyVisibility();
+});
+$('actRestart').addEventListener('click', function () {
+  R = rng(Date.now() & 0xffff);
+  sim = newSim();
+  Object.keys(towerRows).forEach(function (k) { towerRows[k].remove(); delete towerRows[k]; });
+  Object.keys(mapNodes).forEach(function (k) { mapNodes[k].remove(); delete mapNodes[k]; });
+  gapHist = []; cardCar = null; cardUntil = 0;
+  $('tLegend').dataset.done = '';
+});
+
+/* ----------------------------------------------------------------- start */
+
+sim = newSim();
+/* Open on a race already in progress, so the first frame shows real gaps,
+   completed laps and a fastest lap rather than a grid of dashes. */
+for (var boot = 0; boot < 2600; boot++) step(0.55);
+fitStage();
+applyVisibility();
+requestAnimationFrame(frame);
+</script>

@@ -1,0 +1,27 @@
+{
+  "port": 8099,
+  "host": "0.0.0.0",
+  "tickRate": 20,
+  "openBrowser": true,
+
+  "league": {
+    "name": "Your League Name",
+    "logo": "",
+    "accent": "#e8443a",
+    "secondary": "#12b8ff",
+    "hashtag": "#YourLeague"
+  },
+
+  "battleThreshold": 1.2,
+
+  "roster": {
+    "_comment": "mode: local | github | url. For a league, point url at your roster.json on GitHub - see docs/GITHUB_HOSTING.md",
+    "mode": "local",
+    "repo": "your-org/your-league-roster",
+    "branch": "main",
+    "path": "roster.json",
+    "url": "https://raw.githubusercontent.com/your-org/your-league/main/roster.json",
+    "token": "",
+    "autoPullSeconds": 300
+  }
+}

@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PitWall — Battle Box</title>
+<link rel="stylesheet" href="../shared/base.css">
+<!--
+  Battle box — 1920x1080 transparent overlay.
+
+  Shows the closest on-track fight from PW.tick.battles (the engine already
+  computes them: {ahead, behind, gap, pos, sameClass}). Two cars head to head,
+  with the gap animated and shifting colour as it closes, plus a sparkline of
+  the last few seconds so you can see whether the fight is coming to the boil.
+
+  It hides itself above `max` seconds. A battle box showing a four second gap
+  is a lie, so there is a hard ceiling rather than a "closest of whatever".
+
+  Options (query string)
+    pick=closest   the smallest gap anywhere in the field.        (default)
+    pick=lead      only a fight for the outright lead.
+    pick=class     closest fight between two cars in the same class.
+    pick=<n>       the Nth battle in the engine's order (1-based).
+    pos=bl|br|tl|tr  corner to anchor to.                  default br
+    max=<sec>      hide entirely above this gap.           default 2.0
+    stack=<n>      show up to N battles stacked.           default 1
+    names=full|short|surname|abbrev                        default surname
+    hist=<sec>     seconds of gap history in the sparkline. default 8
+    scale=1.2      whole-graphic scale.      accent=%23ff0    opacity=0.9
+    bg=1           opaque background, for checking the layout outside OBS.
+    debug=1        show the connection pill.
+    server=http://host:port   when the page is not served by PitWall itself.
+-->
+<style>
+  #stage { position: absolute; width: 1920px; height: 1080px; top: 0; left: 0; }
+
+  #boxes {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 620px;
+  }
+  #boxes.bl { left: 72px; bottom: 74px; flex-direction: column-reverse; }
+  #boxes.br { right: 72px; bottom: 74px; flex-direction: column-reverse; }
+  #boxes.tl { left: 72px; top: 64px; }
+  #boxes.tr { right: 72px; top: 64px; }
+
+  .battle {
+    background: rgba(var(--panel), var(--panel-opacity));
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 14px 38px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    opacity: 0;
+    transform: translate3d(0, 14px, 0) scale(0.985);
+    transition: opacity 280ms ease, transform 340ms cubic-bezier(0.16, 0.84, 0.3, 1);
+    will-change: transform, opacity;
+  }
+  .battle.in { opacity: 1; transform: none; }
+  .battle.out { opacity: 0; transform: translate3d(0, 8px, 0) scale(0.99); }
+
+  .hd {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 12px 6px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.035);
+  }
+  .hd .t {
+    font-size: 11px; font-weight: 800; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--text);
+  }
+  .hd .t em { font-style: normal; color: var(--accent); }
+  .hd .chip {
+    font-size: 10px; font-weight: 800; letter-spacing: 0.08em;
+    padding: 2px 6px; border-radius: 3px; text-transform: uppercase;
+  }
+
+  .grid { display: flex; align-items: stretch; }
+  .cars { flex: 1 1 auto; min-width: 0; }
+
+  .car {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px;
+    min-width: 0;
+  }
+  .car + .car { border-top: 1px solid rgba(255, 255, 255, 0.07); }
+  .car .bar { width: 4px; align-self: stretch; border-radius: 2px; flex: 0 0 4px; }
+  .car .pos {
+    font-family: var(--mono); font-weight: 800; font-size: 15px;
+    color: var(--text-dim); min-width: 30px;
+  }
+  .car .plate {
+    font-family: var(--mono); font-weight: 800; font-size: 17px; line-height: 1;
+    padding: 5px 7px 4px; border-radius: 3px; min-width: 42px; text-align: center;
+  }
+  .car .flag { font-size: 16px; line-height: 1; }
+  .car .nm {
+    font-size: 22px; font-weight: 800; letter-spacing: -0.01em;
+    text-transform: uppercase;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    min-width: 0; flex: 1 1 auto;
+  }
+  .car .cls { font-size: 9px; font-weight: 800; letter-spacing: 0.08em; padding: 2px 5px; border-radius: 3px; }
+
+  /* gap column ---------------------------------------------------------- */
+  .gapcol {
+    flex: 0 0 168px;
+    border-left: 1px solid var(--line);
+    background: rgba(0, 0, 0, 0.25);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 8px 10px 9px;
+    gap: 4px;
+  }
+  .gapcol .k { font-size: 9px; font-weight: 800; letter-spacing: 0.14em; color: var(--text-faint); }
+  .gapcol .v {
+    font-family: var(--mono); font-weight: 800;
+    font-size: 34px; line-height: 1; letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    transition: color 220ms linear;
+  }
+  .gapcol .spark {
+    width: 138px; height: 24px; display: block;
+    background: rgba(255,255,255,0.05);
+    border-radius: 3px;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.07);
+  }
+  .gapcol .trend { font-size: 9px; font-weight: 800; letter-spacing: 0.12em; }
+  .trend.closing { color: var(--green); }
+  .trend.opening { color: var(--text-faint); }
+  .trend.holding { color: var(--text-dim); }
+</style>
+</head>
+<body class="overlay">
+  <div id="pw-status"></div>
+  <div id="root" class="scale-root">
+    <div id="stage"><div id="boxes"></div></div>
+  </div>
+
+<script src="../shared/pitwall.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  PW.applyChrome();
+
+  var PICK   = String(PW.opt('pick', 'closest')).toLowerCase();
+  var POS    = (function (p) { return /^(bl|br|tl|tr)$/.test(p) ? p : 'br'; })(PW.opt('pos', 'br'));
+  var MAXGAP = PW.optNum('max', 2.0);
+  var STACK  = Math.max(1, Math.min(6, PW.optNum('stack', 1)));
+  var NAMES  = PW.opt('names', 'surname');
+  var HIST_S = PW.optNum('hist', 8);
+
+  var boxes = document.getElementById('boxes');
+  boxes.className = POS;
+
+  /* ------------------------------------------------------------- helpers */
+  function ink(hex) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ''));
+    if (!m) return '#05070a';
+    var n = parseInt(m[1], 16);
+    var l = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+    return l > 0.6 ? '#05070a' : '#ffffff';
+  }
+  function countryOf(idx) {
+    var d = PW.driver(idx) || {};
+    var p = d.profile || {};
+    var c = p.country || d.club || '';
+    return /^[A-Za-z]{2}$/.test(c) ? c.toUpperCase() : '';
+  }
+  function mix(a, b, t) {
+    return [0, 1, 2].map(function (i) { return Math.round(a[i] + (b[i] - a[i]) * t); });
+  }
+  var C_CALM = [242, 245, 248], C_WARM = [255, 204, 51], C_HOT = [255, 77, 77];
+  /** Gap colour: calm white far apart, yellow approaching, red inside 0.25s. */
+  function gapColor(g) {
+    var rgb;
+    if (g >= 1.0) rgb = C_CALM;
+    else if (g >= 0.5) rgb = mix(C_WARM, C_CALM, (g - 0.5) / 0.5);
+    else rgb = mix(C_HOT, C_WARM, Math.max(0, (g - 0.15)) / 0.35);
+    return 'rgb(' + rgb.join(',') + ')';
+  }
+
+  /* -------------------------------------------------------- gap history */
+  var history = {};                 /* key -> [{t, g}] */
+  function push(key, gap) {
+    var now = performance.now() / 1000;
+    var h = history[key] || (history[key] = []);
+    if (!h.length || now - h[h.length - 1].t > 0.12) h.push({ t: now, g: gap });
+    while (h.length && now - h[0].t > HIST_S) h.shift();
+    return h;
+  }
+  /* Scaled to the recent range rather than to zero: a steady gap draws flat
+     along the middle, so any real movement is visible at a glance. */
+  function sparkPath(h, w, hgt) {
+    if (h.length < 2) return { line: '', area: '' };
+    var t0 = h[0].t, t1 = h[h.length - 1].t;
+    var span = Math.max(0.5, t1 - t0);
+    var mn = Infinity, mx = -Infinity;
+    h.forEach(function (p) { if (p.g < mn) mn = p.g; if (p.g > mx) mx = p.g; });
+    var pad = Math.max(0.05, (mx - mn) * 0.7);
+    var lo = mn - pad, hi = mx + pad;
+    var pts = h.map(function (p) {
+      var x = ((p.t - t0) / span) * w;
+      var y = hgt - ((p.g - lo) / (hi - lo)) * (hgt - 2) - 1;
+      return [x.toFixed(1), y.toFixed(1)];
+    });
+    var line = 'M' + pts.map(function (p) { return p[0] + ',' + p[1]; }).join('L');
+    var area = line + 'L' + w + ',' + hgt + 'L0,' + hgt + 'Z';
+    return { line: line, area: area };
+  }
+  function trendOf(h) {
+    if (h.length < 4) return 'holding';
+    var now = h[h.length - 1];
+    var ref = h[0];
+    for (var i = h.length - 1; i >= 0; i--) { if (now.t - h[i].t >= 3) { ref = h[i]; break; } }
+    var d = now.g - ref.g;
+    if (d < -0.04) return 'closing';
+    if (d > 0.04) return 'opening';
+    return 'holding';
+  }
+
+  /* --------------------------------------------------------- selection */
+  function selection() {
+    var all = (PW.tick && PW.tick.battles) || [];
+    var mc = PW.multiclass();
+    var list = all.filter(function (b) {
+      return b.gap !== null && b.gap !== undefined && b.gap <= MAXGAP &&
+             PW.carByIdx(b.ahead) && PW.carByIdx(b.behind);
+    });
+    var n = parseInt(PICK, 10);
+    if (!isNaN(n) && String(n) === PICK.replace(/^0+/, '')) {
+      var one = list[Math.max(0, n - 1)];
+      return one ? [one] : [];
+    }
+    if (PICK === 'lead') {
+      list = list.filter(function (b) {
+        var c = PW.carByIdx(b.ahead);
+        return c && c.p === 1;
+      });
+    } else if (PICK === 'class') {
+      list = list.filter(function (b) { return b.sameClass || !mc; });
+    }
+    list = list.slice().sort(function (a, b) { return a.gap - b.gap; });
+    return list.slice(0, STACK);
+  }
+
+  /* ---------------------------------------------------------- rendering */
+  function keyOf(b) { return b.ahead + '-' + b.behind; }
+
+  function carRow() {
+    var r = document.createElement('div');
+    r.className = 'car';
+    r.innerHTML =
+      '<div class="bar"></div>' +
+      '<div class="pos num"></div>' +
+      '<div class="plate num"></div>' +
+      '<div class="flag"></div>' +
+      '<div class="nm"></div>' +
+      '<div class="cls hide"></div>';
+    return r;
+  }
+
+  function create() {
+    var el = document.createElement('div');
+    el.className = 'battle';
+    el.innerHTML =
+      '<div class="hd"><div class="t"></div><div class="chip hide"></div></div>' +
+      '<div class="grid">' +
+        '<div class="cars"></div>' +
+        '<div class="gapcol">' +
+          '<div class="k">GAP</div>' +
+          '<div class="v">0.000</div>' +
+          '<svg class="spark" viewBox="0 0 138 24" preserveAspectRatio="none">' +
+            '<line x1="0" y1="12" x2="138" y2="12" stroke="rgba(255,255,255,0.10)" ' +
+              'stroke-width="1" stroke-dasharray="3 4"></line>' +
+            '<path class="sa" fill="rgba(255,255,255,0.10)" d=""></path>' +
+            '<path class="sl" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="1.6" ' +
+              'stroke-linejoin="round" stroke-linecap="round" d=""></path>' +
+          '</svg>' +
+          '<div class="trend holding">HOLDING</div>' +
+        '</div>' +
+      '</div>';
+    var cars = el.querySelector('.cars');
+    cars.appendChild(carRow());
+    cars.appendChild(carRow());
+    el._pw = { disp: null };
+    requestAnimationFrame(function () { requestAnimationFrame(function () { el.classList.add('in'); }); });
+    return el;
+  }
+
+  function fillCar(row, idx, car, showCls) {
+    var d = PW.driver(idx) || {};
+    var col = d.classColor || '#8894a4';
+    row.children[0].style.background = col;
+    row.children[1].textContent = car && car.p ? 'P' + car.p : '';
+    var plate = row.children[2];
+    plate.textContent = d.num || '—';
+    plate.style.background = col;
+    plate.style.color = ink(col);
+    var cc = countryOf(idx);
+    row.children[3].textContent = cc ? PW.flag(cc) : '';
+    row.children[3].classList.toggle('hide', !cc);
+    row.children[4].textContent = PW.displayName(idx, NAMES) || d.name || '';
+    var cls = row.children[5];
+    if (showCls && PW.multiclass() && d.classShort) {
+      cls.textContent = d.classShort;
+      cls.style.background = col;
+      cls.style.color = ink(col);
+      cls.classList.remove('hide');
+    } else {
+      cls.classList.add('hide');
+    }
+  }
+
+  function update(el, item) {
+    if (item.dying) { el.classList.add('out'); return; }
+    el.classList.remove('out');
+
+    var b = item.b;
+    var ca = PW.carByIdx(b.ahead), cb = PW.carByIdx(b.behind);
+    var da = PW.driver(b.ahead) || {};
+    var mc = PW.multiclass();
+
+    var title;
+    if (ca && ca.p === 1) title = 'BATTLE FOR <em>THE LEAD</em>';
+    else if (mc && b.sameClass && ca && ca.cp) title = 'BATTLE FOR <em>' + (da.classShort || 'CLASS') + ' P' + ca.cp + '</em>';
+    else if (ca && ca.p) title = 'BATTLE FOR <em>P' + ca.p + '</em>';
+    else title = 'ON TRACK BATTLE';
+    var hd = el.querySelector('.hd .t');
+    if (hd.dataset.t !== title) { hd.innerHTML = title; hd.dataset.t = title; }
+
+    var chip = el.querySelector('.hd .chip');
+    if (mc && !b.sameClass) {
+      chip.textContent = 'MIXED CLASS';
+      chip.style.background = 'rgba(255,255,255,0.12)';
+      chip.style.color = 'var(--text-dim)';
+      chip.classList.remove('hide');
+    } else if (mc && da.classShort) {
+      chip.textContent = da.classShort;
+      chip.style.background = da.classColor || '#8894a4';
+      chip.style.color = ink(da.classColor);
+      chip.classList.remove('hide');
+    } else {
+      chip.classList.add('hide');
+    }
+
+    /* Per-row class chips only earn their space in a mixed-class fight; when
+       both cars are in the same class the header chip already said it. */
+    var rows = el.querySelectorAll('.car');
+    fillCar(rows[0], b.ahead, ca, !b.sameClass);
+    fillCar(rows[1], b.behind, cb, !b.sameClass);
+
+    /* gap: animated toward the live value so the digits never jump */
+    var st = el._pw;
+    st.target = b.gap;
+    if (st.disp === null) st.disp = b.gap;
+
+    var h = push(keyOf(b), b.gap);
+    var sp = sparkPath(h, 138, 24);
+    el.querySelector('.sl').setAttribute('d', sp.line);
+    el.querySelector('.sa').setAttribute('d', sp.area);
+
+    var tr = trendOf(h);
+    var trEl = el.querySelector('.trend');
+    if (trEl.dataset.tr !== tr) {
+      trEl.dataset.tr = tr;
+      trEl.className = 'trend ' + tr;
+      trEl.textContent = tr.toUpperCase();
+    }
+  }
+
+  /* graceful exits: a battle that ends fades rather than vanishing */
+  var dying = {};
+  function paint() {
+    if (!PW.meta || !PW.tick) { boxes.innerHTML = ''; return; }
+    var sel = selection();
+    var live = {};
+    var items = sel.map(function (b) { live[keyOf(b)] = true; return { key: keyOf(b), b: b }; });
+
+    Object.keys(dying).forEach(function (k) {
+      if (live[k]) { clearTimeout(dying[k].timer); delete dying[k]; }
+    });
+    Array.prototype.forEach.call(boxes.children, function (node) {
+      var k = node.dataset.key;
+      if (!k || live[k] || dying[k]) return;
+      dying[k] = {
+        item: { key: k, b: node._pwBattle, dying: true },
+        timer: setTimeout(function () { delete dying[k]; paint(); }, 360)
+      };
+    });
+    Object.keys(dying).forEach(function (k) { items.push(dying[k].item); });
+
+    PW.reconcile(boxes, items, function (it) { return it.key; }, create,
+      function (node, it) { node._pwBattle = it.b; update(node, it); });
+  }
+
+  /* Smooth the displayed gap independently of the data rate. */
+  function animate() {
+    Array.prototype.forEach.call(boxes.children, function (el) {
+      var st = el._pw;
+      if (!st || st.target === undefined || st.target === null) return;
+      st.disp += (st.target - st.disp) * 0.22;
+      if (Math.abs(st.target - st.disp) < 0.0008) st.disp = st.target;
+      var v = el.querySelector('.v');
+      var txt = st.disp.toFixed(3);
+      if (v.textContent !== txt) v.textContent = txt;
+      v.style.color = gapColor(st.disp);
+      el.querySelector('.sl').setAttribute('stroke', gapColor(st.disp));
+    });
+    requestAnimationFrame(animate);
+  }
+  requestAnimationFrame(animate);
+
+  PW.on('meta', paint);
+  PW.on('tick', paint);
+  PW.on('close', function () { boxes.innerHTML = ''; });
+  PW.start({ sub: ['meta', 'tick'], rate: 15 });
+})();
+</script>
+</body>
+</html>

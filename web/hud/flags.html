@@ -1,0 +1,294 @@
+<!doctype html>
+<!--
+  PitWall — Flags & status (in-car HUD)
+  ---------------------------------------------------------------------------
+  The strip you cannot miss. Current flag across the whole width in the flag's
+  own colour, your position, your incident count against the limit, laps to
+  go, and — the ones that end races — black flag, meatball and repair
+  requirements, plus the engine warnings the sim raises (pit limiter, oil,
+  water, stall).
+
+  Down each edge is the spotter: `player.leftRight` rendered as a proximity
+  bar, one car alongside lighting the bar, two cars alongside doubling it. It
+  is on the outside edges deliberately, so it reads in peripheral vision while
+  you are looking somewhere else.
+
+  Flashing is reserved for two things: a red flag, and the first six seconds
+  of a new caution. Nothing else on this widget moves.
+
+  Recommended window: 440 x 58.
+
+  Query string options
+    spotter=0    hide the left/right proximity bars
+    warnings=0   hide the engine-warning chips (black/meatball still show)
+    h=PX         strip height (default 58)
+    car=N        ignored — status is always the local player's
+    scale=1.2    overall scale            (PW.applyChrome)
+    opacity=0.8  panel opacity            (PW.applyChrome)
+    server=URL   point at a PitWall on another machine (pitwall.js)
+
+  `revLimiterActive` is deliberately not shown: it is on every upshift and a
+  chip that is always lit is a chip nobody reads. The chips are ordered most
+  severe first and the strip shows as many as fit its width, so DSQ and a
+  black flag are never pushed off by a pit limiter.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PitWall — Flags</title>
+<link rel="stylesheet" href="../shared/base.css">
+<style>
+  #root { width: 100%; }
+  #strip { display: none; height: var(--h, 58px); overflow: hidden; }
+  body.ready #strip { display: flex; }
+
+  .spot {
+    flex: 0 0 9px;
+    background: rgba(255, 255, 255, 0.05);
+    position: relative;
+  }
+  .spot i {
+    position: absolute;
+    left: 1px; right: 1px;
+    top: 50%; bottom: 50%;
+    background: var(--yellow);
+    border-radius: 2px;
+    transition: top 0.10s linear, bottom 0.10s linear;
+  }
+  .spot.on i  { top: 18%; bottom: 18%; }
+  .spot.two i { top: 3%; bottom: 3%; background: var(--red); }
+  .spot.off { display: none; }
+
+  .mid { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+
+  .flagbar {
+    flex: 1.25 1 0;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    min-height: 0;
+  }
+  .flagbar .sub {
+    margin-left: auto;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.10em;
+    opacity: 0.8;
+  }
+
+  .info {
+    flex: 1 1 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 8px;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .stat { display: flex; align-items: baseline; gap: 3px; white-space: nowrap; }
+  .stat .k {
+    font-size: 8.5px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    color: var(--text-faint);
+  }
+  .stat .v {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .stat .v.warn { color: var(--yellow); }
+  .stat .v.bad  { color: var(--red); }
+  .stat .v small { font-size: 10px; color: var(--text-faint); font-weight: 700; }
+
+  .chips { margin-left: auto; display: flex; gap: 4px; overflow: hidden; }
+  .chip {
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.10em;
+    padding: 2px 5px;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+  .chip.bad  { background: var(--red); color: #fff; }
+  .chip.warn { background: var(--yellow); color: #191204; }
+  .chip.info { background: rgba(59, 130, 246, 0.25); color: #9dc4ff; }
+  .chip.black { background: #05070a; color: #fff; border: 1px solid var(--line-strong); }
+</style>
+</head>
+<body class="overlay">
+  <div id="pw-status"></div>
+  <div id="root" class="scale-root">
+    <div id="strip" class="panel">
+      <div class="spot" id="spL"><i></i></div>
+      <div class="mid">
+        <div class="flagbar flag-none" id="flagbar">
+          <span id="flagtxt">TRACK</span>
+          <span class="sub" id="flagsub"></span>
+        </div>
+        <div class="info">
+          <span class="stat"><span class="k">POS</span><span class="v num" id="pos">–</span></span>
+          <span class="stat"><span class="k">INC</span><span class="v num" id="inc">–</span></span>
+          <span class="stat"><span class="k">TO GO</span><span class="v num" id="togo">–</span></span>
+          <span class="chips" id="chips"></span>
+        </div>
+      </div>
+      <div class="spot" id="spR"><i></i></div>
+    </div>
+  </div>
+
+<script src="../shared/pitwall.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  PW.applyChrome();
+
+  var OPT = {
+    spotter:  PW.optBool('spotter', true),
+    warnings: PW.optBool('warnings', true),
+    height:   PW.optNum('h', 58)
+  };
+  document.getElementById('root').style.setProperty('--h', OPT.height + 'px');
+
+  var el = {};
+  ['strip', 'spL', 'spR', 'flagbar', 'flagtxt', 'flagsub', 'pos', 'inc', 'togo', 'chips']
+    .forEach(function (id) { el[id] = document.getElementById(id); });
+
+  if (!OPT.spotter) { el.spL.classList.add('off'); el.spR.classList.add('off'); }
+
+  var FLAGNAME = {
+    green: 'GREEN', yellow: 'YELLOW', red: 'RED', white: 'WHITE',
+    checkered: 'CHEQUERED', blue: 'BLUE', black: 'BLACK', none: 'TRACK'
+  };
+
+  /* Session flags that a driver must act on, most severe first. */
+  var SESSION_CHIPS = [
+    ['disqualify',  'DSQ',       'bad'],
+    ['black',       'BLACK FLAG','black'],
+    ['repair',      'MEATBALL',  'warn'],
+    ['furled',      'WARNING',   'warn'],
+    ['servicible',  'DAMAGED',   'warn'],
+    ['crossed',     'CROSSED',   'info'],
+    ['debris',      'DEBRIS',    'warn'],
+    ['blue',        'BLUE',      'info']
+  ];
+
+  /* Engine warnings worth a driver's attention. revLimiterActive omitted. */
+  var WARN_CHIPS = [
+    ['engineStalled',   'STALLED',   'bad'],
+    ['oilPressure',     'OIL PRESS', 'bad'],
+    ['fuelPressure',    'FUEL PRESS','bad'],
+    ['waterTemp',       'WATER',     'warn'],
+    ['oilTemp',         'OIL',       'warn'],
+    ['mandRepNeeded',   'REPAIR',    'warn'],
+    ['optRepNeeded',    'OPT REPAIR','info'],
+    ['pitSpeedLimiter', 'LIMITER',   'info']
+  ];
+
+  var cautionSince = -1;
+  var wasCaution = false;
+
+  function setText(node, t) {
+    t = (t == null || t === '') ? '–' : String(t);
+    if (node.textContent !== t) node.textContent = t;
+  }
+
+  function toGo(s, ref) {
+    if (s.lapsRemain != null && s.lapsRemain >= 0 && s.lapsRemain < 30000) {
+      return s.lapsRemain + 'L';
+    }
+    if (s.timeRemain != null && s.timeRemain >= 0 && s.timeRemain < 604800) {
+      return PW.fmtClock(s.timeRemain);
+    }
+    if (s.lapsTotal && s.raceLaps != null) {
+      return Math.max(0, s.lapsTotal - s.raceLaps) + 'L';
+    }
+    return null;
+  }
+
+  function render() {
+    var t = PW.tick;
+    if (!t || !PW.meta) { document.body.classList.remove('ready'); return; }
+    var s = t.session || {};
+    var p = t.player || {};
+    document.body.classList.add('ready');
+
+    /* ---- flag ---------------------------------------------------------- */
+    var caution = !!s.caution;
+    if (caution && !wasCaution) cautionSince = (t.t || Date.now() / 1000);
+    wasCaution = caution;
+    var flag = caution ? 'yellow' : (s.flag || 'none');
+    var name = caution ? 'CAUTION' : (FLAGNAME[flag] || String(flag).toUpperCase());
+    var cls = 'flagbar flag-' + flag;
+    var fresh = caution && cautionSince > 0 && ((t.t || 0) - cautionSince) < 6;
+    if (flag === 'red' || fresh) cls += ' flashing';
+    if (el.flagbar.className !== cls) el.flagbar.className = cls;
+    setText(el.flagtxt, name);
+    var sub = s.state && s.state !== 'Racing' ? s.state : '';
+    if (!sub && s.pitsOpen === false) sub = 'PITS CLOSED';
+    el.flagsub.textContent = sub;
+
+    /* ---- position / incidents / to go ---------------------------------- */
+    var mc = PW.multiclass();
+    var pos = mc ? p.classPos : p.pos;
+    var fieldN = mc ? ((PW.classOf(p.idx) || {}).count || 0)
+                    : ((PW.meta.event || {}).numStarters || PW.cars().length);
+    setText(el.pos, (pos != null && pos > 0)
+      ? String(pos) + (fieldN ? ' / ' + fieldN : '') : null);
+
+    var lim = (PW.meta.event || {}).incidentLimit;
+    var inc = (p.incidents != null && p.incidents >= 0) ? p.incidents : null;
+    setText(el.inc, inc == null ? null : (inc + (lim ? ' / ' + lim : 'x')));
+    el.inc.className = 'v num' +
+      (inc != null && lim ? (inc >= lim ? ' bad' : (inc >= lim * 0.75 ? ' warn' : '')) : '');
+
+    var ref = (p.lapBest > 0) ? p.lapBest : (p.lapLast > 0 ? p.lapLast : 0);
+    setText(el.togo, toGo(s, ref));
+
+    /* ---- chips --------------------------------------------------------- */
+    var have = {};
+    (s.flags || []).forEach(function (f) { have[f] = 1; });
+    var warn = {};
+    (p.warnings || []).forEach(function (w) { warn[w] = 1; });
+
+    var chips = [];
+    SESSION_CHIPS.forEach(function (c) { if (have[c[0]]) chips.push(c); });
+    if (OPT.warnings) WARN_CHIPS.forEach(function (c) { if (warn[c[0]]) chips.push(c); });
+    if (p.fastRepairs != null && (s.flags || []).indexOf('repair') >= 0 && p.fastRepairAvail > 0) {
+      chips.push(['fr', 'FR ' + p.fastRepairAvail, 'info']);
+    }
+
+    PW.reconcile(el.chips, chips,
+      function (c) { return c[0]; },
+      function () { return PW.el('span', 'chip'); },
+      function (node, c) {
+        if (node.textContent !== c[1]) node.textContent = c[1];
+        var k = 'chip ' + c[2];
+        if (node.className !== k) node.className = k;
+      });
+
+    /* ---- spotter ------------------------------------------------------- */
+    if (OPT.spotter) {
+      var lr = p.leftRight || 'off';
+      var left = (lr === 'carLeft' || lr === 'carLeftRight' || lr === 'twoCarsLeft');
+      var right = (lr === 'carRight' || lr === 'carLeftRight' || lr === 'twoCarsRight');
+      el.spL.className = 'spot' + (lr === 'twoCarsLeft' ? ' on two' : (left ? ' on' : ''));
+      el.spR.className = 'spot' + (lr === 'twoCarsRight' ? ' on two' : (right ? ' on' : ''));
+    }
+  }
+
+  PW.on('meta', render);
+  PW.on('tick', render);
+  PW.start({ sub: ['meta', 'tick'], rate: 10, name: 'flags' });
+})();
+</script>
+</body>
+</html>

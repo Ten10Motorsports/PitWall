@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>League Race Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Matches the setup handbook so the league's public pages read as one site. */
+:root {
+  --paper:#f7f5f3; --surface:#fff; --surface-2:#efece8;
+  --ink:#1b1917; --ink-2:#4a4541; --ink-3:#7d7772;
+  --rule:#ded8d2; --rule-2:#c9c2ba;
+  --accent:#d13b2e; --accent-ink:#9c2a20; --accent-wash:#fbeae8;
+  --info:#0e6b7d; --info-wash:#e2f0f2;
+  --go:#226b45; --go-wash:#e2f1e8;
+  --display:'Archivo','Helvetica Neue',Arial,sans-serif;
+  --body:'Public Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,Consolas,monospace;
+  --shadow:0 1px 2px rgba(27,25,23,.05), 0 8px 24px -12px rgba(27,25,23,.18);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:#17161a; --surface:#1e1d22; --surface-2:#26252b;
+    --ink:#f1eeea; --ink-2:#c0bab3; --ink-3:#8d867f;
+    --rule:#34323a; --rule-2:#46434c;
+    --accent:#f2604f; --accent-ink:#ff8878; --accent-wash:#33201d;
+    --info:#4ec2d6; --info-wash:#173034;
+    --go:#57c68c; --go-wash:#16301f;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"] {
+  --paper:#17161a; --surface:#1e1d22; --surface-2:#26252b;
+  --ink:#f1eeea; --ink-2:#c0bab3; --ink-3:#8d867f;
+  --rule:#34323a; --rule-2:#46434c;
+  --accent:#f2604f; --accent-ink:#ff8878; --accent-wash:#33201d;
+  --info:#4ec2d6; --info-wash:#173034;
+  --go:#57c68c; --go-wash:#16301f;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);
+     font-size:16.5px;line-height:1.62;-webkit-font-smoothing:antialiased}
+.wrap{max-width:940px;margin:0 auto;padding:0 26px 100px}
+
+header{border-bottom:3px solid var(--ink);padding:42px 0 22px;margin-bottom:34px;
+       display:flex;align-items:flex-end;justify-content:space-between;gap:22px;flex-wrap:wrap}
+.mark{display:flex;align-items:center;gap:13px}
+.mark .bars{display:flex;flex-direction:column;gap:3px}
+.mark .bars i{display:block;height:4px;border-radius:1px;background:var(--ink-3)}
+.mark .bars i:first-child{background:var(--accent);width:30px}
+.mark .bars i:nth-child(2){width:21px}
+.mark .bars i:nth-child(3){width:26px}
+.mark h1{font-family:var(--display);font-weight:700;font-size:29px;letter-spacing:-.02em;margin:0;line-height:1}
+.mark p{margin:4px 0 0;font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+        color:var(--ink-3);font-weight:600}
+header .right{font-size:13px;color:var(--ink-3);text-align:right}
+
+.lede{font-size:19px;line-height:1.55;color:var(--ink-2);margin:0 0 30px;max-width:66ch}
+.lede strong{color:var(--ink);font-weight:600}
+
+h2{font-family:var(--display);font-size:12px;font-weight:600;letter-spacing:.14em;
+   text-transform:uppercase;color:var(--ink-3);margin:38px 0 14px}
+
+/* Four cards: two rows of two, so none is stranded alone on a row. */
+.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+@media (max-width:700px){.cards{grid-template-columns:1fr}}
+.c{background:var(--surface);border:1px solid var(--rule);border-radius:7px;
+   padding:20px;display:flex;flex-direction:column;box-shadow:var(--shadow)}
+.c .who{font-family:var(--display);font-size:10.5px;font-weight:600;letter-spacing:.13em;
+        text-transform:uppercase;color:var(--accent);margin-bottom:7px}
+.c h3{font-family:var(--display);font-size:19px;font-weight:700;letter-spacing:-.01em;margin:0 0 7px}
+.c p{margin:0 0 16px;font-size:14.5px;color:var(--ink-2);flex:1}
+.c .install{font-size:12px;color:var(--ink-3);margin:-8px 0 14px;font-family:var(--mono)}
+a.btn{display:inline-block;text-align:center;font-weight:600;font-size:14.5px;
+      text-decoration:none;padding:10px 16px;border-radius:5px;
+      background:var(--accent);color:#fff;transition:filter .12s}
+a.btn:hover{filter:brightness(1.09)}
+a.btn.quiet{background:transparent;color:var(--ink);border:1px solid var(--rule-2)}
+a.btn.quiet:hover{background:var(--surface-2);filter:none}
+
+.note{border-left:3px solid var(--info);background:var(--info-wash);border-radius:0 5px 5px 0;
+      padding:14px 18px;margin:22px 0 0;font-size:15px}
+.note .tag{display:block;font-family:var(--display);font-size:10.5px;font-weight:600;
+           letter-spacing:.13em;text-transform:uppercase;color:var(--info);margin-bottom:5px}
+.note p{margin:0}
+
+/* roster */
+.roster{display:grid;grid-template-columns:repeat(auto-fill,minmax(238px,1fr));gap:11px}
+.d{display:flex;align-items:center;gap:11px;background:var(--surface);
+   border:1px solid var(--rule);border-radius:6px;padding:9px 12px;min-width:0}
+.d .av{width:38px;height:38px;border-radius:5px;flex:none;object-fit:cover;
+       display:grid;place-items:center;font-family:var(--display);font-weight:700;
+       font-size:14px;color:#fff;background:var(--accent)}
+.d .t{min-width:0}
+.d .n{font-weight:600;font-size:14.5px;line-height:1.3;overflow-wrap:anywhere}
+.d .s{font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.d .no{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--ink-3)}
+.empty{color:var(--ink-3);font-size:15px;background:var(--surface);border:1px dashed var(--rule-2);
+       border-radius:6px;padding:22px;text-align:center}
+
+footer{margin-top:52px;padding-top:20px;border-top:3px solid var(--ink);
+       font-size:13.5px;color:var(--ink-3)}
+footer code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);
+            border:1px solid var(--rule);border-radius:3px;padding:1px 5px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+@media (prefers-reduced-motion: reduce){*{transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="mark">
+      <div class="bars"><i></i><i></i><i></i></div>
+      <div><h1 id="leagueName">Race Hub</h1><p>Timing &middot; Broadcast &middot; Sign-up</p></div>
+    </div>
+    <div class="right" id="repoLine"></div>
+  </header>
+
+  <p class="lede">Everything for race night in one place. <strong>Drivers install nothing</strong> &mdash; sign up through the form below and you are done. Only whoever runs the broadcast needs the app.</p>
+
+  <h2>Start here</h2>
+  <div class="cards">
+
+    <div class="c">
+      <div class="who">Drivers</div>
+      <h3>Sign up</h3>
+      <p>Register once so your name, number, flag, photo and bio appear on the broadcast and the timing screen. Takes two minutes.</p>
+      <div class="install">Nothing to install</div>
+      <a class="btn" id="signupLink" href="#">Open the sign-up form</a>
+    </div>
+
+    <div class="c">
+      <div class="who">Broadcast &amp; race control</div>
+      <h3>Get the app</h3>
+      <p>One file. Double-click it and the control panel opens. No Python, no setup. Only one person per session needs this.</p>
+      <div class="install">Windows &middot; single .exe</div>
+      <a class="btn" id="downloadLink" href="#">Download the latest release</a>
+    </div>
+
+    <div class="c">
+      <div class="who">Everyone</div>
+      <h3>See it working</h3>
+      <p>A full race running in your browser, driving every graphic and HUD widget. No sim, no server, nothing installed.</p>
+      <div class="install">Opens in this browser</div>
+      <a class="btn quiet" href="preview.html">Open the showroom</a>
+    </div>
+
+    <div class="c">
+      <div class="who">Whoever sets it up</div>
+      <h3>Setup handbook</h3>
+      <p>Install, iRacing settings, OBS scenes, the second screen, the HUD, and a race day run sheet.</p>
+      <div class="install">Read in a browser</div>
+      <a class="btn quiet" href="setup.html">Open the handbook</a>
+    </div>
+
+  </div>
+
+  <div class="note">
+    <span class="tag">Why only one person needs the app</span>
+    <p>iRacing publishes its live timing data on the computer running the sim, so something has to read it there. Everyone else &mdash; stewards, engineers, spotters, a co-commentator on the same network &mdash; just opens a web page that the app serves.</p>
+  </div>
+
+  <h2>Entry list <span id="rosterCount" style="font-family:var(--mono);text-transform:none;letter-spacing:0"></span></h2>
+  <div id="roster" class="roster"></div>
+
+  <footer>
+    Timing, broadcast graphics and driver profiles for iRacing leagues. The roster on this page is
+    built automatically from sign-ups &mdash; edit your own issue to change your entry.
+    Source and releases are in this repository.
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* Work out which repo this is from the Pages URL, so nothing needs
+     configuring. user.github.io/repo/ -> user/repo. A user or org site
+     (user.github.io with no path) maps to user/user.github.io. */
+  function repoInfo() {
+    var host = location.hostname;
+    var owner = host.endsWith('.github.io') ? host.replace('.github.io', '') : null;
+    if (!owner) return null;
+    var seg = location.pathname.split('/').filter(Boolean);
+    var repo = seg.length ? seg[0] : host;
+    return { owner: owner, repo: repo, slug: owner + '/' + repo };
+  }
+
+  var info = repoInfo();
+  var base = info ? 'https://github.com/' + info.slug : null;
+
+  var signup = document.getElementById('signupLink');
+  var dl = document.getElementById('downloadLink');
+
+  if (base) {
+    signup.href = base + '/issues/new?template=driver-signup.yml';
+    dl.href = base + '/releases/latest';
+    document.getElementById('repoLine').textContent = info.slug;
+  } else {
+    /* Opened from a file or a custom domain: send people somewhere useful
+       rather than leaving a dead link. */
+    [signup, dl].forEach(function (a) {
+      a.setAttribute('aria-disabled', 'true');
+      a.classList.add('quiet');
+      a.removeAttribute('href');
+      a.title = 'Available once this page is published on GitHub Pages';
+    });
+    signup.textContent = 'Sign-up form (publish to GitHub Pages first)';
+    dl.textContent = 'Releases (publish to GitHub Pages first)';
+  }
+
+  /* Entry list, straight from the roster the sign-up form maintains. */
+  var box = document.getElementById('roster');
+  var count = document.getElementById('rosterCount');
+
+  function initials(name) {
+    return (name || '?').trim().split(/\s+/).slice(0, 2)
+      .map(function (w) { return w.charAt(0); }).join('').toUpperCase();
+  }
+  function flag(cc) {
+    if (!cc || cc.length !== 2 || !/^[A-Za-z]{2}$/.test(cc)) return '';
+    cc = cc.toUpperCase();
+    return String.fromCodePoint(0x1f1e6 + cc.charCodeAt(0) - 65, 0x1f1e6 + cc.charCodeAt(1) - 65);
+  }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  fetch('roster.json', { cache: 'no-cache' })
+    .then(function (r) { return r.ok ? r.json() : { drivers: [] }; })
+    .then(function (data) {
+      var list = (data && data.drivers) || [];
+      if (!list.length) {
+        count.textContent = '';
+        box.className = '';
+        box.innerHTML = '<div class="empty">No entries yet. Be the first &mdash; use the sign-up form above.</div>';
+        return;
+      }
+      count.textContent = '· ' + list.length;
+      box.className = 'roster';
+      box.innerHTML = list.map(function (d) {
+        var av = d.headshot
+          ? '<img class="av" src="' + esc(d.headshot) + '" alt="" loading="lazy" ' +
+            'onerror="this.replaceWith(Object.assign(document.createElement(\'div\'),' +
+            '{className:\'av\',textContent:' + JSON.stringify(initials(d.displayName)) + '}))">'
+          : '<div class="av"' + (d.accentColor ? ' style="background:' + esc(d.accentColor) + '"' : '') + '>' +
+            esc(initials(d.displayName)) + '</div>';
+        var sub = [flag(d.country), esc(d.team || '')].filter(Boolean).join(' ');
+        return '<div class="d">' + av + '<div class="t">' +
+          '<div class="n">' + (d.carNumber ? '<span class="no">#' + esc(d.carNumber) + '</span> ' : '') +
+          esc(d.displayName) + '</div>' +
+          (sub ? '<div class="s">' + sub + '</div>' : '') +
+          '</div></div>';
+      }).join('');
+    })
+    .catch(function () {
+      box.className = '';
+      box.innerHTML = '<div class="empty">Could not load the entry list.</div>';
+    });
+}());
+</script>
+</body>
+</html>

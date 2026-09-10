@@ -1,0 +1,377 @@
+<!doctype html>
+<!--
+  PitWall — Fuel & stint (in-car HUD)
+  ---------------------------------------------------------------------------
+  The number a driver actually needs is "how much do I put in", so that is the
+  headline: ADD n.n L. Everything else supports it — what is in the tank, the
+  burn rate, how many laps that is worth, how many laps the race still has,
+  and the current stint.
+
+  The burn rate is the engine's `fuelPerLap` (median of recent green laps, pit
+  laps excluded) and `fuelToAdd` is its finish-the-race figure, which already
+  carries a 2% cushion. `?margin=N` adds N further laps of fuel on top — one
+  lap by default, because a safety car restart or a long final lap eats a
+  cushion that small.
+
+  Until a couple of clean laps have gone by the engine cannot know the burn
+  rate: those fields arrive as null and are rendered as dashes, never as a
+  number and never as -1.
+
+  Tyre wear and temperature come from `player.tyres` — three bands per corner,
+  inner / middle / outer. Cars and sessions that do not publish wear (and the
+  demo feed) simply have no tyre block rather than four empty gauges.
+
+  Recommended window: 270 x 205 with tyres, 270 x 145 with ?tyres=0.
+
+  Query string options
+    units=l|gal  fuel units (default l; gal is US gallons)
+    tyres=0      hide the tyre block
+    margin=N     extra laps of fuel to add on top of the finish figure
+                 (default 1)
+    w=PX         widget width (default 270)
+    car=N        ignored — fuel is always the local player's
+    scale=1.2    overall scale            (PW.applyChrome)
+    opacity=0.8  panel opacity            (PW.applyChrome)
+    server=URL   point at a PitWall on another machine (pitwall.js)
+
+  Colour is information only: red when the fuel on board will not reach the
+  end of the race, yellow when it is inside one lap of the margin, green when
+  nothing more is needed. Tyre bands run green / yellow / red on wear.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PitWall — Fuel</title>
+<link rel="stylesheet" href="../shared/base.css">
+<style>
+  #root { width: var(--w, 270px); }
+  #wrap { display: none; }
+  body.ready #wrap { display: block; }
+
+  .add {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 6px 9px 5px;
+    border-bottom: 1px solid var(--line);
+  }
+  .add .lbl {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    color: var(--text-dim);
+  }
+  .add .v {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 30px;
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .add .u { font-size: 11px; font-weight: 700; color: var(--text-dim); letter-spacing: 0.06em; }
+
+  .add.warn { background: rgba(255, 77, 77, 0.16); }
+  .add.warn .v, .add.warn .lbl { color: var(--red); }
+  .add.tight { background: rgba(255, 204, 51, 0.12); }
+  .add.tight .v { color: var(--yellow); }
+  .add.ok .v { color: var(--green); }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1px;
+    background: var(--line);
+  }
+  .cellbox {
+    background: rgba(var(--panel), var(--panel-opacity));
+    padding: 4px 7px 5px;
+    min-width: 0;
+  }
+  .cellbox .k {
+    font-size: 8.5px;
+    font-weight: 700;
+    letter-spacing: 0.11em;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .cellbox .v {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.25;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .cellbox .v.sm { font-size: 12.5px; }
+  .cellbox .v.short { color: var(--red); }
+  .cellbox .v.empty { color: var(--text-faint); }
+
+  .laps {
+    display: flex;
+    gap: 12px;
+    padding: 4px 8px 5px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.11em;
+    color: var(--text-faint);
+    border-top: 1px solid var(--line);
+  }
+  .laps span { display: flex; gap: 5px; align-items: baseline; }
+  .laps b {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ------------------------------------------------------------------ tyres */
+  .tyres {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+    padding: 6px 7px 7px;
+    border-top: 1px solid var(--line);
+  }
+  .tyres.hide { display: none; }
+
+  .corner { display: flex; align-items: center; gap: 5px; }
+  .corner .cn {
+    font-size: 8.5px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: var(--text-faint);
+    width: 15px;
+    flex: 0 0 15px;
+  }
+  .bands { display: flex; gap: 2px; height: 20px; flex: 0 0 auto; }
+  .bands b {
+    display: block;
+    width: 5px;
+    background: rgba(255, 255, 255, 0.09);
+    border-radius: 1px;
+    position: relative;
+    overflow: hidden;
+  }
+  .bands b i {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    display: block;
+    background: var(--green);
+  }
+  .bands b.mid i { background: var(--yellow); }
+  .bands b.low i { background: var(--red); }
+
+  .tmp {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .tmp .hi { color: var(--yellow); }
+</style>
+</head>
+<body class="overlay">
+  <div id="pw-status"></div>
+  <div id="root" class="scale-root">
+    <div id="wrap" class="panel">
+      <div class="add" id="add">
+        <span class="lbl">ADD</span>
+        <span class="v num" id="addv">–</span>
+        <span class="u" id="addu">L</span>
+      </div>
+      <div class="grid" id="grid">
+        <div class="cellbox"><div class="k" id="k-fuel">Fuel</div><div class="v num" id="c-fuel">–</div></div>
+        <div class="cellbox"><div class="k" id="k-per">Per lap</div><div class="v num" id="c-per">–</div></div>
+        <div class="cellbox"><div class="k">Laps left</div><div class="v num" id="c-left">–</div></div>
+        <div class="cellbox"><div class="k">Race left</div><div class="v num" id="c-race">–</div></div>
+        <div class="cellbox"><div class="k">Stint</div><div class="v num" id="c-stint">–</div></div>
+        <div class="cellbox"><div class="k">Spare</div><div class="v num" id="c-spare">–</div></div>
+      </div>
+      <div class="laps">
+        <span>LAST <b class="num" id="c-last">–</b></span>
+        <span>BEST <b class="num" id="c-best">–</b></span>
+      </div>
+      <div class="tyres hide" id="tyres"></div>
+    </div>
+  </div>
+
+<script src="../shared/pitwall.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  PW.applyChrome();
+
+  var OPT = {
+    gal:    String(PW.opt('units', 'l')).toLowerCase().indexOf('g') === 0,
+    tyres:  PW.optBool('tyres', true),
+    margin: Math.max(0, PW.optNum('margin', 1)),
+    width:  PW.optNum('w', 270)
+  };
+  document.getElementById('root').style.setProperty('--w', OPT.width + 'px');
+
+  var GAL = 0.2641720524;                       // litres -> US gallons
+  var UNIT = OPT.gal ? 'GAL' : 'L';
+  document.getElementById('addu').textContent = UNIT;
+  document.getElementById('k-fuel').textContent = 'Fuel ' + UNIT;
+  document.getElementById('k-per').textContent = 'Per lap ' + UNIT;
+
+  var CORNERS = ['LF', 'RF', 'LR', 'RR'];
+  var el = {};
+  ['add', 'addv', 'c-fuel', 'c-per', 'c-left', 'c-race', 'c-stint', 'c-spare',
+   'c-last', 'c-best', 'tyres']
+    .forEach(function (id) { el[id] = document.getElementById(id); });
+
+  function vol(litres, places) {
+    if (litres == null) return null;
+    var v = OPT.gal ? litres * GAL : litres;
+    return v.toFixed(places === undefined ? 1 : places);
+  }
+
+  function setText(node, t) {
+    t = (t == null || t === '') ? '–' : String(t);
+    if (node.textContent !== t) node.textContent = t;
+  }
+
+  function setCls(node, cls) {
+    if (node.className !== cls) node.className = cls;
+  }
+
+  /** Laps the race still has to run, from laps or from time remaining. */
+  function lapsRemaining(s, ref) {
+    if (s.lapsRemain != null && s.lapsRemain >= 0 && s.lapsRemain < 30000) return s.lapsRemain;
+    if (s.timeRemain != null && s.timeRemain >= 0 && s.timeRemain < 604800 && ref > 0) {
+      return Math.ceil(s.timeRemain / ref) + 1;
+    }
+    return null;
+  }
+
+  /* ----------------------------------------------------------------- tyres */
+
+  var tyreBuilt = false;
+
+  function buildTyres() {
+    var h = '';
+    CORNERS.forEach(function (c) {
+      h += '<div class="corner" data-c="' + c + '">' +
+             '<span class="cn">' + c + '</span>' +
+             '<span class="bands"><b><i></i></b><b><i></i></b><b><i></i></b></span>' +
+             '<span class="tmp"></span>' +
+           '</div>';
+    });
+    el.tyres.innerHTML = h;
+    tyreBuilt = true;
+  }
+
+  function bandClass(w) {
+    if (w == null) return '';
+    if (w < 0.25) return 'low';
+    if (w < 0.55) return 'mid';
+    return '';
+  }
+
+  function renderTyres(t) {
+    if (!OPT.tyres || !t) { el.tyres.classList.add('hide'); return; }
+    var any = false;
+    CORNERS.forEach(function (c) {
+      var x = t[c];
+      if (x && (x.wl != null || x.tl != null)) any = true;
+    });
+    if (!any) { el.tyres.classList.add('hide'); return; }
+    if (!tyreBuilt) buildTyres();
+    el.tyres.classList.remove('hide');
+
+    for (var i = 0; i < CORNERS.length; i++) {
+      var c = CORNERS[i];
+      var x = t[c] || {};
+      var node = el.tyres.children[i];
+      var bands = node.children[1];
+      var w = [x.wl, x.wm, x.wr];
+      for (var b = 0; b < 3; b++) {
+        var box = bands.children[b];
+        var fill = box.firstChild;
+        var v = (w[b] == null) ? null : Math.max(0, Math.min(1, w[b]));
+        var pct = (v == null ? 0 : Math.round(v * 100)) + '%';
+        if (fill.style.height !== pct) fill.style.height = pct;
+        var want = bandClass(v);
+        if (box.className !== want) box.className = want;
+      }
+      var temps = [x.tl, x.tm, x.tr].filter(function (v) { return v != null; });
+      var tn = node.children[2];
+      if (!temps.length) { setText(tn, ''); tn.className = 'tmp'; continue; }
+      var avg = temps.reduce(function (a, v) { return a + v; }, 0) / temps.length;
+      setText(tn, Math.round(avg) + '°');
+      tn.className = 'tmp' + (avg >= 100 ? ' hi' : '');
+    }
+  }
+
+  /* ---------------------------------------------------------------- render */
+
+  function render() {
+    var t = PW.tick;
+    if (!t || !t.player) { document.body.classList.remove('ready'); return; }
+    var p = t.player;
+    var s = t.session || {};
+    document.body.classList.add('ready');
+
+    var perLap = (p.fuelPerLap != null && p.fuelPerLap > 0) ? p.fuelPerLap : null;
+    var ref = (p.lapBest > 0) ? p.lapBest : ((p.lapLast > 0) ? p.lapLast : 0);
+    var remain = lapsRemaining(s, ref);
+
+    // Headline: the engine's finish-the-race figure plus the driver's margin.
+    var add = null;
+    if (p.fuelToAdd != null && p.fuelToAdd >= 0) {
+      add = p.fuelToAdd + (perLap ? OPT.margin * perLap : 0);
+    }
+    var lapsLeft = (p.fuelLapsLeft != null && p.fuelLapsLeft >= 0) ? p.fuelLapsLeft : null;
+
+    setText(el.addv, add == null ? null : vol(add, 1));
+
+    var cls = 'add';
+    if (lapsLeft != null && remain != null) {
+      if (lapsLeft < remain) cls += ' warn';
+      else if (lapsLeft < remain + OPT.margin) cls += ' tight';
+      else if (!add) cls += ' ok';
+    }
+    setCls(el.add, cls);
+
+    setText(el['c-fuel'], p.fuel != null ? vol(p.fuel, 1) : null);
+    setText(el['c-per'], perLap ? vol(perLap, 2) : null);
+    setCls(el['c-per'], 'v num' + (perLap ? '' : ' empty'));
+
+    setText(el['c-left'], lapsLeft != null ? lapsLeft.toFixed(1) : null);
+    setCls(el['c-left'], 'v num' +
+      (lapsLeft == null ? ' empty' : ((remain != null && lapsLeft < remain) ? ' short' : '')));
+
+    setText(el['c-race'], remain != null ? remain + 'L' : null);
+    setCls(el['c-race'], 'v num' + (remain == null ? ' empty' : ''));
+
+    setText(el['c-stint'], (p.stint != null && p.stint >= 0) ? p.stint + 'L' : null);
+
+    // Spare: laps of fuel over and above what the race still needs. This is
+    // the number that says "short by two laps" without any arithmetic.
+    var spare = (lapsLeft != null && remain != null) ? (lapsLeft - remain) : null;
+    setText(el['c-spare'], spare == null ? null :
+      (spare >= 0 ? '+' : '−') + Math.abs(spare).toFixed(1));
+    setCls(el['c-spare'], 'v num' +
+      (spare == null ? ' empty' : (spare < 0 ? ' short' : '')));
+
+    setText(el['c-last'], PW.fmtLap(p.lapLast));
+    setText(el['c-best'], PW.fmtLap(p.lapBest));
+
+    renderTyres(p.tyres);
+  }
+
+  PW.on('meta', render);
+  PW.on('tick', render);
+  PW.start({ sub: ['meta', 'tick'], rate: 4, name: 'fuel' });
+})();
+</script>
+</body>
+</html>
