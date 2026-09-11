@@ -622,6 +622,8 @@ class Engine:
         tyre = v.get("CarIdxTireCompound") or []
 
         under_caution = bool(flags_raw & enums.CAUTION_MASK)
+        mode = self._mode_of(self._session_type(v))
+        timed = mode == "timed"
 
         entries: List[Dict[str, Any]] = []
         n = len(pcts)
@@ -667,10 +669,28 @@ class Engine:
         # iRacing's own CarIdxPosition only moves at the timing line. For a
         # broadcast tower we want the official order; for a relative we want
         # smooth track position. Compute both.
-        official = sorted(
-            entries,
-            key=lambda e: (e["pos"] if e["pos"] and e["pos"] > 0 else 9999, -e["trackPos"]),
-        )
+        # iRacing fills in CarIdxPosition itself when it has an opinion, and
+        # that opinion is authoritative in every session type. It only leaves
+        # the field at zero in sessions it is not scoring - an open practice,
+        # most commonly - and that is the case we have to score ourselves.
+        has_official = any(e["pos"] and e["pos"] > 0 for e in entries)
+
+        if timed and not has_official:
+            # Quickest lap first. Cars yet to set one go to the back, ordered
+            # among themselves by how far round they are, so a board at the
+            # start of a session fills from the top as laps come in rather
+            # than shuffling on every tick.
+            def timed_key(e):
+                best = e["car"].best_time
+                if best and best > 0:
+                    return (0, best, 0.0)
+                return (1, 0.0, -e["trackPos"])
+            official = sorted(entries, key=timed_key)
+        else:
+            official = sorted(
+                entries,
+                key=lambda e: (e["pos"] if e["pos"] and e["pos"] > 0 else 9999, -e["trackPos"]),
+            )
         live = sorted(entries, key=lambda e: -e["trackPos"])
         for rank, e in enumerate(live, 1):
             e["livePos"] = rank if e["inWorld"] else 0
@@ -726,6 +746,46 @@ class Engine:
             e["lapsDown"] = max(0, int(math.floor(leader["trackPos"] - e["trackPos"])))
             prev_overall = e
             prev_by_class[e["cls"]] = e
+
+        # --- timed sessions: gaps are lap times, not track position -------
+        # In practice or qualifying nobody cares that one car is 400 metres
+        # ahead of another on an out lap. The number that matters is how far
+        # off the quickest lap you are, so gap and interval are recomputed
+        # against best laps and the laps-down counter is meaningless.
+        if timed:
+            ordered = sorted(official, key=lambda e: e["order"])
+            fastest_best = None
+            class_best: Dict[int, float] = {}
+            for e in ordered:
+                b = e["car"].best_time
+                if not b or b <= 0:
+                    continue
+                if fastest_best is None:
+                    fastest_best = b
+                if e["cls"] not in class_best:
+                    class_best[e["cls"]] = b
+
+            prev_best: Optional[float] = None
+            prev_class_best: Dict[int, float] = {}
+            for e in ordered:
+                b = e["car"].best_time
+                e["lapsDown"] = 0
+                if not b or b <= 0:
+                    # No lap yet, so there is no gap to quote. A dash is the
+                    # honest answer and the overlays already render one.
+                    e["gapLeader"] = None
+                    e["interval"] = None
+                    e["gapClassLeader"] = None
+                    e["classInterval"] = None
+                    continue
+                e["gapLeader"] = None if fastest_best is None else round(b - fastest_best, 3)
+                e["interval"] = None if prev_best is None else round(b - prev_best, 3)
+                cb = class_best.get(e["cls"])
+                e["gapClassLeader"] = None if cb is None else round(b - cb, 3)
+                pcb = prev_class_best.get(e["cls"])
+                e["classInterval"] = None if pcb is None else round(b - pcb, 3)
+                prev_best = b
+                prev_class_best[e["cls"]] = b
 
         # --- assemble ---------------------------------------------------
         fastest_idx = self.fastest_overall.get("idx")
@@ -803,7 +863,11 @@ class Engine:
                 str(c): {"idx": x["idx"], "time": _r(x["time"])}
                 for c, x in self.fastest_by_class.items()
             },
-            "battles": self._battles(live),
+            # A "battle" is two cars fighting over track position. In
+            # practice or qualifying there is no such thing, so the battle box
+            # stays empty rather than inventing a fight between two cars that
+            # happen to be near each other on an out lap.
+            "battles": [] if timed else self._battles(live),
             "player": self._player_block(v),
             "cam": {
                 "idx": v.get("CamCarIdx"),
@@ -914,6 +978,29 @@ class Engine:
 
     # -- session / player blocks -----------------------------------------
 
+
+    # -- session mode -----------------------------------------------------
+
+    def _session_type(self, v: Dict[str, Any]) -> str:
+        sessions = dig(self.session_info, "SessionInfo", "Sessions", default=[]) or []
+        snum = v.get("SessionNum") or 0
+        cur = sessions[snum] if isinstance(sessions, list) and 0 <= snum < len(sessions) else {}
+        return str((cur or {}).get("SessionType") or "")
+
+    @staticmethod
+    def _mode_of(session_type: str) -> str:
+        """
+        "race" or "timed".
+
+        A race is scored by who is in front. Practice, qualifying, warmup and
+        testing are scored by who has set the quickest lap, and the difference
+        is not cosmetic: in a timed session the position of a car on track
+        carries no information at all, so ordering by it produces a board that
+        reshuffles every few seconds and puts a driver three tenths quicker
+        behind one who merely happens to be further round his out lap.
+        """
+        return "race" if "race" in (session_type or "").lower() else "timed"
+
     def _session_block(self, v: Dict[str, Any], flags_raw: int) -> Dict[str, Any]:
         sessions = dig(self.session_info, "SessionInfo", "Sessions", default=[]) or []
         snum = v.get("SessionNum") or 0
@@ -926,6 +1013,7 @@ class Engine:
             "num": snum,
             "name": (cur or {}).get("SessionName") or "",
             "type": (cur or {}).get("SessionType") or "",
+            "mode": self._mode_of((cur or {}).get("SessionType") or ""),
             "state": enums.SESSION_STATE.get(int(v.get("SessionState") or 0), "Invalid"),
             "time": _r(v.get("SessionTime"), 2),
             "timeRemain": None if enums.is_unlimited_time(time_remain) else _r(time_remain, 1),

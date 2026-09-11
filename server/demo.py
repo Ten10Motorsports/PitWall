@@ -334,11 +334,15 @@ class DemoFeed:
             "SessionState": self.state,
             "SessionUniqueID": 1,
             "SessionFlags": self.flags,
-            "SessionTimeRemain": 604800.0,
-            "SessionTimeTotal": 604800.0,
-            "SessionLapsRemain": laps_remain,
-            "SessionLapsRemainEx": laps_remain,
-            "SessionLapsTotal": self.race_laps,
+            # A race counts down laps; practice and qualifying count down a
+            # clock. iRacing signals "not applicable" with its unlimited
+            # sentinel rather than with zero, so the demo does the same.
+            "SessionTimeRemain": 604800.0 if self.scenario == "race"
+            else max(0.0, 3600.0 - self.session_time),
+            "SessionTimeTotal": 604800.0 if self.scenario == "race" else 3600.0,
+            "SessionLapsRemain": laps_remain if self.scenario == "race" else 32767,
+            "SessionLapsRemainEx": laps_remain if self.scenario == "race" else 32767,
+            "SessionLapsTotal": self.race_laps if self.scenario == "race" else 32767,
             "SessionTimeOfDay": 50400.0 + self.session_time,
             "RaceLaps": leader.lap,
             "PitsOpen": True,
@@ -357,8 +361,14 @@ class DemoFeed:
             "CarIdxLapDistPct": arr(lambda c: c.pct if not c.retired else -1.0, -1.0),
             "CarIdxLap": arr(lambda c: c.lap, 0),
             "CarIdxLapCompleted": arr(lambda c: c.laps_complete, 0),
-            "CarIdxPosition": arr(lambda c: getattr(c, "position", 0), 0),
-            "CarIdxClassPosition": arr(lambda c: getattr(c, "class_position", 0), 0),
+            # iRacing only scores a position when it is running a race. In an
+            # open practice it leaves the whole field at zero, which is exactly
+            # the case the engine has to handle for itself, so the demo models
+            # it rather than papering over it.
+            "CarIdxPosition": arr(lambda c: getattr(c, "position", 0), 0)
+            if self.scenario == "race" else [0] * len(self.cars),
+            "CarIdxClassPosition": arr(lambda c: getattr(c, "class_position", 0), 0)
+            if self.scenario == "race" else [0] * len(self.cars),
             "CarIdxClass": arr(lambda c: c.cls["id"], 0),
             "CarIdxTrackSurface": arr(lambda c: -1 if c.retired else c.surface, -1),
             "CarIdxOnPitRoad": arr(lambda c: c.on_pit, False),
@@ -436,6 +446,19 @@ class DemoFeed:
         return out
 
     # -- session string ---------------------------------------------------
+
+    _SESSION_NAMES = {
+        "race": ("RACE", "Race"),
+        "practice": ("PRACTICE", "Practice"),
+        "qualify": ("QUALIFY", "Open Qualify"),
+        "warmup": ("WARMUP", "Warmup"),
+    }
+
+    def _session_name(self) -> str:
+        return self._SESSION_NAMES.get(self.scenario, self._SESSION_NAMES["race"])[0]
+
+    def _session_type(self) -> str:
+        return self._SESSION_NAMES.get(self.scenario, self._SESSION_NAMES["race"])[1]
 
     def session_info(self) -> Dict[str, Any]:
         drivers = []
@@ -516,9 +539,9 @@ class DemoFeed:
                 "Sessions": [
                     {
                         "SessionNum": 0,
-                        "SessionName": "RACE",
-                        "SessionType": "Race",
-                        "SessionLaps": self.race_laps,
+                        "SessionName": self._session_name(),
+                        "SessionType": self._session_type(),
+                        "SessionLaps": self.race_laps if self.scenario == "race" else "unlimited",
                         "SessionTime": "unlimited",
                         "ResultsNumCautionFlags": 1 if self.session_time > 400 else 0,
                         "ResultsNumCautionLaps": 3 if self.session_time > 400 else 0,

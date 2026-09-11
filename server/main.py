@@ -153,7 +153,7 @@ class PitWall:
             return False
         self.server.hub.hello = {
             "app": "PitWall",
-            "version": "1.1.0",
+            "version": "1.2.0",
             "demo": self.demo,
             "league": self.config.get("league", {}),
             "event": self.leagues.event_payload(),
@@ -599,7 +599,8 @@ def _hold_open_on_error(exc: BaseException) -> None:
 def main(argv: Optional[List[str]] = None) -> int:
     p = argparse.ArgumentParser(prog="pitwall", description="iRacing live timing and overlays")
     p.add_argument("--demo", action="store_true", help="run a synthetic race, no iRacing needed")
-    p.add_argument("--scenario", default="race", choices=["race", "practice"])
+    p.add_argument("--scenario", default="race",
+                   choices=["race", "practice", "qualify", "warmup"])
     p.add_argument("--seed", type=int, default=7, help="demo random seed")
     p.add_argument("--speed", type=float, default=1.0,
                    help="demo time compression, e.g. 10 to run a race in minutes")
