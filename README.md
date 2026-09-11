@@ -118,6 +118,29 @@ Better still, drivers can sign up through a **GitHub issue form** and the roster
 updates itself — no server running, no admin, and they can fix their own entry
 by editing their submission. See [docs/GITHUB_HOSTING.md](docs/GITHUB_HOSTING.md).
 
+### Practice and qualifying, not just races
+
+A race is scored by who is in front. Practice and qualifying are scored by who
+set the quickest lap, and iRacing does not always score them for you: in an open
+practice it leaves every car's position at zero.
+
+PitWall detects the session type and changes what it computes. In practice,
+qualifying, warmup and testing:
+
+- the running order is **quickest lap first**, with cars yet to set a lap at the
+  back rather than shuffled through the field
+- **gap** becomes how far off the quickest lap you are, and **interval** the
+  difference to the car classified ahead, instead of distances round the track
+  that mean nothing
+- the timing tower switches its columns to **best and last** by itself, and
+  switches back when the race starts
+- laps down and the battle box turn themselves off
+
+None of that needs configuring, and none of it needs the overlay reloading: a
+league night that runs practice, then qualifying, then the race is one set of
+OBS sources that follow along. A tower with `col=` in its URL is left alone, on
+the grounds that you asked for that column and should get it.
+
 ### Track maps that build themselves
 
 Most overlay tools ship hand-drawn track art and are missing whichever circuit
@@ -258,6 +281,8 @@ site/                     the GitHub Pages landing page
 ```
 python -m server.main                     live telemetry
 python -m server.main --demo              synthetic race
+python -m server.main --demo --scenario practice    synthetic practice session
+python -m server.main --demo --scenario qualify     synthetic qualifying
 python -m server.main --demo --speed 14   run a race in minutes
 python -m server.main --port 8100         different port
 python -m server.main --host 127.0.0.1    local only, no LAN access

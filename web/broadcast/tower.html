@@ -213,6 +213,7 @@
     white-space: nowrap;
   }
   .cell.c2 { color: var(--text-dim); }
+  .row .cell[hidden] { display: none !important; }
   .cell.empty { color: var(--text-faint); }
   /* colour beats column rank: PB green and pit yellow must win over .c2 */
   .cell.pb { color: var(--pb); }
@@ -267,6 +268,13 @@
 
   var COLS = { gap: 'GAP', int: 'INT', last: 'LAST', best: 'BEST', delta: 'DELTA' };
 
+  /* Whether the URL pinned the columns, as opposed to leaving them to the
+     session. A league night runs practice, then qualifying, then the race in
+     one sitting, and the tower has to follow that without being reloaded, so
+     the effective columns are worked out per tick rather than once at load. */
+  var COL_PINNED  = PW.opt('col', '') !== '';
+  var COL2_PINNED = PW.opt('col2', '') !== '';
+
   var OPT = {
     rows:   PW.optNum('rows', 0),
     col:    (COLS[PW.opt('col', 'gap')] ? PW.opt('col', 'gap') : 'gap'),
@@ -291,6 +299,24 @@
   /* ------------------------------------------------------------ helpers */
 
   function classGaps() { return OPT.group === 'class' || !!OPT.klass; }
+
+  /** True in practice, qualifying, warmup and testing. */
+  function timedSession() {
+    return !!(PW.tick && PW.tick.session && PW.tick.session.mode === 'timed');
+  }
+
+  /* In a timed session the interesting columns are the lap times, not the
+     gaps, so an unpinned tower switches itself to BEST and LAST and switches
+     back when the race starts. A tower with col= in its URL is left alone:
+     the operator asked for that column and gets it. */
+  function col1() {
+    if (COL_PINNED) return OPT.col;
+    return timedSession() ? 'best' : OPT.col;
+  }
+  function col2() {
+    if (COL2_PINNED) return OPT.col2;
+    return timedSession() ? 'last' : OPT.col2;
+  }
 
   var lapsToAhead = {};     // car index -> laps down to the car directly ahead
 
@@ -401,8 +427,8 @@
     h += '<div class="collabels">';
     h += '<span class="l-pos">POS</span><span class="l-bar"></span><span class="l-num">CAR</span>';
     h += '<span class="l-name">DRIVER</span><span class="l-secs"></span>';
-    h += '<span class="l-cell">' + esc(COLS[OPT.col]) + '</span>';
-    if (OPT.col2) h += '<span class="l-cell">' + esc(COLS[OPT.col2]) + '</span>';
+    h += '<span class="l-cell">' + esc(COLS[col1()]) + '</span>';
+    if (col2()) h += '<span class="l-cell">' + esc(COLS[col2()]) + '</span>';
     h += '</div>';
     if (elHead._h !== h) { elHead.innerHTML = h; elHead._h = h; }
   }
@@ -514,10 +540,10 @@
       '<div class="nm"><span class="fl"></span><span class="dn"></span></div>' +
       '<div class="secs"></div>' +
       '<div class="cell num c1"></div>';
-    if (OPT.col2) {
-      var c2 = PW.el('div', 'cell num c2');
-      r.appendChild(c2);
-    }
+    // Always present, shown or hidden per tick: the effective second column
+    // changes when the session type changes, and a row built during the race
+    // must be able to grow one when qualifying starts.
+    r.appendChild(PW.el('div', 'cell num c2'));
     return r;
   }
 
@@ -577,12 +603,15 @@
     }
 
     var pit = pitCell(c, now);
-    var v1 = pit || cellFor(c, OPT.col, caution);
+    var v1 = pit || cellFor(c, col1(), caution);
     cell(q[5], v1);
-    if (OPT.col2) cell(q[6], cellFor(c, OPT.col2, caution));
+    var second = col2();
+    q[6].hidden = !second;
+    if (second) cell(q[6], cellFor(c, second, caution));
+    else setText(q[6], '');
 
     // purple on the name unless a BEST column is already carrying the purple
-    var bestCol = OPT.col === 'best' || OPT.col2 === 'best';
+    var bestCol = col1() === 'best' || col2() === 'best';
     nm.children[1].className = 'dn' + (c.fast && !bestCol ? ' fastest' : '');
 
     node.classList.toggle('is-pit', c.st === 'pit');

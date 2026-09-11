@@ -1,0 +1,24 @@
+{
+  "port": 8132,
+  "host": "0.0.0.0",
+  "tickRate": 20,
+  "openBrowser": true,
+  "league": {
+    "name": "Sheet Signup Test",
+    "logo": "",
+    "accent": "#ff8800",
+    "secondary": "#12b8ff",
+    "sponsorBar": [],
+    "hashtag": ""
+  },
+  "battleThreshold": 1.2,
+  "roster": {
+    "mode": "url",
+    "repo": "",
+    "branch": "main",
+    "path": "roster.json",
+    "url": "http://127.0.0.1:8199/empty.csv",
+    "token": "",
+    "autoPullSeconds": 0
+  }
+}

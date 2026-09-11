@@ -988,6 +988,26 @@ compile, no Python.</p>
     which re-renders the text at the new size.</p>
   </div>
 
+  <h3>Practice and qualifying</h3>
+  <p>The same six sources cover the whole night. PitWall reads the session type
+  from the sim and changes what the graphics mean, so you do not build a second
+  scene and you do not reload anything between sessions.</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th></th><th>In a race</th><th>In practice or qualifying</th></tr></thead>
+      <tbody>
+        <tr><td><b>Tower order</b></td><td>Running order</td><td>Quickest lap first, no-laps at the back</td></tr>
+        <tr><td><b>Tower columns</b></td><td>Gap and interval</td><td>Best and last, switched automatically</td></tr>
+        <tr><td><b>Gap means</b></td><td>Distance to the leader</td><td>How far off the quickest lap</td></tr>
+        <tr><td><b>Session bar</b></td><td>Lap 7 / 42</td><td>A countdown clock</td></tr>
+        <tr><td><b>Battle box</b></td><td>Closest fight</td><td>Hidden, there is no fight to show</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>If you pinned the tower's columns with <code>col=</code> in its URL, that is
+  left alone in every session: you asked for that column and you get it. Leave
+  <code>col=</code> off and the tower decides for itself.</p>
+
   <h3>Gaps under caution</h3>
   <p>When the field is bunched behind a safety car, the gaps between cars mean
   nothing. Rather than print numbers that are wrong, the tower shows a dash until
