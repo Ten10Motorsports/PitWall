@@ -16,6 +16,7 @@ import os
 import sys
 import threading
 import time
+import traceback
 import webbrowser
 from typing import Any, Dict, List, Optional
 
@@ -153,7 +154,7 @@ class PitWall:
             return False
         self.server.hub.hello = {
             "app": "PitWall",
-            "version": "1.2.0",
+            "version": "1.2.1",
             "demo": self.demo,
             "league": self.config.get("league", {}),
             "event": self.leagues.event_payload(),
@@ -453,75 +454,99 @@ class PitWall:
         last_pull = time.time()
         auto_pull = float(self.config.get("roster", {}).get("autoPullSeconds") or 0)
 
+        # One bad field in the sim's data must not end a broadcast. Before
+        # this, any unexpected value anywhere in a tick propagated straight out
+        # of the loop and closed the app, mid-race, with a traceback nobody
+        # watching the stream could do anything about. Now a failing tick is
+        # reported once and the loop carries on with the last good state, which
+        # for a viewer is a graphic that briefly stops updating rather than an
+        # entire broadcast going dark.
+        tick_errors = 0
+        last_error_report = 0.0
+
         try:
             while self.running:
                 now = time.time()
+                try:
 
-                if self.demo:
-                    assert self.feed is not None
-                    self.last_vars = self.feed.tick()
-                    self.connected = True
-                    if now - last_meta_check > 2.0:
-                        last_meta_check = now
-                        self.engine.apply_session_info(self.feed.session_info())
-                        self.server.hub.set_meta(self.engine.build_meta())
-                    self.engine.update(self.last_vars)
-                    self.stats["ticks"] += 1
-                    time.sleep(0.016)
-                else:
-                    assert self.sdk is not None
-                    if not self.sdk.connected:
-                        if now - last_reconnect > 1.0:
-                            last_reconnect = now
-                            self.connected = self.sdk.open()
-                            self.sdk_error = self.sdk.last_error
-                            if self.connected:
-                                print("[PitWall] Connected to iRacing.")
-                        else:
-                            time.sleep(0.05)
-                        if not self.connected:
-                            self._idle_broadcast()
-                            time.sleep(0.2)
-                            continue
-                    if self.sdk.wait_for_tick(32):
-                        self.last_vars = self.sdk.snapshot(WANTED)
-                        self.stats["ticks"] += 1
-                        if self.sdk.session_info_dirty:
-                            info = parse_session(self.sdk.session_info_raw())
-                            if info:
-                                self.engine.apply_session_info(info)
-                                self.server.hub.set_meta(self.engine.build_meta())
-                        self.engine.update(self.last_vars)
-                        self.maps.set_track(
-                            self.engine.track.get("id"), self.engine.track.get("name", "")
-                        )
-                        self.maps.sample(self.last_vars)
+                    if self.demo:
+                        assert self.feed is not None
+                        self.last_vars = self.feed.tick()
                         self.connected = True
-                        self.sdk_error = None
-                    elif not self.sdk.connected:
-                        self.connected = False
-                        self.sdk_error = "iRacing stopped sending telemetry."
-                        print("[PitWall] Lost the sim. Waiting for it to come back.")
-                        self.sdk.close()
-                        continue
+                        if now - last_meta_check > 2.0:
+                            last_meta_check = now
+                            self.engine.apply_session_info(self.feed.session_info())
+                            self.server.hub.set_meta(self.engine.build_meta())
+                        self.engine.update(self.last_vars)
+                        self.stats["ticks"] += 1
+                        time.sleep(0.016)
+                    else:
+                        assert self.sdk is not None
+                        if not self.sdk.connected:
+                            if now - last_reconnect > 1.0:
+                                last_reconnect = now
+                                self.connected = self.sdk.open()
+                                self.sdk_error = self.sdk.last_error
+                                if self.connected:
+                                    print("[PitWall] Connected to iRacing.")
+                            else:
+                                time.sleep(0.05)
+                            if not self.connected:
+                                self._idle_broadcast()
+                                time.sleep(0.2)
+                                continue
+                        if self.sdk.wait_for_tick(32):
+                            self.last_vars = self.sdk.snapshot(WANTED)
+                            self.stats["ticks"] += 1
+                            if self.sdk.session_info_dirty:
+                                info = parse_session(self.sdk.session_info_raw())
+                                if info:
+                                    self.engine.apply_session_info(info)
+                                    self.server.hub.set_meta(self.engine.build_meta())
+                            self.engine.update(self.last_vars)
+                            self.maps.set_track(
+                                self.engine.track.get("id"), self.engine.track.get("name", "")
+                            )
+                            self.maps.sample(self.last_vars)
+                            self.connected = True
+                            self.sdk_error = None
+                        elif not self.sdk.connected:
+                            self.connected = False
+                            self.sdk_error = "iRacing stopped sending telemetry."
+                            print("[PitWall] Lost the sim. Waiting for it to come back.")
+                            self.sdk.close()
+                            continue
 
-                if now - last_send >= interval and self.last_vars:
-                    last_send = now
-                    state = self.engine.build_state(self.last_vars)
-                    self.server.hub.broadcast("tick", state)
-                    self.stats["sent"] += 1
-                    samples = self.engine.drain_inputs()
-                    if samples:
-                        self.server.hub.broadcast(
-                            "inputs", {"type": "inputs", "s": samples[-40:]}
-                        )
-                    events = self.engine.drain_events()
-                    if events:
-                        self.server.hub.broadcast("events", {"type": "events", "e": events})
+                    if now - last_send >= interval and self.last_vars:
+                        last_send = now
+                        state = self.engine.build_state(self.last_vars)
+                        self.server.hub.broadcast("tick", state)
+                        self.stats["sent"] += 1
+                        samples = self.engine.drain_inputs()
+                        if samples:
+                            self.server.hub.broadcast(
+                                "inputs", {"type": "inputs", "s": samples[-40:]}
+                            )
+                        events = self.engine.drain_events()
+                        if events:
+                            self.server.hub.broadcast("events", {"type": "events", "e": events})
 
-                if auto_pull and now - last_pull > auto_pull:
-                    last_pull = now
-                    threading.Thread(target=self.roster.pull, daemon=True).start()
+                    if auto_pull and now - last_pull > auto_pull:
+                        last_pull = now
+                        threading.Thread(target=self.roster.pull, daemon=True).start()
+
+                except Exception as exc:
+                    tick_errors += 1
+                    if now - last_error_report > 10.0:
+                        last_error_report = now
+                        print(f"\n[PitWall] Recovered from an error while reading the sim "
+                              f"({type(exc).__name__}: {exc}).")
+                        print(f"          Overlays keep running. This has happened "
+                              f"{tick_errors} time(s) since starting.")
+                        print("          If graphics look wrong, send this to whoever "
+                              "maintains PitWall:")
+                        traceback.print_exc()
+                    time.sleep(0.05)
 
         except KeyboardInterrupt:
             pass

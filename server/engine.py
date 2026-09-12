@@ -165,6 +165,24 @@ class CarState:
 # ---------------------------------------------------------------------------
 
 
+
+def _text(v: Any) -> str:
+    """
+    Force a session-string value to displayable text.
+
+    iRacing's session string carries no types. A driver whose name is "747", a
+    team called "911", a car number of 88 used as initials: all of these arrive
+    as integers, and calling .strip() on an integer takes the whole app down at
+    the precise moment it connects to the sim. Everything shown as text goes
+    through here, so a numeric name is displayed rather than fatal.
+    """
+    if v is None:
+        return ""
+    if isinstance(v, str):
+        return v.strip()
+    return str(v).strip()
+
+
 class Engine:
     def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
         self.config = config or {}
@@ -205,13 +223,13 @@ class Engine:
         wi = info.get("WeekendInfo") or {}
         opts = wi.get("WeekendOptions") or {}
         self.track = {
-            "name": wi.get("TrackDisplayName") or wi.get("TrackName") or "",
-            "shortName": wi.get("TrackDisplayShortName") or "",
-            "config": wi.get("TrackConfigName") or "",
+            "name": _text(wi.get("TrackDisplayName")) or _text(wi.get("TrackName")),
+            "shortName": _text(wi.get("TrackDisplayShortName")),
+            "config": _text(wi.get("TrackConfigName")),
             "id": wi.get("TrackID"),
             "lengthKm": number(wi.get("TrackLength")),
-            "city": wi.get("TrackCity") or "",
-            "country": wi.get("TrackCountry") or "",
+            "city": _text(wi.get("TrackCity")),
+            "country": _text(wi.get("TrackCountry")),
             "turns": wi.get("TrackNumTurns"),
             "pitSpeedKph": number(wi.get("TrackPitSpeedLimit")),
             "northOffset": number(wi.get("TrackNorthOffset")),
@@ -262,26 +280,26 @@ class Engine:
             rec = {
                 "idx": idx,
                 "userId": d.get("UserID"),
-                "name": (d.get("UserName") or "").strip(),
-                "abbrev": (d.get("AbbrevName") or "").strip(),
-                "initials": (d.get("Initials") or "").strip(),
-                "team": (d.get("TeamName") or "").strip(),
+                "name": _text(d.get("UserName")),
+                "abbrev": _text(d.get("AbbrevName")),
+                "initials": _text(d.get("Initials")),
+                "team": _text(d.get("TeamName")),
                 "teamId": d.get("TeamID"),
-                "num": str(d.get("CarNumber") or "").strip(),
+                "num": _text(d.get("CarNumber")),
                 "numRaw": d.get("CarNumberRaw"),
-                "car": d.get("CarScreenName") or "",
-                "carShort": d.get("CarScreenNameShort") or "",
-                "carPath": d.get("CarPath") or "",
+                "car": _text(d.get("CarScreenName")),
+                "carShort": _text(d.get("CarScreenNameShort")),
+                "carPath": _text(d.get("CarPath")),
                 "carId": d.get("CarID"),
                 "classId": int(cls) if cls is not None else 0,
-                "classShort": d.get("CarClassShortName") or "",
+                "classShort": _text(d.get("CarClassShortName")),
                 "classColor": enums.hex_colour(d.get("CarClassColor")),
                 "classRelSpeed": d.get("CarClassRelSpeed"),
                 "irating": d.get("IRating") or 0,
-                "license": d.get("LicString") or "",
+                "license": _text(d.get("LicString")),
                 "licColor": enums.hex_colour(d.get("LicColor"), "#666"),
-                "club": d.get("ClubName") or "",
-                "division": d.get("DivisionName") or "",
+                "club": _text(d.get("ClubName")),
+                "division": _text(d.get("DivisionName")),
                 "incidents": d.get("CurDriverIncidentCount") or 0,
                 "teamIncidents": d.get("TeamIncidentCount") or 0,
                 "isPace": bool(d.get("CarIsPaceCar")),
@@ -985,7 +1003,7 @@ class Engine:
         sessions = dig(self.session_info, "SessionInfo", "Sessions", default=[]) or []
         snum = v.get("SessionNum") or 0
         cur = sessions[snum] if isinstance(sessions, list) and 0 <= snum < len(sessions) else {}
-        return str((cur or {}).get("SessionType") or "")
+        return _text((cur or {}).get("SessionType"))
 
     @staticmethod
     def _mode_of(session_type: str) -> str:
@@ -999,7 +1017,7 @@ class Engine:
         reshuffles every few seconds and puts a driver three tenths quicker
         behind one who merely happens to be further round his out lap.
         """
-        return "race" if "race" in (session_type or "").lower() else "timed"
+        return "race" if "race" in _text(session_type).lower() else "timed"
 
     def _session_block(self, v: Dict[str, Any], flags_raw: int) -> Dict[str, Any]:
         sessions = dig(self.session_info, "SessionInfo", "Sessions", default=[]) or []
@@ -1011,9 +1029,9 @@ class Engine:
         time_remain = v.get("SessionTimeRemain")
         return {
             "num": snum,
-            "name": (cur or {}).get("SessionName") or "",
-            "type": (cur or {}).get("SessionType") or "",
-            "mode": self._mode_of((cur or {}).get("SessionType") or ""),
+            "name": _text((cur or {}).get("SessionName")),
+            "type": _text((cur or {}).get("SessionType")),
+            "mode": self._mode_of((cur or {}).get("SessionType")),
             "state": enums.SESSION_STATE.get(int(v.get("SessionState") or 0), "Invalid"),
             "time": _r(v.get("SessionTime"), 2),
             "timeRemain": None if enums.is_unlimited_time(time_remain) else _r(time_remain, 1),
@@ -1183,7 +1201,7 @@ class Engine:
             "sessions": [
                 {
                     "num": s.get("SessionNum"),
-                    "name": s.get("SessionName"),
+                    "name": _text(s.get("SessionName")),
                     "type": s.get("SessionType"),
                     "laps": s.get("SessionLaps"),
                     "time": s.get("SessionTime"),
@@ -1194,7 +1212,7 @@ class Engine:
             "cameras": [
                 {
                     "num": g.get("GroupNum"),
-                    "name": g.get("GroupName"),
+                    "name": _text(g.get("GroupName")),
                     "scenic": bool(g.get("IsScenic")),
                 }
                 for g in (dig(self.session_info, "CameraInfo", "Groups", default=[]) or [])

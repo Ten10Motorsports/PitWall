@@ -98,7 +98,7 @@ class RosterStore:
             cid = str(e.get("iracingId") or "").strip()
             if cid:
                 self._by_id[cid] = e
-            name = (e.get("displayName") or "").strip()
+            name = str(e.get("displayName") or "").strip()
             if name:
                 self._by_name[name.lower()] = e
                 surname = name.split()[-1].lower() if name.split() else ""
@@ -114,7 +114,7 @@ class RosterStore:
             uid = str(driver.get("userId") or "").strip()
             if uid and uid in self._by_id:
                 return self._public(self._by_id[uid])
-            name = (driver.get("name") or "").strip()
+            name = str(driver.get("name") or "").strip()
             if name:
                 num = str(driver.get("num") or "").strip().lstrip("0") or "0"
                 surname = name.split()[-1].lower() if name.split() else ""
