@@ -1,0 +1,276 @@
+<!doctype html>
+<!--
+  PitWall — Lap time graph (in-car HUD)
+  ---------------------------------------------------------------------------
+  Your last laps as a chart rather than a list, because the thing a driver
+  wants from lap times is the shape: am I falling away, have I settled, did
+  that change actually help.
+
+  Your best lap is purple, in-lap and out-lap are greyed and excluded from the
+  scale, and the vertical range zooms to the spread of the laps shown so a
+  three-tenth drift is visible rather than being flattened by one pit lap.
+
+  WHERE THE HISTORY COMES FROM
+  ----------------------------
+  This page collects lap times from the moment it opens, the same way the
+  timing screen does. iRacing publishes your last lap time, not a history, so
+  there is nothing to back-fill: open the widget before the session and it has
+  the whole race. Open it on lap 30 and it starts at lap 30. It says so on
+  screen rather than pretending otherwise.
+
+  Recommended window: 360 x 190.
+
+  Query string options
+    laps=N          how many laps to show           (default 12)
+    style=bars|line how to draw them                (default bars)
+    best=0          hide the best-lap line
+    avg=0           hide the average line
+    pits=0          hide in-laps and out-laps entirely
+    range=SEC       fix the vertical span in seconds instead of zooming
+    scale=1.2       overall scale                   (PW.applyChrome)
+    opacity=0.8     panel opacity                   (PW.applyChrome)
+    server=URL      point at a PitWall elsewhere    (pitwall.js)
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PitWall — Lap times</title>
+<link rel="stylesheet" href="../shared/base.css">
+<style>
+  #root { width: 100%; }
+
+  #wrap {
+    display: none;
+    flex-direction: column;
+    gap: 7px;
+    padding: 10px 12px 9px;
+    border-radius: 8px;
+    background: rgba(var(--panel), var(--panel-opacity));
+    border: 1px solid var(--line);
+  }
+  body.ready #wrap { display: flex; }
+
+  .hd { display: flex; align-items: baseline; gap: 10px; }
+  .hd .t {
+    font-family: var(--chrome); font-size: 0.64rem; font-weight: 800;
+    letter-spacing: 0.15em; color: var(--text-faint);
+  }
+  .hd .best {
+    margin-left: auto; font-family: var(--mono);
+    font-variant-numeric: tabular-nums; font-size: 0.86rem; font-weight: 700;
+    color: var(--purple);
+  }
+  .hd .last {
+    font-family: var(--mono); font-variant-numeric: tabular-nums;
+    font-size: 0.86rem; font-weight: 700;
+  }
+
+  .chart { position: relative; width: 100%; }
+  .chart svg { display: block; width: 100%; height: auto; }
+
+  .note {
+    font-size: 0.66rem; color: var(--text-faint); text-align: center;
+    padding: 14px 0 12px;
+  }
+  .note.hide { display: none; }
+
+  .axis { font-family: var(--mono); font-size: 8px; fill: var(--text-faint); }
+</style>
+</head>
+<body class="overlay">
+<div id="root">
+  <div id="wrap">
+    <div class="hd">
+      <span class="t">LAP TIMES</span>
+      <span class="last" id="last">–</span>
+      <span class="best" id="best">–</span>
+    </div>
+    <div class="chart" id="chart"></div>
+    <div class="note" id="note">Collecting laps from now.</div>
+  </div>
+</div>
+
+<script src="../shared/pitwall.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  PW.applyChrome();
+
+  var LAPS   = Math.max(3, Math.min(60, PW.optNum('laps', 12)));
+  var STYLE  = String(PW.opt('style', 'bars')).toLowerCase() === 'line' ? 'line' : 'bars';
+  var SHOWB  = PW.optBool('best', true);
+  var SHOWA  = PW.optBool('avg', true);
+  var SHOWP  = PW.optBool('pits', true);
+  var FIXED  = PW.optNum('range', 0);
+
+  var W = 300, H = 96, PADL = 30, PADR = 4, PADT = 6, PADB = 12;
+
+  var wrapEl  = document.getElementById('wrap');
+  var chartEl = document.getElementById('chart');
+  var noteEl  = document.getElementById('note');
+  var lastEl  = document.getElementById('last');
+  var bestEl  = document.getElementById('best');
+
+  /* history ---------------------------------------------------------------
+     iRacing gives the last lap time, not a history, so we accumulate. A lap
+     is recorded when the lap counter moves on, which is also the moment the
+     sim has a final time for the lap that just ended. */
+  var laps = [];            // {lap, time, pit}
+  var seenLap = null;
+  var pittedThisLap = false;
+
+  function record(p) {
+    if (p.lap == null) return;
+    if (seenLap === null) { seenLap = p.lap; pittedThisLap = !!p.onPitRoad; return; }
+    if (p.onPitRoad) pittedThisLap = true;
+    if (p.lap === seenLap) return;
+
+    var t = p.lapLast;
+    if (t && t > 0) {
+      laps.push({ lap: seenLap, time: t, pit: pittedThisLap });
+      if (laps.length > 200) laps.splice(0, laps.length - 200);
+    }
+    seenLap = p.lap;
+    // The lap that has just started is an out lap if we were on pit road.
+    pittedThisLap = !!p.onPitRoad;
+  }
+
+  /* ---------------------------------------------------------------- draw */
+
+  function shown() {
+    var out = laps.slice(-LAPS);
+    if (!SHOWP) out = out.filter(function (l) { return !l.pit; }).slice(-LAPS);
+    return out;
+  }
+
+  function fmt(t) { return PW.fmtLap(t) || '–'; }
+
+  function draw() {
+    var list = shown();
+    if (list.length < 2) {
+      chartEl.innerHTML = '';
+      noteEl.classList.remove('hide');
+      noteEl.textContent = laps.length
+        ? 'One lap so far. The graph needs two.'
+        : 'Collecting laps from now.';
+      return;
+    }
+    noteEl.classList.add('hide');
+
+    // Clean laps set the scale. A pit lap is thirty seconds slower and would
+    // otherwise squash every real lap into a flat line at the top.
+    var clean = list.filter(function (l) { return !l.pit; });
+    var basis = clean.length >= 2 ? clean : list;
+    var times = basis.map(function (l) { return l.time; });
+    var lo = Math.min.apply(null, times);
+    var hi = Math.max.apply(null, times);
+
+    if (FIXED > 0) {
+      var mid = (lo + hi) / 2;
+      lo = mid - FIXED / 2; hi = mid + FIXED / 2;
+    } else {
+      var pad = Math.max(0.25, (hi - lo) * 0.18);
+      lo -= pad; hi += pad;
+    }
+    if (hi - lo < 0.2) { hi = lo + 0.2; }
+
+    var innerW = W - PADL - PADR, innerH = H - PADT - PADB;
+    function y(t) {
+      var f = (t - lo) / (hi - lo);
+      return PADT + innerH - Math.max(0, Math.min(1, f)) * innerH;
+    }
+    var n = list.length;
+    var step = innerW / n;
+    function xMid(i) { return PADL + step * i + step / 2; }
+
+    var bestT = Math.min.apply(null, clean.length ? clean.map(function (l) { return l.time; }) : times);
+    var avgT = basis.reduce(function (a, l) { return a + l.time; }, 0) / basis.length;
+
+    /* Uniform scaling, deliberately. Stretching the viewBox to the widget
+       width distorts the axis text horizontally, which at a wide window makes
+       the lap times look squashed. Letting it scale evenly costs a little
+       height and keeps the numbers readable. */
+    var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '">';
+
+    // grid: the fastest and slowest of the window, labelled
+    [lo, hi].forEach(function (t) {
+      svg += '<line x1="' + PADL + '" y1="' + y(t).toFixed(1) + '" x2="' + (W - PADR) +
+             '" y2="' + y(t).toFixed(1) + '" stroke="rgba(255,255,255,0.07)" stroke-width="1"></line>';
+    });
+    svg += '<text class="axis" x="2" y="' + (y(hi) + 3).toFixed(1) + '">' + fmt(hi) + '</text>';
+    svg += '<text class="axis" x="2" y="' + (y(lo) + 3).toFixed(1) + '">' + fmt(lo) + '</text>';
+
+    if (SHOWA) {
+      svg += '<line x1="' + PADL + '" y1="' + y(avgT).toFixed(1) + '" x2="' + (W - PADR) +
+             '" y2="' + y(avgT).toFixed(1) + '" stroke="rgba(255,255,255,0.28)" ' +
+             'stroke-width="1" stroke-dasharray="3 3"></line>';
+    }
+    if (SHOWB) {
+      svg += '<line x1="' + PADL + '" y1="' + y(bestT).toFixed(1) + '" x2="' + (W - PADR) +
+             '" y2="' + y(bestT).toFixed(1) + '" stroke="var(--purple)" ' +
+             'stroke-width="1" stroke-dasharray="4 3" opacity="0.75"></line>';
+    }
+
+    if (STYLE === 'bars') {
+      var bw = Math.max(2, step * 0.62);
+      list.forEach(function (l, i) {
+        var yy = y(l.time), x = xMid(i) - bw / 2;
+        var h = Math.max(1, (PADT + innerH) - yy);
+        var fill = l.pit ? 'rgba(255,255,255,0.16)'
+                 : (Math.abs(l.time - bestT) < 1e-6 ? 'var(--purple)' : 'var(--accent)');
+        svg += '<rect x="' + x.toFixed(1) + '" y="' + yy.toFixed(1) + '" width="' + bw.toFixed(1) +
+               '" height="' + h.toFixed(1) + '" rx="1.5" fill="' + fill + '"></rect>';
+      });
+    } else {
+      var pts = list.map(function (l, i) { return xMid(i).toFixed(1) + ',' + y(l.time).toFixed(1); });
+      svg += '<polyline fill="none" stroke="var(--accent)" stroke-width="1.8" ' +
+             'stroke-linejoin="round" stroke-linecap="round" points="' + pts.join(' ') + '"></polyline>';
+      list.forEach(function (l, i) {
+        var isBest = Math.abs(l.time - bestT) < 1e-6;
+        svg += '<circle cx="' + xMid(i).toFixed(1) + '" cy="' + y(l.time).toFixed(1) +
+               '" r="' + (isBest ? 2.8 : 1.8) + '" fill="' +
+               (l.pit ? 'rgba(255,255,255,0.3)' : isBest ? 'var(--purple)' : 'var(--accent)') +
+               '"></circle>';
+      });
+    }
+
+    // lap numbers at each end, so the window is readable without clutter
+    svg += '<text class="axis" x="' + xMid(0).toFixed(1) + '" y="' + (H - 2) +
+           '" text-anchor="middle">' + list[0].lap + '</text>';
+    if (n > 1) {
+      svg += '<text class="axis" x="' + xMid(n - 1).toFixed(1) + '" y="' + (H - 2) +
+             '" text-anchor="middle">' + list[n - 1].lap + '</text>';
+    }
+    svg += '</svg>';
+
+    if (chartEl._h !== svg) { chartEl.innerHTML = svg; chartEl._h = svg; }
+  }
+
+  /* -------------------------------------------------------------- render */
+
+  function render() {
+    if (!PW.meta || !PW.tick || !PW.tick.player) {
+      document.body.classList.remove('ready');
+      return;
+    }
+    document.body.classList.add('ready');
+    var p = PW.tick.player;
+    record(p);
+
+    var lastTxt = fmt(p.lapLast);
+    if (lastEl.textContent !== lastTxt) lastEl.textContent = lastTxt;
+    var bestTxt = fmt(p.lapBest);
+    if (bestEl.textContent !== bestTxt) bestEl.textContent = bestTxt;
+
+    draw();
+  }
+
+  PW.on('meta', render);
+  PW.on('tick', render);
+  PW.on('close', function () { document.body.classList.remove('ready'); });
+  PW.start({ sub: ['meta', 'tick'], rate: 4 });
+}());
+</script>
+</body>
+</html>

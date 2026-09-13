@@ -155,7 +155,7 @@ class PitWall:
             return False
         self.server.hub.hello = {
             "app": "PitWall",
-            "version": "1.4.0",
+            "version": "1.6.0",
             "demo": self.demo,
             "league": self.config.get("league", {}),
             "event": self.leagues.event_payload(),

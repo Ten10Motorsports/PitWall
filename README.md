@@ -63,35 +63,44 @@ The control panel has a builder that writes those URLs for you.
 car for its profile, lap history and lap chart. It reflows into a card list on a
 phone. Open it on a laptop, tablet or phone anywhere on your network.
 
-### In-game HUD
+### In-game HUD, for drivers
 
-Six transparent widgets — relative, standings, inputs trace, fuel and tyres,
-delta bar, flags and spotter — that sit over iRacing.
+**Drivers download one file: `PitWall-HUD.exe`.** It carries the engine inside
+itself, so there is nothing else to run, nothing to start in the right order,
+and no console window. Double-click it and a settings window opens.
 
-Run them with the Electron shell in `hud-app/` (`npm install && npm start`), or
-just add them as OBS sources, or open them in a browser window. Same files
-either way.
+Eight widgets, each with its own saved settings:
 
-`Ctrl+Shift+E` unlocks the widgets to drag and resize. Press it again and they
-become click-through, so they can never swallow a click meant for the sim.
+| Widget | What it is |
+|---|---|
+| Relative | Cars around you on track with the gap in seconds |
+| Leaderboard | The broadcast timing tower, sized for in-car, with pin-and-rotate |
+| Flags and status | Flag, position, incidents, laps to go, the warnings that end races |
+| Blindspot | Something alongside, and which side, built for peripheral vision |
+| Lap time graph | Your last laps as a chart, best in purple, pit laps greyed |
+| Delta bar | How this lap compares, with the sector breakdown |
+| Fuel and tyres | Fuel per lap, laps left, what to add to finish |
+| Inputs trace | Throttle, brake and steering |
 
-### League profiles
+**Layouts are per screen arrangement, and defaults are computed from the screen
+you actually have.** A triple-screen or ultrawide driver opens it to a sensible
+layout on the centre display rather than everything stacked in a corner. Plug
+in a different monitor and that arrangement gets its own layout; plug the old
+one back and your layout is still there. Settings are separate from positions,
+because a preference should follow you between setups and a coordinate should
+not.
 
-Everything that changes between one series and another — the name and colours
-on every graphic, where the roster is read from, and the season calendar — is
-saved as a **league profile** in the **Leagues** tab.
+| Shortcut | What it does |
+|---|---|
+| `Ctrl+Shift+E` | Unlock the widgets to drag and resize. Press again to lock and make them click-through. |
+| `Ctrl+Shift+S` | Open settings. |
+| `Ctrl+Shift+H` | Hide and show the whole HUD. |
+| `Ctrl+Shift+R` | Reload every widget. |
 
-Pick a league, pick a round, and the app applies all of it at once: the accent
-colour on every overlay, the league name in the session bar, the roster pulled
-fresh from GitHub, and the round and circuit on screen. Overlays already open
-follow along without being reloaded, so this works mid-broadcast.
+The same pages also work as OBS sources or in a browser tab. One implementation
+of every widget, three places it can be shown.
 
-A broadcaster who runs three different series keeps three profiles and never
-retypes a roster URL. Editing the live league applies immediately, which is
-what you want when a track changes at five to eight.
-
-Profiles live in `data/leagues.json` next to the executable, so they survive an
-app update and can be copied to a co-commentator's machine.
+Building it from source instead: `cd hud-app && npm install && npm start`.
 
 ### Driver-submitted profiles
 

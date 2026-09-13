@@ -213,6 +213,9 @@
     white-space: nowrap;
   }
   .cell.c2 { color: var(--text-dim); }
+  /* Not streamed: dimmed a little, but nothing like the struck-through
+     treatment a retired car gets. */
+  .row.is-nodata .nm, .row.is-nodata .pos { opacity: 0.72; }
   .row .cell[hidden] { display: none !important; }
   .cell.empty { color: var(--text-faint); }
   /* colour beats column rank: PB green and pit yellow must win over .c2 */
@@ -363,6 +366,9 @@
   /** Pit lane (and retirement) override the primary data column. */
   function pitCell(c, now) {
     if (c.st === 'out') return { t: 'OUT', c: 'empty' };
+    // The sim is not streaming this car to us. It is still racing, we just
+    // cannot see where it is, so say nothing rather than claim it retired.
+    if (c.st === 'nodata') return { t: '\u2013', c: 'empty' };
     if (c.st === 'stall') {
       if (stallStart[c.i] == null) stallStart[c.i] = now;
       var d = Math.max(0, now - stallStart[c.i]);
@@ -681,6 +687,7 @@
     node.classList.toggle('is-pit', c.st === 'pit');
     node.classList.toggle('is-stall', c.st === 'stall');
     node.classList.toggle('is-out', c.st === 'out');
+    node.classList.toggle('is-nodata', c.st === 'nodata');
     node.classList.toggle('is-focus', (OPT.focus || OPT.top > 0) && focusIdx != null && c.i === focusIdx);
   }
 

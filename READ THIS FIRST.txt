@@ -1,160 +1,249 @@
-PitWall 1.2.0  -  the whole thing, in one upload
-================================================
+PITWALL 1.6.0  -  COMPLETE UPLOAD
+=================================
 
-This is every file, complete. You upload it ONCE and you are done.
+This zip is the whole project. Every file in it replaces or adds to what is
+in the repository. You upload it once, tag a release, and GitHub builds both
+downloads for you.
 
-
-STEP 1  -  EXTRACT THIS ZIP PROPERLY
-------------------------------------
-Right-click the zip  ->  Extract All...  ->  Extract.
-
-This matters more than anything else on this page. If you drag files
-straight out of the zip PREVIEW window, Windows strips the folder
-information and everything lands loose in your repository with names like
-"index (1).html". That is what went wrong before. Extracting first fixes it.
-
-
-STEP 2  -  SHOW HIDDEN FILES
-----------------------------
-Open the extracted PitWall-1.2.0-EVERYTHING folder.
-
-In the Explorer window:   View  ->  Show  ->  Hidden items   (tick it)
-
-You should now see a folder called  .github  at the top of the list. If you
-cannot see it, do not continue: without it the automatic build never runs.
-
-
-STEP 3  -  SELECT EVERYTHING
-----------------------------
-Click once inside the folder, then press  Ctrl + A  to select all of it.
-
-You should have 17 things selected: 8 folders and 9 files.
-
-The 8 folders are:
-    .github   config   docs   hud-app   scripts   server   site   web
-
-This READ THIS FIRST.txt is one of the 9 files. Uploading it does no harm,
-so there is no need to deselect anything.
-
-
-STEP 4  -  UPLOAD
------------------
-   1. Open your repository on github.com
-   2. Make sure you are at the TOP level (the address ends in the
-      repository name, with no /tree/ after it)
-   3. Click  Add file  ->  Upload files
-   4. Drag the selected items from Explorer into the browser window
-
-
-STEP 5  -  CHECK BEFORE YOU COMMIT   <-- the important bit
-----------------------------------------------------------
-GitHub now lists what it is about to upload. LOOK AT THAT LIST.
-
-   CORRECT - the names have folders in front of them:
-
-        server/main.py
-        server/engine.py
-        web/control/index.html
-        web/broadcast/tower.html
-        .github/workflows/release.yml
-
-   WRONG - bare names with no folders, and numbered duplicates:
-
-        main.py
-        index.html
-        index (1).html
-        index (2).html
-
-If it looks WRONG: do not commit. Leave the page without committing, go
-back to Step 1, and make sure you extracted the zip first.
-
-If it looks CORRECT: scroll to the bottom, type  PitWall 1.2.0  in the
-description box, and click  Commit changes.
-
-That is the whole upload. One commit, everything in place.
-
-
-STEP 6  -  CHECK THE RESULT
----------------------------
-On the Code tab you should see these folders and nothing loose:
-
-    .github   config   docs   hud-app   scripts   server   site   web
-
-
-STEP 7  -  MAKE THE RELEASE  (this builds the new PitWall.exe)
---------------------------------------------------------------
-"Actions -> Run workflow" is NOT enough on its own. The .exe is only
-attached to a release when the build is started BY A TAG, and creating
-the release below is what makes the tag.
-
-   1. On your repository, in the right-hand sidebar, click  Releases
-      (or add  /releases  to the repository address)
-
-   2. Click  Draft a new release
-
-   3. Click the  Choose a tag  box and type:
-
-            v1.2.0
-
-      A line appears underneath saying "+ Create new tag: v1.2.0 on
-      publish".  CLICK THAT LINE.  Skip it and no .exe will ever appear.
-
-   4. Release title:   v1.2.0
-
-   5. Leave the description empty. The build writes it for you.
-
-   6. Leave "Set as a pre-release" unticked.
-
-   7. Click  Publish release
-
-   8. Click the  Actions  tab. A run called "Build Windows app" starts
-      within a few seconds and takes three to four minutes.
-      Orange dot = running.  Green tick = done.  Red X = failed, open it
-      and send me what the failed step says.
-
-   9. Green tick? Go back to Releases, click v1.2.0, and under  Assets
-      you should now see:
-
-            PitWall.exe
-            PitWall-windows.zip
-
-      If Assets only shows the two "Source code" entries, the build has
-      not finished. Wait and refresh.
-
-
-STEP 8  -  UPDATE THE RACE PC
------------------------------
-   1. Download PitWall.exe from the v1.2.0 release
-   2. Close PitWall if it is running (close the black window)
-   3. Drop the new PitWall.exe into C:\PitWall over the old one
-   4. Double-click it
-
-Your data folder sits BESIDE the .exe, so the roster, the cached track maps
-and your league profiles are all kept. Nothing is lost.
+Nothing to install. No Git, no Python, no Node. Web browser only.
 
 
 WHAT IS NEW IN THIS VERSION
 ---------------------------
-Practice and qualifying now work properly. The app reads the session type
-and changes what it shows:
 
-   * running order is quickest lap first, not track position
-   * gap = how far off the quickest lap you are
-   * the tower switches to BEST and LAST columns by itself, and switches
-     back when the race starts
-   * the session bar shows a countdown clock instead of Lap 7 / 42
-   * the battle box hides itself, there is no fight to show
+  * PitWall-HUD.exe  -  a second download, for drivers.
+      Transparent click-through widgets drawn over iRacing, with a settings
+      window. One file. It starts the timing engine itself, hidden, so a
+      driver never sees a console window and never runs anything else.
+      Widgets: Relative, Leaderboard, Flags, Blind spot, Lap time graph,
+      Delta, Fuel, Inputs. Every widget has settings and every setting is
+      saved. Ctrl+Shift+E unlocks them for dragging, Ctrl+Shift+E again
+      locks them. Ctrl+Shift+S opens settings. It also sits in the tray.
+      Layouts are saved per screen arrangement, so a triple-screen rig and a
+      single screen each keep their own positions.
 
-One set of OBS sources now covers practice, qualifying and the race with
-no reloading in between.
+  * Rotating tower. Top 10 stays pinned, the block underneath cycles
+    11-20, 21-30 and so on, then starts again.
 
-Also included: the Leagues tab. Each league profile saves its name,
-colours, roster URL and season calendar. One click applies the lot and
-pulls the roster.
+  * League profiles that save. Create, edit, duplicate, delete, switch
+    between them, and keep a schedule of rounds per league.
 
-To try it without iRacing, open a command window in C:\PitWall (type cmd
-in the Explorer address bar) and run, with two hyphens before each word:
+  * Roster edits that survive a pull. Anything you edit by hand is kept
+    when the roster is pulled again, and marked so you can revert it.
 
-    PitWall.exe --demo --scenario practice --speed 14
-    PitWall.exe --demo --scenario qualify --speed 14
-    PitWall.exe --demo --speed 14
+  * Battle box picker. Choose 2 or 4 drivers by hand, or leave it on auto.
+
+  * Drivers no longer show as OUT when they are simply not being streamed
+    to your client. See the note at the bottom about Max Cars.
+
+  * Practice and qualifying now score correctly, ordered by best lap.
+
+  * A bad value coming out of the sim can no longer end a broadcast. The
+    engine coerces every text field, and a failed tick is logged and skipped
+    instead of stopping the app.
+
+
+STEP 1  -  EXTRACT THE ZIP
+--------------------------
+
+Do this properly or the upload lands wrong.
+
+  1. Right-click the zip file.
+  2. Choose "Extract All...".
+  3. Click "Extract".
+  4. A normal folder window opens. Work in THAT window.
+
+Do NOT drag files straight out of the zip preview window. Windows flattens
+the folders when you do, and you end up with files called "index (1).html"
+sitting loose at the top of the repository.
+
+
+STEP 2  -  SHOW HIDDEN FILES
+----------------------------
+
+Two of the items start with a dot and Windows hides them by default. They
+are the most important ones: the .github folder is what builds the two .exe
+files for you.
+
+  1. In the extracted folder window, click "View" in the toolbar.
+  2. Point at "Show".
+  3. Click "Hidden items" so it is ticked.
+
+You should now see ".github" and ".gitignore" appear in the folder.
+
+
+STEP 3  -  UPLOAD
+-----------------
+
+  1. Open this page:
+
+         https://github.com/Ten10Motorsports/PitWall
+
+  2. Click "Add file" near the top right, then "Upload files".
+
+  3. Go back to the extracted folder window.
+     Press Ctrl+A to select everything, including .github and .gitignore.
+
+  4. Drag the whole selection onto the upload page.
+
+  5. WAIT. It takes a minute or two. There are 89 files and a lot of them
+     are inside folders.
+
+  Selecting everything also picks up this text file. That is fine. It
+  just lands in the repository as a note and changes nothing.
+
+
+STEP 4  -  CHECK BEFORE YOU COMMIT
+----------------------------------
+
+This is the step that catches the mistake that has bitten before. Look at
+the list of files on the upload page.
+
+  RIGHT:   .github/workflows/release.yml
+           server/engine.py
+           web/hud/blindspot.html
+           hud-app/main.js
+
+  WRONG:   release.yml
+           engine.py
+           index (1).html
+
+Names must have folders in front of them, with forward slashes. If they do
+not, the folders were flattened. Click the X on the page to cancel, go back
+to Step 1, and extract the zip properly this time.
+
+When the list looks right:
+
+  6. In the "Commit changes" box at the bottom, type:  PitWall 1.6.0
+  7. Leave "Commit directly to the main branch" selected.
+  8. Click "Commit changes".
+
+
+STEP 5  -  CUT THE RELEASE
+--------------------------
+
+Uploading the files does not build anything. The build only runs when a
+version tag appears. This is the part that was missed last time, which is
+why the download only had source code in it.
+
+  1. Open this page:
+
+         https://github.com/Ten10Motorsports/PitWall/releases/new
+
+  2. Click the "Choose a tag" button.
+  3. Type:  v1.6.0
+  4. A line appears underneath reading "Create new tag: v1.6.0 on publish".
+     CLICK THAT LINE. If you do not click it, no tag is created and no
+     build runs.
+  5. In the "Release title" box, type:  PitWall 1.6.0
+  6. Leave the description empty. It gets filled in automatically.
+  7. Click "Publish release".
+
+Do not use "Run workflow" from the Actions tab instead. That builds the
+files but does not attach them to a release, which is exactly what went
+wrong before.
+
+
+STEP 6  -  WAIT FOR THE BUILD
+-----------------------------
+
+  1. Open this page:
+
+         https://github.com/Ten10Motorsports/PitWall/actions
+
+  2. The top entry will have a spinning yellow dot. Leave it alone.
+
+  3. This build takes longer than previous ones, roughly 8 to 15 minutes,
+     because it now downloads Electron and packages the driver HUD as well
+     as the main app. Earlier versions took about 4 minutes. A yellow dot
+     after 10 minutes is normal, not a failure.
+
+  4. When the dot turns into a green tick, open:
+
+         https://github.com/Ten10Motorsports/PitWall/releases/latest
+
+     Under "Assets" you should see:
+
+         PitWall-HUD.exe        (driver download, roughly 80 to 120 MB)
+         PitWall.exe            (broadcaster download)
+         PitWall-windows.zip    (broadcaster download with the guides)
+         Source code (zip)
+         Source code (tar.gz)
+
+If the dot turns red, click into the run and find the step with the red
+cross next to it. Send me the name of that step and the last twenty lines
+of red text underneath it.
+
+
+WHO DOWNLOADS WHAT
+------------------
+
+  Whoever runs the stream:   PitWall-windows.zip
+                             Contains PitWall.exe, the setup guide and the
+                             preview page. Extract it, double-click
+                             PitWall.exe, browser opens the control panel.
+
+  A driver who wants a HUD:  PitWall-HUD.exe
+                             One file. Double-click it. The settings window
+                             opens the first time so widgets can be turned
+                             on. Nothing else to download, nothing to run
+                             alongside it.
+
+A driver does NOT need PitWall.exe as well. The HUD carries its own copy of
+the engine inside it and starts it quietly in the background.
+
+
+ONE HONEST WARNING ABOUT THE HUD
+--------------------------------
+
+The HUD has been built and driven end to end here, on Linux, under a real
+Electron runtime: widget layout, the settings window, saving settings,
+locking and unlocking, and the packaging step that carries the engine inside
+the app were all verified working. What has never run yet is the Windows
+packaging step on GitHub's own Windows machine. That is the one thing that
+cannot be rehearsed from here.
+
+So expect one of two outcomes at Step 6:
+
+  * A green tick, and PitWall-HUD.exe appears on the release. Done.
+
+  * A red cross on the step called "Build the in-game HUD" or "Check the
+    HUD binary exists". If that happens, the main PitWall.exe is still
+    built and still attached, so the broadcast side is unaffected. Send me
+    the red text and it gets fixed in one pass.
+
+The build deliberately fails rather than shipping a broken file: if the HUD
+comes out smaller than 40 MB it means Electron or the engine did not get
+packed in, and the workflow stops there instead of publishing something that
+would not start.
+
+
+REQUIREMENTS FOR THE HUD, FOR DRIVERS
+-------------------------------------
+
+  * iRacing must be running in WINDOWED or BORDERLESS mode.
+    Exclusive fullscreen hands the entire screen to one program, so no
+    desktop overlay of any kind can draw on top of it. This is a Windows
+    limitation, not something the app can work around.
+
+  * Not VR. A desktop window is never visible inside a headset. There is no
+    partial version of this: a headset only shows what the VR runtime draws.
+
+
+TWO THINGS STILL TO DO ON YOUR SIDE
+-----------------------------------
+
+  1. The driver card source in OBS is still set to 500 wide by 200 tall.
+     The card is drawn at its correct position inside a 1920x1080 canvas,
+     which is entirely outside a 200px tall source, so it shows as an empty
+     outline. Fix: right-click the source, Properties, set Width 1920 and
+     Height 1080, leave the position at 0,0. Every PitWall browser source
+     should be 1920x1080. You crop or move the graphic in OBS, not by
+     shrinking the source.
+
+  2. Set Max Cars to 63 on the iRacing website, under Account then Settings.
+     iRacing only streams a limited number of cars to your client, and a car
+     it is not streaming looks identical to a car that has left the session.
+     This version handles that far better on its own, showing dashes instead
+     of declaring a driver OUT, but raising Max Cars removes the cause
+     rather than papering over it.

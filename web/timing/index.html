@@ -614,6 +614,7 @@
         if (c.st === 'pit') return { t: 'PIT', c: 'st-pit' };
         if (c.st === 'stall') return { t: 'BOX', c: 'st-stall' };
         if (c.st === 'out') return { t: 'OUT', c: 'empty' };
+        if (c.st === 'nodata') return { t: '\u2013', c: 'empty' };
         return dash(PW.fmtLap(c.cur, 1), 'dimv');
       },
       s: function (c) { return c.cur == null ? 1e9 : c.cur; } },
@@ -1120,7 +1121,8 @@
     setText(mid.children[1].children[0], p.team || d.team || '');
     setText(mid.children[1].children[1],
       (PW.multiclass() && d.classShort ? d.classShort + ' · ' : '') +
-      (c.st === 'pit' ? 'IN PIT' : c.st === 'stall' ? 'IN BOX' : c.st === 'out' ? 'OUT' : 'L' + (c.lap || 0)));
+      (c.st === 'pit' ? 'IN PIT' : c.st === 'stall' ? 'IN BOX' : c.st === 'out' ? 'OUT'
+        : c.st === 'nodata' ? 'NO DATA' : 'L' + (c.lap || 0)));
     var right = node.children[3];
     var lastTxt = PW.fmtLap(c.last);
     setText(right.children[0], lastTxt || '–');

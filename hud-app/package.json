@@ -1,9 +1,11 @@
 {
   "name": "pitwall-hud",
   "productName": "PitWall HUD",
-  "version": "1.0.0",
+  "version": "1.6.0",
   "private": true,
-  "description": "Transparent in-game HUD shell for PitWall. Loads the same overlay pages the server feeds to OBS and the second screen.",
+  "description": "The PitWall driver HUD. Transparent, click-through widgets over iRacing, with a settings window. Carries the engine, so it is one download.",
+  "author": "PitWall",
+  "repository": "https://github.com/Ten10Motorsports/PitWall",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -15,7 +17,37 @@
   },
   "build": {
     "appId": "app.pitwall.hud",
-    "win": { "target": ["portable", "nsis"] },
-    "files": ["main.js", "preload.js", "icon.png", "package.json"]
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "icon.png"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "settings-preload.js",
+      "settings.html",
+      "icon.png",
+      "package.json"
+    ],
+    "portable": {
+      "artifactName": "PitWall-HUD.exe"
+    },
+    "artifactName": "PitWall-HUD.exe",
+    "extraResources": [
+      {
+        "from": "engine",
+        "to": "engine",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ]
   }
 }

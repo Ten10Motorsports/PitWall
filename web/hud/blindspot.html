@@ -1,0 +1,293 @@
+<!doctype html>
+<!--
+  PitWall — Blindspot (in-car HUD)
+  ---------------------------------------------------------------------------
+  The widget you never look at directly. Two bars either side of a car mark,
+  lit when something is alongside you, doubled and red when two cars are. It
+  is built for peripheral vision: no text you have to read, no numbers that
+  need parsing, just the side lighting up.
+
+  WHERE THE SIGNAL COMES FROM, AND WHAT IT CANNOT DO
+  -------------------------------------------------
+  iRacing publishes `CarLeftRight`, its own spotter call, with six states:
+  clear, car left, car right, cars both sides, two cars left, two cars right.
+  That is the whole lateral signal the sim gives. It does NOT publish where
+  other cars are sideways of you, so this cannot be a true top-down radar with
+  cars in their exact positions. No tool can, on iRacing telemetry alone.
+
+  What it can do, and does: tell you reliably that someone is there, on which
+  side, and roughly how far up or down the road they are, taken from the same
+  gap maths the relative uses. That is the information that stops you turning
+  in on someone.
+
+  The hold is deliberate. The sim drops back to "clear" the instant a car's
+  bumper passes your mirror line, which in a side-by-side corner flickers.
+  Holding the light for a moment after the call clears is the difference
+  between a useful warning and a strobe.
+
+  Recommended window: 320 x 120.
+
+  Query string options
+    sides=both|left|right   which sides to show          (default both)
+    hold=MS                 keep lit this long after clear (default 700)
+    dist=0                  hide the distance readout
+    num=0                   hide the car number of the nearest car alongside
+    near=SEC                how close counts as alongside (default 1.2)
+    scale=1.2               overall scale                (PW.applyChrome)
+    opacity=0.8             panel opacity                (PW.applyChrome)
+    server=URL              point at a PitWall elsewhere (pitwall.js)
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PitWall — Blindspot</title>
+<link rel="stylesheet" href="../shared/base.css">
+<style>
+  #root { width: 100%; }
+
+  #bs {
+    display: none;
+    align-items: stretch;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 8px;
+    background: rgba(var(--panel), var(--panel-opacity));
+    border: 1px solid var(--line);
+  }
+  body.ready #bs { display: flex; }
+
+  /* --- the side bars ---------------------------------------------------- */
+  .side {
+    flex: 0 0 34px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.045);
+    position: relative;
+    overflow: hidden;
+    transition: background 90ms linear;
+  }
+  .side i {
+    position: absolute;
+    left: 3px; right: 3px;
+    top: 50%; bottom: 50%;
+    border-radius: 4px;
+    background: var(--yellow);
+    transition: top 90ms linear, bottom 90ms linear, background 90ms linear;
+  }
+  .side.on  { background: rgba(240, 190, 60, 0.10); }
+  .side.on i  { top: 14%; bottom: 14%; }
+  .side.two { background: rgba(255, 77, 77, 0.12); }
+  .side.two i { top: 3%; bottom: 3%; background: var(--red); }
+  .side.hide { display: none; }
+
+  /* --- the middle ------------------------------------------------------- */
+  .mid {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    text-align: center;
+  }
+
+  .word {
+    font-family: var(--chrome);
+    font-size: 0.86rem;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    color: var(--text-faint);
+    transition: color 90ms linear;
+  }
+  #bs.alert .word { color: var(--yellow); }
+  #bs.danger .word { color: var(--red); }
+
+  /* A plain car mark. Deliberately abstract: it is a position reference for
+     the bars, not decoration to look at. */
+  .mark { display: block; opacity: 0.55; }
+
+  .who {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 0.82rem; min-height: 1.1em;
+  }
+  .who .plate {
+    font-family: var(--mono); font-weight: 800; font-size: 0.76rem;
+    border-radius: 3px; padding: 1px 5px; letter-spacing: 0.02em;
+  }
+  .who .d {
+    font-family: var(--mono); font-variant-numeric: tabular-nums;
+    color: var(--text-dim);
+  }
+  .who.hide { display: none; }
+</style>
+</head>
+<body class="overlay">
+<div id="root">
+  <div id="bs">
+    <div class="side" id="sideL"><i></i></div>
+    <div class="mid">
+      <div class="word" id="word">CLEAR</div>
+      <svg class="mark" width="22" height="34" viewBox="0 0 22 34" aria-hidden="true">
+        <rect x="3" y="2" width="16" height="30" rx="5"
+              fill="none" stroke="currentColor" stroke-width="1.6"></rect>
+        <rect x="6.5" y="7" width="9" height="7" rx="2" fill="currentColor"></rect>
+      </svg>
+      <div class="who hide" id="who"></div>
+    </div>
+    <div class="side" id="sideR"><i></i></div>
+  </div>
+</div>
+
+<script src="../shared/pitwall.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  PW.applyChrome();
+
+  var SIDES = (function (s) {
+    s = String(s || 'both').toLowerCase();
+    return (s === 'left' || s === 'right') ? s : 'both';
+  })(PW.opt('sides', 'both'));
+  var HOLD    = Math.max(0, PW.optNum('hold', 700));
+  var SHOWNUM = PW.optBool('num', true);
+  var SHOWD   = PW.optBool('dist', true);
+  var NEAR    = PW.optNum('near', 1.2);
+
+  /* Readable text on a class colour. Each widget carries its own copy: it is
+     four lines and not worth a shared import. */
+  function ink(hex) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ''));
+    if (!m) return '#0b0d10';
+    var n = parseInt(m[1], 16);
+    var lum = 0.2126 * (n >> 16 & 255) + 0.7152 * (n >> 8 & 255) + 0.0722 * (n & 255);
+    return lum > 150 ? '#0b0d10' : '#ffffff';
+  }
+
+  var bs = document.getElementById('bs');
+  var sideL = document.getElementById('sideL');
+  var sideR = document.getElementById('sideR');
+  var wordEl = document.getElementById('word');
+  var whoEl = document.getElementById('who');
+
+  sideL.classList.toggle('hide', SIDES === 'right');
+  sideR.classList.toggle('hide', SIDES === 'left');
+
+  /* The sim's call, and when each side was last called. Holding a side lit
+     briefly after it clears is what stops the bars strobing through a
+     side-by-side corner. */
+  var lastLeft = 0, lastRight = 0, leftTwo = false, rightTwo = false;
+
+  function noteCall(state) {
+    var now = Date.now();
+    if (state === 'carLeft' || state === 'carLeftRight') { lastLeft = now; leftTwo = false; }
+    if (state === 'carRight' || state === 'carLeftRight') { lastRight = now; rightTwo = false; }
+    if (state === 'twoCarsLeft') { lastLeft = now; leftTwo = true; }
+    if (state === 'twoCarsRight') { lastRight = now; rightTwo = true; }
+  }
+
+  /* ------------------------------------------------ nearest car alongside */
+
+  function refLap(me) {
+    var cls = PW.classOf(me.i);
+    return (me.best || me.last || (cls && cls.est) || 90) || 90;
+  }
+
+  function relativeTo(me, c, ref) {
+    if (me.gl != null && c.gl != null) {
+      var v = me.gl - c.gl, half = ref / 2;
+      if (v > half) v -= ref; else if (v < -half) v += ref;
+      return v;
+    }
+    if (me.pct != null && c.pct != null) {
+      var dp = c.pct - me.pct;
+      if (dp > 0.5) dp -= 1; else if (dp < -0.5) dp += 1;
+      return dp * ref;
+    }
+    return null;
+  }
+
+  /** The closest car within `near` seconds, either side of us. */
+  function nearest(meIdx) {
+    var all = PW.relative(meIdx, 999, 999);
+    var me = null;
+    for (var i = 0; i < all.length; i++) if (all[i].i === meIdx) me = all[i];
+    if (!me) return null;
+    var ref = refLap(me), best = null;
+    all.forEach(function (c) {
+      if (c.i === meIdx) return;
+      if (c.st === 'out' || c.st === 'nodata') return;
+      var rel = relativeTo(me, c, ref);
+      if (rel === null) return;
+      var d = Math.abs(rel);
+      if (d > NEAR) return;
+      if (!best || d < best.d) best = { i: c.i, d: d, rel: rel };
+    });
+    return best;
+  }
+
+  /* ---------------------------------------------------------- rendering */
+
+  function render() {
+    if (!PW.meta || !PW.tick || !PW.tick.player) { document.body.classList.remove('ready'); return; }
+    document.body.classList.add('ready');
+
+    var p = PW.tick.player;
+    noteCall(p.leftRight);
+
+    var now = Date.now();
+    var left  = SIDES !== 'right' && (now - lastLeft)  < HOLD;
+    var right = SIDES !== 'left'  && (now - lastRight) < HOLD;
+
+    sideL.className = 'side' + (SIDES === 'right' ? ' hide' : '') +
+                      (left ? (leftTwo ? ' two' : ' on') : '');
+    sideR.className = 'side' + (SIDES === 'left' ? ' hide' : '') +
+                      (right ? (rightTwo ? ' two' : ' on') : '');
+
+    var two = (left && leftTwo) || (right && rightTwo);
+    var any = left || right;
+    bs.className = any ? (two ? 'alert danger' : 'alert') : '';
+
+    var word = 'CLEAR';
+    if (left && right) word = 'BOTH SIDES';
+    else if (left) word = leftTwo ? 'TWO LEFT' : 'CAR LEFT';
+    else if (right) word = rightTwo ? 'TWO RIGHT' : 'CAR RIGHT';
+    if (wordEl.textContent !== word) wordEl.textContent = word;
+
+    /* Who it is, when we can tell. The sim names no car for a spotter call,
+       so this is the closest car by track position rather than a certainty,
+       and it is hidden entirely when nothing is close. */
+    if (!any || (!SHOWNUM && !SHOWD) || p.idx == null) {
+      whoEl.classList.add('hide');
+      return;
+    }
+    var n = nearest(p.idx);
+    if (!n) { whoEl.classList.add('hide'); return; }
+
+    var d = PW.driver(n.i) || {};
+    var col = d.classColor || '#8894a4';
+    var h = '';
+    if (SHOWNUM) {
+      h += '<span class="plate" style="background:' + col + ';color:' +
+           ink(col) + '">' + (d.num != null ? d.num : '?') + '</span>';
+    }
+    if (SHOWD) {
+      h += '<span class="d">' + (n.rel >= 0 ? '+' : '') + n.rel.toFixed(2) + 's</span>';
+    }
+    if (whoEl._h !== h) { whoEl.innerHTML = h; whoEl._h = h; }
+    whoEl.classList.remove('hide');
+  }
+
+  /* The hold means the display has to keep updating between ticks, or a side
+     would stay lit until the next packet rather than for exactly `hold`. */
+  function frame() { render(); requestAnimationFrame(frame); }
+  requestAnimationFrame(frame);
+
+  PW.on('meta', render);
+  PW.on('tick', render);
+  PW.on('close', function () { document.body.classList.remove('ready'); });
+  PW.start({ sub: ['meta', 'tick'], rate: 30 });
+}());
+</script>
+</body>
+</html>

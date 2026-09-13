@@ -280,7 +280,8 @@
     lb.setAttribute('font-size', (r * (txt.length >= 3 ? 0.86 : 1.12)).toFixed(1));
     lb.setAttribute('fill', pit ? colour : '#05070a');
 
-    var cls = 'car' + (pit ? ' pit' : '') + (c.st === 'out' ? ' out' : '');
+    var cls = 'car' + (pit ? ' pit' : '') +
+              (c.st === 'out' || c.st === 'nodata' ? ' out' : '');
     if (g.getAttribute('class') !== cls) g.setAttribute('class', cls);
   }
 

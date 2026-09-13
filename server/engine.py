@@ -141,6 +141,14 @@ class CarState:
         self.was_leader = False
         self.gap_history: List[float] = []
         self.out = False
+        # iRacing reports "not in world" both for a car that has left the
+        # session and for one it simply is not streaming to this client, which
+        # it does constantly once a field is larger than the Max Cars setting.
+        # These two let the engine tell those apart instead of calling every
+        # car it cannot see retired.
+        self.last_in_world: Optional[float] = None
+        self.last_scored_lap = -1
+        self.last_scored_at: Optional[float] = None
 
     # -- helpers ---------------------------------------------------------
 
@@ -373,6 +381,8 @@ class Engine:
         lastt = v.get("CarIdxLastLapTime") or []
         bestt = v.get("CarIdxBestLapTime") or []
         bestn = v.get("CarIdxBestLapNum") or []
+        lapsc = v.get("CarIdxLapCompleted") or []
+        posn = v.get("CarIdxPosition") or []
 
         for i in range(n):
             if i >= len(pcts):
@@ -389,7 +399,18 @@ class Engine:
             car.out = not in_world
             if not in_world:
                 car.last_pct = pct if pct is not None else 0.0
+                # Scoring keeps ticking over for cars the sim is not streaming,
+                # so a moving lap count is proof the car is still racing.
+                scored = lapsc[i] if i < len(lapsc) else 0
+                if scored is not None and scored > car.last_scored_lap:
+                    car.last_scored_lap = scored
+                    car.last_scored_at = st
                 continue
+            car.last_in_world = st
+            scored_now = lapsc[i] if i < len(lapsc) else 0
+            if scored_now is not None and scored_now > car.last_scored_lap:
+                car.last_scored_lap = scored_now
+                car.last_scored_at = st
 
             # --- pit road -------------------------------------------------
             pit = bool(onpit[i]) if i < len(onpit) else False
@@ -620,6 +641,62 @@ class Engine:
 
     # -- building the outgoing state -------------------------------------
 
+
+    # -- car state --------------------------------------------------------
+
+    # How long a car has to be both unseen and unscored before the engine is
+    # willing to call it retired. Scoring only updates as a car crosses the
+    # line, so this has to clear a whole lap with room to spare or a car on a
+    # long circuit is declared retired between every timing loop. It scales
+    # with the class lap time for that reason, and this floor only applies
+    # when no lap time is known yet.
+    OUT_AFTER = 240.0
+
+    def _car_state(self, e: Dict[str, Any], car: "CarState", now_s: float) -> str:
+        """
+        run / pit / stall / off / nodata / out.
+
+        The distinction that matters here is "out" against "nodata". iRacing
+        reports a car as not in the world for two completely different reasons:
+        the car has left the session, or the sim simply is not streaming that
+        car to this client. The second happens constantly once a field is
+        bigger than the Max Cars setting allows, and the old code called every
+        such car OUT. On a forty car grid that put OUT against most of the
+        field while they were racing perfectly well.
+
+        Scoring is the tell. iRacing keeps counting laps for every car in the
+        session whether or not it is streaming their position, so a lap count
+        that is still moving means the car is still racing and we merely cannot
+        see it. Only a car that is neither visible nor being scored, for longer
+        than a couple of its own laps, is treated as genuinely gone.
+
+        The bias is deliberate. A car wrongly shown as retired while it is
+        racing is a visible error on the broadcast; a car that retired and
+        shows a dash for a few minutes before the board admits it is not.
+        """
+        if e["inWorld"]:
+            if e["surface"] == enums.TRK_IN_PIT_STALL:
+                return "stall"
+            if e["onPit"]:
+                return "pit"
+            if e["surface"] == enums.TRK_OFF_TRACK:
+                return "off"
+            return "run"
+
+        # Never seen at all and never scored: it is not in this session.
+        if car.last_in_world is None and car.last_scored_at is None:
+            return "out"
+
+        recent = max(
+            car.last_in_world if car.last_in_world is not None else -1e9,
+            car.last_scored_at if car.last_scored_at is not None else -1e9,
+        )
+        ref = car.reference_lap(self.class_est.get(e["cls"], 0.0)) or 0.0
+        limit = max(self.OUT_AFTER, ref * 2.2)
+        if now_s - recent < limit:
+            return "nodata"
+        return "out"
+
     def build_state(self, v: Dict[str, Any]) -> Dict[str, Any]:
         """Produce the per-tick payload sent to every overlay."""
         flags_raw = int(v.get("SessionFlags") or 0)
@@ -809,19 +886,12 @@ class Engine:
         fastest_idx = self.fastest_overall.get("idx")
         cars_out: List[Dict[str, Any]] = []
         by_order = sorted(live, key=lambda e: e["order"])
+        now_s = float(v.get("SessionTime") or 0.0)
+
         for e in by_order:
             car: CarState = e["car"]
             d = e["d"]
-            state = "out"
-            if e["inWorld"]:
-                if e["surface"] == enums.TRK_IN_PIT_STALL:
-                    state = "stall"
-                elif e["onPit"]:
-                    state = "pit"
-                elif e["surface"] == enums.TRK_OFF_TRACK:
-                    state = "off"
-                else:
-                    state = "run"
+            state = self._car_state(e, car, now_s)
             sector_best = []
             for si, sv in enumerate(car.last_sectors):
                 pb = car.best_sectors[si] if si < len(car.best_sectors) else None
