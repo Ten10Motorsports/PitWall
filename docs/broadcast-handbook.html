@@ -713,6 +713,26 @@ compile, no Python.</p>
     live.</strong> It takes a second and it is on the run sheet in step 11.</p>
   </div>
 
+  <h3>Fixing a driver's details yourself</h3>
+  <p>A misspelled name or a missing team does not have to wait for the driver
+  to resubmit. In the <span class="ui">Roster</span> tab every driver has an
+  <span class="ui">Edit</span> button, and <span class="ui">Add a driver</span>
+  creates an entry for someone who never signed up at all.</p>
+
+  <div class="note ok">
+    <span class="tag">Your corrections survive a refresh</span>
+    <p>Anything you change here is marked <span class="ui">edited here</span>
+    and is kept when the roster next pulls from the league. Previously a pull
+    replaced the file outright, so a correction made at ten to eight vanished
+    the next time the roster refreshed, usually without anyone noticing until a
+    graphic was wrong on air.</p>
+    <p>To hand a driver back to the league's version, open them and click
+    <span class="ui">Revert to the shared roster</span>.</p>
+  </div>
+
+  <p>The customer ID is the join key, so it cannot be changed on an existing
+  entry. If it is wrong, delete the entry and add it again.</p>
+
   <div class="note ok">
     <span class="tag">Nobody has to sign up for the timing to work</span>
     <p>This is the question every league asks and the answer is a firm no.
@@ -934,6 +954,39 @@ compile, no Python.</p>
   from the URL and toggle the source's eye icon instead. The card then shows
   whichever car the camera is on, permanently, until you hide it.</p>
 
+  <h3>Choosing who is in the battle box</h3>
+  <p>Left alone, the battle box picks the closest fight on track and holds it
+  for a few seconds before moving on, so it does not strobe between pairs in a
+  tight midfield. When you want a specific fight instead, pick it by hand.</p>
+
+  <ol class="clicks">
+    <li>Control panel, <span class="ui">Sim control</span> tab, <span class="ui">Battle box</span> at the top.</li>
+    <li>Tick the cars you want. Two, or up to six.</li>
+    <li>Optionally type a title, such as <code>FIGHT FOR THE PODIUM</code>.</li>
+    <li>Click <span class="ui">Show these</span>.
+      <span class="expect">The box on the stream changes within a second. No reload, no scene switch.</span>
+    </li>
+    <li>Click <span class="ui">Back to automatic</span> when the moment has passed.</li>
+  </ol>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Cars picked</th><th>What you get</th></tr></thead>
+      <tbody>
+        <tr><td><b>Two</b></td><td>The full head to head: live gap, the closing or opening trend, and the gap history sparkline.</td></tr>
+        <tr><td><b>Three or more</b></td><td>A stacked box listing them in running order with the interval down the order. There is no single gap to show, so the gap column is dropped rather than left showing one arbitrary pair.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note why">
+    <span class="tag">It works even when sim control does not</span>
+    <p>The battle box picker sits above the camera and replay controls, outside
+    the part that greys out when PitWall is not on the same PC as iRacing.
+    Pinning a fight is a PitWall display choice, not a message sent to the sim,
+    so it works from any machine.</p>
+  </div>
+
   <h3>Directing from the control panel</h3>
   <p>The <span class="ui">Sim control</span> tab cuts cameras and scrubs the replay
   without alt-tabbing into iRacing. <span class="ui">Most exciting</span> jumps to
@@ -1008,6 +1061,48 @@ compile, no Python.</p>
   left alone in every session: you asked for that column and you get it. Leave
   <code>col=</code> off and the tower decides for itself.</p>
 
+  <h3>Showing a field bigger than the screen</h3>
+  <p>A 1080-high tower fits about twenty rows. With a thirty car field the back
+  half simply never appears. Instead of shrinking the text until nobody can read
+  it, the tower can <strong>pin the leaders and rotate everyone else underneath
+  them</strong>.</p>
+
+  <div class="cmd"><button>Copy</button><pre>http://localhost:8099/broadcast/tower.html?top=10&rows=20&cycle=15</pre></div>
+
+  <div class="tablewrap">
+    <table class="opt">
+      <thead><tr><th>Option</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>top=10</td><td>Positions 1 to 10 are pinned and never move.</td></tr>
+        <tr><td>rows=20</td><td>Total height in rows. Twenty minus the ten pinned leaves ten rotating.</td></tr>
+        <tr><td>cycle=15</td><td>Seconds per page. The block below the line shows 11 to 20, then 21 to 30, then back to 11.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>A dashed line separates the pinned block from the rotating one, so it is
+  obvious the lower half is not simply the next positions. If the whole field
+  already fits, nothing rotates: the tower shows everyone and stays still.</p>
+
+  <div class="note why">
+    <span class="tag">Rotation and camera-following do not mix</span>
+    <p><code>focus=1</code> keeps the car the camera is on visible, which wants
+    the same rows that rotation wants, for a different reason. When both are
+    set, rotation wins. A board that jumps to the camera car halfway through a
+    rotation reads as a fault rather than a feature.</p>
+    <p>The page is chosen from the clock rather than counted, so a source that
+    was hidden and comes back is immediately on the right page instead of
+    resuming a stale rotation.</p>
+  </div>
+
+  <div class="note warn">
+    <span class="tag">Paste this URL rather than building it</span>
+    <p>The option builder in the control panel does not yet offer
+    <code>top</code> or <code>cycle</code>, so pressing <span class="ui">Copy URL</span>
+    there will hand you a URL without them. Paste the address above into the
+    OBS source directly.</p>
+  </div>
+
   <h3>Gaps under caution</h3>
   <p>When the field is bunched behind a safety car, the gaps between cars mean
   nothing. Rather than print numbers that are wrong, the tower shows a dash until
@@ -1061,6 +1156,16 @@ compile, no Python.</p>
     <table>
       <thead><tr><th>What you see</th><th>What it is</th><th>Fix</th></tr></thead>
       <tbody>
+        <tr>
+          <td><b>One source blank, the rest fine</b></td>
+          <td>Almost always the wrong size. The driver card, the battle box and the standings board draw themselves <em>inside</em> a full frame, so at any smaller size the graphic lands outside the source and you see nothing.</td>
+          <td>Set that source to <b>1920 &times; 1080</b>, position 0,0, and do not crop or scale it. Only the tower (460 &times; 1080), the session bar (1920 &times; 120) and the track map (600 &times; 600) are sized to their content.</td>
+        </tr>
+        <tr>
+          <td><b>Driver card never appears</b></td>
+          <td>Working as intended if the URL ends in <code>auto=1</code>: the card shows for eight seconds after each camera cut and hides again.</td>
+          <td>While setting up, use the URL with no options so it stays on screen. Put <code>?auto=1&amp;hold=8</code> back for the broadcast.</td>
+        </tr>
         <tr>
           <td><b>Every source blank in OBS</b></td>
           <td>The program is not running.</td>
@@ -1168,7 +1273,8 @@ compile, no Python.</p>
         <tr><td>group</td><td>class</td><td>Multiclass blocks.</td></tr>
         <tr><td>class</td><td>a class name</td><td>Show only that class.</td></tr>
         <tr><td>focus</td><td>1</td><td>Follow the camera car.</td></tr>
-        <tr><td>top</td><td>a number</td><td>Pin the top N positions while the rest scrolls.</td></tr>
+        <tr><td>top</td><td>a number</td><td>Pin the top N positions. The rest rotates or follows the camera below them.</td></tr>
+        <tr><td>cycle</td><td>seconds</td><td>Rotate the unpinned rows a page at a time, so a field bigger than the screen is all seen in turn.</td></tr>
         <tr><td>header</td><td>0</td><td>Hide the column headings.</td></tr>
       </tbody>
     </table>
@@ -1199,6 +1305,8 @@ compile, no Python.</p>
         <tr><td>stack</td><td>1 to 6</td><td>Show several battles at once.</td></tr>
         <tr><td>pos</td><td>bl, br, tl, tr</td><td>Corner of the frame.</td></tr>
         <tr><td>hist</td><td>seconds</td><td>Window for the closing or opening trend.</td></tr>
+        <tr><td>switch</td><td>seconds</td><td>Minimum time a fight stays on screen before the box moves to another. Default 4. Set 0 to always show the closest.</td></tr>
+        <tr><td>cars</td><td>car numbers</td><td>Lock this source to specific cars, e.g. <code>cars=12,7</code>. Overrides the control panel picker, for a scene deliberately fixed to one battle.</td></tr>
       </tbody>
     </table>
   </div>
