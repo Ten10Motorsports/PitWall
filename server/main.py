@@ -124,6 +124,7 @@ class PitWall:
         self.demo = args.demo
         self.roster = RosterStore(self.data_dir, self.config)
         self.leagues = LeagueStore(self.data_dir)
+        self.battle: Optional[Dict[str, Any]] = None
         self.engine = Engine(self.config)
         self.engine.roster_lookup = self.roster.lookup
         self.control = Control()
@@ -154,10 +155,11 @@ class PitWall:
             return False
         self.server.hub.hello = {
             "app": "PitWall",
-            "version": "1.2.1",
+            "version": "1.4.0",
             "demo": self.demo,
             "league": self.config.get("league", {}),
             "event": self.leagues.event_payload(),
+            "battle": self.battle,
             "controlAvailable": self.control.available,
         }
         self._routes()
@@ -283,6 +285,7 @@ class PitWall:
             """
             self.server.hub.hello["league"] = self.config.get("league", {})
             self.server.hub.hello["event"] = self.leagues.event_payload()
+            self.server.hub.hello["battle"] = self.battle
             self.server.hub.broadcast("meta", {"type": "hello", **self.server.hub.hello})
 
         def _apply_league(league):
@@ -388,6 +391,57 @@ class PitWall:
         r.add(("POST", "/api/roster/pull"), roster_pull)
         r.add(("POST", "/api/roster/push"), roster_push)
         r.add(("POST", "/api/roster/import"), roster_import)
+        def roster_edit(h, body):
+            """A correction typed into the control panel, not a driver's form."""
+            entry = self.roster.submit(body or {}, local_edit=True)
+            self.engine.meta_serial += 1
+            self.engine.apply_session_info(self.engine.session_info)
+            h._json({"ok": True, "entry": entry, "status": self.roster.status()})
+
+        def roster_revert(h, body):
+            cid = str((body or {}).get("iracingId") or "")
+            ok = self.roster.clear_local_edit(cid)
+            h._json({"ok": ok, "status": self.roster.status()})
+
+        # -- battle box selection -----------------------------------------
+
+        def battle_get(h, q):
+            h._json({"battle": self.battle})
+
+        def battle_set(h, body):
+            """
+            Pin the battle box to specific cars, or release it back to picking
+            the closest fight itself.
+
+            Held in memory rather than on disk: it is a directing choice for
+            the next thirty seconds, not a setting, and a broadcaster restarting
+            the app should not find last week's pairing still pinned.
+            """
+            body = body or {}
+            cars = body.get("cars")
+            if not cars:
+                self.battle = None
+            else:
+                if not isinstance(cars, list):
+                    raise ValueError("cars must be a list of car numbers.")
+                # Car numbers are text: "01" and "1" are different cars.
+                nums = [str(c).strip() for c in cars if str(c).strip()][:6]
+                if not nums:
+                    self.battle = None
+                else:
+                    self.battle = {
+                        "cars": nums,
+                        "title": str(body.get("title") or "").strip()[:60],
+                    }
+            self.server.hub.hello["battle"] = self.battle
+            self.server.hub.broadcast("meta", {"type": "hello", **self.server.hub.hello})
+            h._json({"ok": True, "battle": self.battle})
+
+        r.add(("POST", "/api/roster/edit"), roster_edit)
+        r.add(("POST", "/api/roster/revert"), roster_revert)
+        r.add(("GET", "/api/battle"), battle_get)
+        r.add(("POST", "/api/battle"), battle_set)
+
         r.add(("POST", "/api/control"), api_control)
         r.add(("WS", "control"), lambda msg: self._do_control(msg.get("action", ""), msg))
 

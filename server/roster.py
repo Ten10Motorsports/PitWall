@@ -133,8 +133,15 @@ class RosterStore:
 
     # -- mutation --------------------------------------------------------
 
-    def submit(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Accept a driver submission. Upserts on iRacing customer ID."""
+    def submit(self, payload: Dict[str, Any], local_edit: bool = False) -> Dict[str, Any]:
+        """
+        Accept a driver submission. Upserts on iRacing customer ID.
+
+        local_edit marks the entry as typed into this machine's control panel
+        rather than submitted by the driver. Those survive a pull from the
+        shared roster, because otherwise every correction a broadcaster makes
+        on race night is silently undone the next time the roster refreshes.
+        """
         entry: Dict[str, Any] = {}
         for f in FIELDS:
             v = payload.get(f)
@@ -160,6 +167,11 @@ class RosterStore:
                 entry[target] = self._store_image(data, f"{cid}-{target}")
 
         entry["submittedAt"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        if local_edit:
+            # Stamped so a later pull can tell "this was typed here" from
+            # "this came from the shared roster", and leave it alone.
+            entry["editedHere"] = True
+            entry["editedAt"] = entry["submittedAt"]
 
         with self.lock:
             existing = self._by_id.get(cid)
@@ -168,6 +180,11 @@ class RosterStore:
                 for k in ("headshot", "sponsorLogo"):
                     if k not in entry and existing.get(k):
                         entry[k] = existing[k]
+                # A driver re-submitting their own form does not clear the fact
+                # that a broadcaster corrected something here.
+                if not local_edit and existing.get("editedHere"):
+                    entry["editedHere"] = True
+                    entry["editedAt"] = existing.get("editedAt")
                 idx = self.entries.index(existing)
                 self.entries[idx] = entry
             else:
@@ -188,6 +205,54 @@ class RosterStore:
         with self.lock:
             self.entries = drivers
             self.save()
+
+    def merge_pull(self, drivers: List[Dict[str, Any]]) -> Dict[str, int]:
+        """
+        Fold a freshly pulled roster into the local one, keeping local edits.
+
+        A pull used to replace the file outright, which meant any correction
+        typed on the broadcast machine vanished the next time the roster
+        refreshed, usually without anyone noticing until a graphic was wrong on
+        air. Now an entry edited here wins over the pulled copy, and an entry
+        that only exists here is kept.
+        """
+        with self.lock:
+            kept = {
+                str(e.get("iracingId")): e
+                for e in self.entries
+                if e.get("editedHere")
+            }
+            out, replaced = [], 0
+            for d in drivers:
+                cid = str(d.get("iracingId") or "")
+                local = kept.pop(cid, None)
+                if local is not None:
+                    out.append(local)
+                    replaced += 1
+                else:
+                    out.append(d)
+            # Anything edited here that the shared roster has never heard of.
+            local_only = list(kept.values())
+            out.extend(local_only)
+            self.entries = out
+            self.save()
+            return {
+                "pulled": len(drivers),
+                "keptEdited": replaced,
+                "localOnly": len(local_only),
+                "total": len(out),
+            }
+
+    def clear_local_edit(self, cid: str) -> bool:
+        """Drop the local-edit flag so the next pull restores the shared copy."""
+        with self.lock:
+            e = self._by_id.get(str(cid))
+            if not e or not e.get("editedHere"):
+                return False
+            e.pop("editedHere", None)
+            e.pop("editedAt", None)
+            self.save()
+            return True
 
     def _store_image(self, data_url: str, stem: str) -> str:
         m = re.match(r"^data:([\w/+-]+);base64,(.*)$", data_url, re.S)
@@ -241,10 +306,10 @@ class RosterStore:
                 return {"ok": False, "error": "Roster sync is set to local storage."}
             data = json.loads(blob.decode("utf-8"))
             drivers = data.get("drivers", data if isinstance(data, list) else [])
-            self.replace_all(drivers)
+            stats = self.merge_pull(drivers)
             self.last_sync = time.strftime("%H:%M:%S")
             self.sync_error = None
-            return {"ok": True, "count": len(drivers)}
+            return {"ok": True, "count": stats["total"], **stats}
         except Exception as exc:
             self.sync_error = str(exc)
             return {"ok": False, "error": str(exc)}
@@ -301,6 +366,7 @@ class RosterStore:
         cfg.update(
             {
                 "count": len(self.entries),
+                "editedHere": sum(1 for e in self.entries if e.get("editedHere")),
                 "lastSync": self.last_sync,
                 "error": self.sync_error,
                 "file": self.path,
