@@ -130,6 +130,14 @@
   .trend.closing { color: var(--green); }
   .trend.opening { color: var(--text-faint); }
   .trend.holding { color: var(--text-dim); }
+
+  /* ----------------------------------------------- three or more cars */
+  .battle.group .cars { gap: 2px; }
+  .battle.group .car { display: grid; grid-template-columns: 4px 44px 46px 22px 1fr auto auto; }
+  .battle.group .gp {
+    font-variant-numeric: tabular-nums;
+    font-size: 1.05rem; font-weight: 700; padding-left: 14px; white-space: nowrap;
+  }
 </style>
 </head>
 <body class="overlay">
@@ -151,6 +159,11 @@
   var STACK  = Math.max(1, Math.min(6, PW.optNum('stack', 1)));
   var NAMES  = PW.opt('names', 'surname');
   var HIST_S = PW.optNum('hist', 8);
+  /* Minimum seconds a battle stays on screen before the box is allowed to
+     move to a different one. Without it the "closest fight" can change
+     several times a second in a tight midfield and the box strobes between
+     pairs, which looks broken rather than busy. 0 disables the hold. */
+  var HOLD_S = Math.max(0, PW.optNum('switch', 4));
 
   var boxes = document.getElementById('boxes');
   boxes.className = POS;
@@ -222,7 +235,85 @@
   }
 
   /* --------------------------------------------------------- selection */
+
+  /* -------------------------------------------------- pinned selection */
+
+  /* The operator can pin the box to specific cars from the control panel.
+     Read live rather than cached: the choice arrives over the same socket as
+     everything else, so pinning a fight mid-race takes effect without anyone
+     touching OBS. URL wins over the panel, for a source deliberately locked
+     to one battle in a fixed scene. */
+  var URL_CARS = String(PW.opt('cars', '')).split(',')
+    .map(function (x) { return x.trim(); }).filter(Boolean);
+
+  function pinnedNumbers() {
+    if (URL_CARS.length) return URL_CARS;
+    var p = PW.hello && PW.hello.battle;
+    return (p && p.cars && p.cars.length) ? p.cars : [];
+  }
+
+  function pinnedTitle() {
+    var p = PW.hello && PW.hello.battle;
+    return (p && p.title) || '';
+  }
+
+  /** Car numbers are text, so "01" and "1" are different cars. */
+  function idxOfNumber(num) {
+    var drivers = (PW.meta && PW.meta.drivers) || {};
+    var want = String(num).trim();
+    for (var k in drivers) {
+      if (!Object.prototype.hasOwnProperty.call(drivers, k)) continue;
+      if (String(drivers[k].num).trim() === want) return drivers[k].idx;
+    }
+    return null;
+  }
+
+  /** Pinned cars, in current running order, skipping any not in the session. */
+  function pinnedCars() {
+    var out = [];
+    pinnedNumbers().forEach(function (n) {
+      var idx = idxOfNumber(n);
+      if (idx === null) return;
+      var car = PW.carByIdx(idx);
+      if (car) out.push({ i: idx, car: car });
+    });
+    out.sort(function (a, b) { return (a.car.p || 999) - (b.car.p || 999); });
+    return out;
+  }
+
+  /** Gap between two cars, from their gaps to the leader. */
+  function gapBetween(a, b) {
+    if (a.gl == null || b.gl == null) return null;
+    return Math.abs(a.gl - b.gl);
+  }
+
+  var heldKey = null, heldSince = 0;
+
   function selection() {
+    var pin = pinnedCars();
+    if (pin.length >= 2) {
+      if (pin.length === 2) {
+        // Two cars get the full treatment: live gap, sparkline and trend.
+        return [{
+          kind: 'pair',
+          key: 'pin-' + pin.map(function (p) { return p.i; }).join('-'),
+          b: {
+            ahead: pin[0].i, behind: pin[1].i,
+            gap: gapBetween(pin[0].car, pin[1].car),
+            sameClass: (PW.driver(pin[0].i) || {}).classId ===
+                       (PW.driver(pin[1].i) || {}).classId,
+            pinned: true
+          }
+        }];
+      }
+      return [{
+        kind: 'group',
+        key: 'pin-' + pin.map(function (p) { return p.i; }).join('-'),
+        cars: pin
+      }];
+    }
+    if (pinnedNumbers().length) return [];   // pinned, but none of them on track
+
     var all = (PW.tick && PW.tick.battles) || [];
     var mc = PW.multiclass();
     var list = all.filter(function (b) {
@@ -243,7 +334,27 @@
       list = list.filter(function (b) { return b.sameClass || !mc; });
     }
     list = list.slice().sort(function (a, b) { return a.gap - b.gap; });
-    return list.slice(0, STACK);
+
+    /* Hold the current fight rather than chasing whichever pair is
+       fractionally closest this instant. */
+    if (HOLD_S > 0 && STACK === 1 && list.length) {
+      var now = Date.now();
+      var still = null;
+      for (var i = 0; i < list.length; i++) {
+        if (keyOf(list[i]) === heldKey) { still = list[i]; break; }
+      }
+      if (still && now - heldSince < HOLD_S * 1000) {
+        list = [still];
+      } else if (!still || now - heldSince >= HOLD_S * 1000) {
+        var top = still && keyOf(list[0]) === heldKey ? still : list[0];
+        if (keyOf(top) !== heldKey) { heldKey = keyOf(top); heldSince = now; }
+        list = [top];
+      }
+    }
+
+    return list.slice(0, STACK).map(function (b) {
+      return { kind: 'pair', key: keyOf(b), b: b };
+    });
   }
 
   /* ---------------------------------------------------------- rendering */
@@ -262,7 +373,8 @@
     return r;
   }
 
-  function create() {
+  function create(item) {
+    if (item && item.kind === 'group') return createGroup();
     var el = document.createElement('div');
     el.className = 'battle';
     el.innerHTML =
@@ -290,6 +402,57 @@
     return el;
   }
 
+
+  /* Three or more cars pinned together. There is no single "the gap" to put
+     in a column, so each row carries the interval to the car above it and the
+     gap column is dropped rather than left showing one arbitrary pair. */
+  function createGroup() {
+    var el = document.createElement('div');
+    el.className = 'battle group';
+    el.innerHTML = '<div class="hd"><div class="t"></div><div class="chip hide"></div></div>' +
+                   '<div class="cars"></div>';
+    el._pw = { disp: null };
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { el.classList.add('in'); });
+    });
+    return el;
+  }
+
+  function updateGroup(el, item) {
+    if (item.dying) { el.classList.add('out'); return; }
+    el.classList.remove('out');
+
+    var hd = el.querySelector('.hd .t');
+    var title = pinnedTitle() || (item.cars.length + '-WAY <em>BATTLE</em>');
+    if (hd.dataset.t !== title) { hd.innerHTML = title; hd.dataset.t = title; }
+    el.querySelector('.hd .chip').classList.add('hide');
+
+    var cars = el.querySelector('.cars');
+    while (cars.children.length < item.cars.length) cars.appendChild(groupRow());
+    while (cars.children.length > item.cars.length) cars.lastChild.remove();
+
+    item.cars.forEach(function (p, i) {
+      var row = cars.children[i];
+      fillCar(row, p.i, p.car, PW.multiclass());
+      var gapEl = row.querySelector('.gp');
+      if (i === 0) {
+        gapEl.textContent = '';
+      } else {
+        var g = gapBetween(item.cars[i - 1].car, p.car);
+        gapEl.textContent = g == null ? '\u2013' : '+' + g.toFixed(3);
+        gapEl.style.color = g == null ? 'var(--text-faint)' : gapColor(g);
+      }
+    });
+  }
+
+  function groupRow() {
+    var r = carRow();
+    var g = document.createElement('div');
+    g.className = 'gp num';
+    r.appendChild(g);
+    return r;
+  }
+
   function fillCar(row, idx, car, showCls) {
     var d = PW.driver(idx) || {};
     var col = d.classColor || '#8894a4';
@@ -315,6 +478,7 @@
   }
 
   function update(el, item) {
+    if (item.kind === 'group') return updateGroup(el, item);
     if (item.dying) { el.classList.add('out'); return; }
     el.classList.remove('out');
 
@@ -324,7 +488,9 @@
     var mc = PW.multiclass();
 
     var title;
-    if (ca && ca.p === 1) title = 'BATTLE FOR <em>THE LEAD</em>';
+    if (b.pinned && pinnedTitle()) title = pinnedTitle();
+    else if (b.pinned) title = 'HEAD TO <em>HEAD</em>';
+    else if (ca && ca.p === 1) title = 'BATTLE FOR <em>THE LEAD</em>';
     else if (mc && b.sameClass && ca && ca.cp) title = 'BATTLE FOR <em>' + (da.classShort || 'CLASS') + ' P' + ca.cp + '</em>';
     else if (ca && ca.p) title = 'BATTLE FOR <em>P' + ca.p + '</em>';
     else title = 'ON TRACK BATTLE';
@@ -354,10 +520,17 @@
 
     /* gap: animated toward the live value so the digits never jump */
     var st = el._pw;
-    st.target = b.gap;
-    if (st.disp === null) st.disp = b.gap;
+    var gv = el.querySelector('.v');
+    if (b.gap == null) {
+      st.target = null;
+      gv.textContent = '\u2013';
+      gv.style.color = 'var(--text-faint)';
+    } else {
+      st.target = b.gap;
+      if (st.disp === null) st.disp = b.gap;
+    }
 
-    var h = push(keyOf(b), b.gap);
+    var h = push(keyOf(b), b.gap == null ? (st.disp || 0) : b.gap);
     var sp = sparkPath(h, 138, 24);
     el.querySelector('.sl').setAttribute('d', sp.line);
     el.querySelector('.sa').setAttribute('d', sp.area);
@@ -377,23 +550,39 @@
     if (!PW.meta || !PW.tick) { boxes.innerHTML = ''; return; }
     var sel = selection();
     var live = {};
-    var items = sel.map(function (b) { live[keyOf(b)] = true; return { key: keyOf(b), b: b }; });
+    var items = sel.map(function (it) { live[it.key] = true; return it; });
 
+    /* Fading out, without the box getting stuck on screen.
+       The timer version of this looped: the timer deleted the entry and
+       repainted, the node was still in the DOM at that instant, the scan
+       below saw it was neither live nor dying and started the fade again.
+       A finished battle therefore sat on the broadcast for ever. Expiry is
+       now a timestamp checked during the normal paint, and a node that has
+       already faded is marked so it is never queued a second time. */
+    var now = Date.now();
     Object.keys(dying).forEach(function (k) {
-      if (live[k]) { clearTimeout(dying[k].timer); delete dying[k]; }
+      if (live[k] || dying[k].until <= now) delete dying[k];
     });
     Array.prototype.forEach.call(boxes.children, function (node) {
       var k = node.dataset.key;
-      if (!k || live[k] || dying[k]) return;
+      if (!k || live[k] || dying[k] || node._faded) return;
+      node._faded = true;
       dying[k] = {
-        item: { key: k, b: node._pwBattle, dying: true },
-        timer: setTimeout(function () { delete dying[k]; paint(); }, 360)
+        until: now + 360,
+        item: { key: k, kind: node._pwKind, b: node._pwBattle,
+                cars: node._pwCars, dying: true }
       };
     });
     Object.keys(dying).forEach(function (k) { items.push(dying[k].item); });
 
     PW.reconcile(boxes, items, function (it) { return it.key; }, create,
-      function (node, it) { node._pwBattle = it.b; update(node, it); });
+      function (node, it) {
+        node._pwKind = it.kind;
+        node._pwBattle = it.b;
+        node._pwCars = it.cars;
+        if (!it.dying) node._faded = false;
+        update(node, it);
+      });
   }
 
   /* Smooth the displayed gap independently of the data rate. */
@@ -414,6 +603,7 @@
   requestAnimationFrame(animate);
 
   PW.on('meta', paint);
+  PW.on('hello', paint);
   PW.on('tick', paint);
   PW.on('close', function () { boxes.innerHTML = ''; });
   PW.start({ sub: ['meta', 'tick'], rate: 15 });

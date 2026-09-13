@@ -283,6 +283,7 @@
     klass:  PW.opt('class', ''),
     focus:  PW.optBool('focus', false),
     top:    Math.max(0, PW.optNum('top', 0)),
+    cycle:  Math.max(0, PW.optNum('cycle', 0)),
     header: PW.optBool('header', true)
   };
 
@@ -490,6 +491,56 @@
     return -1;
   }
 
+
+  /* ------------------------------------------------------- rotating pages */
+
+  /* Split what is left after the pinned block into screenfuls, so a 30-car
+     field can be shown ten at a time under a fixed top ten. Pages are built
+     from the same budget the static layout uses, so a page always fits
+     exactly and never half-draws a row at the bottom edge. */
+  function paginate(rest, budget) {
+    var pages = [], i = 0, guard = 0;
+    var governing = null;        // the class header the current row belongs to
+
+    while (i < rest.length && guard++ < 200) {
+      // A page that begins part way through a class has to carry that class's
+      // header, or GT4 positions 9 and 10 sit on screen looking exactly like
+      // GT3 positions 9 and 10.
+      var lead = [], avail = budget;
+      if (rest[i].type === 'car' && governing) {
+        lead = [governing];
+        avail -= governing.cost;
+      }
+
+      var page = take(rest, i, avail);
+      if (!page.length) {
+        // One entry bigger than the whole budget would otherwise loop for ever.
+        page = [rest[i]];
+      }
+
+      pages.push(lead.concat(page));
+
+      for (var k = 0; k < page.length; k++) {
+        if (page[k].type === 'head') governing = page[k];
+      }
+      i += page.length;
+
+      // take() drops a trailing class header. Without this the same header
+      // would lead every subsequent page and the rotation would never move on.
+      while (i < rest.length && rest[i].type === 'head' &&
+             (i + 1 >= rest.length || rest[i + 1].type === 'head')) i++;
+    }
+    return pages.length ? pages : [[]];
+  }
+
+  /* Which page is due now. Driven by the clock rather than a counter, so a
+     browser source that was hidden and comes back is immediately on the page
+     it should be on instead of resuming a stale rotation. */
+  function currentPage(count) {
+    if (count <= 1 || OPT.cycle <= 0) return 0;
+    return Math.floor((Date.now() / 1000) / OPT.cycle) % count;
+  }
+
   /** Pinned top block + a window that keeps the focus car on screen. */
   function layout(entries, capacity, focusIdx) {
     var following = OPT.focus || OPT.top > 0;
@@ -505,6 +556,19 @@
     var rest = entries.slice(pinCount);
     var budget = capacity;
     pinned.forEach(function (e) { budget -= e.cost; });
+
+    /* Rotation wins over camera-following when both are asked for: they want
+       the same rows for different reasons, and a board that jumps to the
+       camera car mid-rotation reads as a fault rather than a feature. */
+    if (OPT.cycle > 0) {
+      var pages = paginate(rest, budget);
+      var page = pages[currentPage(pages.length)] || [];
+      var out2 = pinned.slice();
+      if (pinned.length && pages.length > 1) {
+        out2.push({ type: 'sep', key: 'sep', h: SEP_H, cost: SEP_H / rowH() });
+      }
+      return out2.concat(page);
+    }
 
     if (!following || focusIdx == null) return pinned.concat(take(rest, 0, budget));
 
