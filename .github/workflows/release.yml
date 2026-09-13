@@ -50,7 +50,7 @@ jobs:
             if (-not $j.connected) { throw "demo feed did not connect" }
             Write-Host "OK - served $($j.ticks) ticks"
 
-            foreach ($path in @('/control','/timing','/register','/broadcast/tower.html','/hud/relative.html')) {
+            foreach ($path in @('/control','/timing','/register','/broadcast/tower.html','/hud/relative.html','/api/leagues')) {
               $pr = Invoke-WebRequest -Uri "http://127.0.0.1:8123$path" -UseBasicParsing -TimeoutSec 10
               if ($pr.StatusCode -ne 200) { throw "$path returned $($pr.StatusCode)" }
               Write-Host "OK - $path"
@@ -93,6 +93,53 @@ jobs:
           path: PitWall-windows.zip
           retention-days: 90
 
+      # ---------------------------------------------------------------- HUD
+      # The in-game overlay is an Electron shell. Building it here means a
+      # driver who wants HUD widgets downloads one more .exe rather than
+      # installing Node and running npm, which is the whole point of the
+      # project.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # The engine rides inside the HUD so a driver downloads one file and
+      # never sees a console window. Copied in after the app build, because it
+      # is that exact binary we want carried, not a stale one.
+      - name: Put the engine inside the HUD
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path hud-app\engine | Out-Null
+          Copy-Item dist\PitWall.exe hud-app\engine\PitWall.exe -Force
+          Get-ChildItem hud-app\engine | Select-Object Name, Length | Format-Table
+
+      - name: Build the in-game HUD
+        working-directory: hud-app
+        run: |
+          npm install --no-audit --no-fund
+          npx electron-builder --win --x64 --publish never
+
+      - name: Check the HUD binary exists
+        shell: pwsh
+        run: |
+          $exe = "hud-app\dist\PitWall-HUD.exe"
+          if (-not (Test-Path $exe)) {
+            Write-Host "Expected $exe. What was actually built:"
+            Get-ChildItem hud-app\dist -Recurse | Select-Object FullName, Length | Format-Table
+            exit 1
+          }
+          $mb = [math]::Round((Get-Item $exe).Length / 1MB, 1)
+          Write-Host "HUD built: $exe ($mb MB)"
+          if ($mb -lt 40) {
+            Write-Host "That is too small to contain Electron and the engine. Something did not get packed."
+            exit 1
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PitWall-HUD
+          path: hud-app/dist/PitWall-HUD.exe
+          retention-days: 90
+
       - name: Attach to the release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
@@ -100,6 +147,7 @@ jobs:
           files: |
             PitWall-windows.zip
             dist/PitWall.exe
+            hud-app/dist/PitWall-HUD.exe
           generate_release_notes: true
           body: |
             ## Install
@@ -110,3 +158,18 @@ jobs:
 
             Only one person in a league needs this — whoever is spectating or
             driving in the session. Everyone else opens a web page.
+
+            ## For drivers
+
+            **PitWall-HUD.exe** is the driver's download. One file: transparent,
+            click-through widgets over iRacing, with a settings window for
+            turning each one on and configuring it. It starts the engine itself,
+            so there is nothing else to run and no console window.
+
+            Press `Ctrl+Shift+E` to unlock the widgets and drag them, and again
+            to lock them so they can never swallow a click meant for the sim.
+            `Ctrl+Shift+S` opens settings. It also lives in the tray.
+
+            iRacing must be in **windowed** or **borderless** mode. Exclusive
+            fullscreen hands the whole screen to one program, so no desktop
+            overlay of any kind can draw on it. This does not work in VR.

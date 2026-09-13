@@ -39,6 +39,7 @@ jobs:
           cp -r site/* _site/ 2>/dev/null || true
           cp docs/setup-guide.html _site/setup.html 2>/dev/null || true
           cp docs/preview.html     _site/preview.html 2>/dev/null || true
+          cp docs/broadcast-handbook.html _site/broadcast.html 2>/dev/null || true
           cp roster.json           _site/roster.json 2>/dev/null || echo '{"drivers":[]}' > _site/roster.json
           # GitHub Pages runs Jekyll unless told not to, which eats folders
           # starting with an underscore.
