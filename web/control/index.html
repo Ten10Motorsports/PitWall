@@ -291,6 +291,8 @@
   .kvlist .v { font-family: var(--mono); word-break: break-all; }
 
 
+
+
   /* ========================================================= sim control */
 
   .disabled-note {
@@ -369,6 +371,31 @@
     font-size: 10px; background: var(--accent); color: var(--bg);
     border-radius: 8px; padding: 1px 6px; margin-left: 4px; font-weight: 700;
   }
+
+  /* --- battle box picker ------------------------------------------------ */
+  .bpick { display: grid; grid-template-columns: repeat(auto-fill, minmax(186px, 1fr)); gap: 6px; }
+  .bpick label {
+    display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+    border: 1px solid var(--line); border-radius: 6px; cursor: pointer; font-size: 13px;
+  }
+  .bpick label:hover { border-color: var(--line-2); background: rgba(255,255,255,0.03); }
+  .bpick input { margin: 0; accent-color: var(--accent); }
+  .bpick input:checked + .bn { color: var(--accent); font-weight: 700; }
+  .bpick .bnum {
+    font-family: var(--mono); font-size: 11px; font-weight: 700; border-radius: 3px;
+    padding: 1px 5px; flex: none; min-width: 26px; text-align: center;
+  }
+  .bpick .bn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bpick .bp { margin-left: auto; color: var(--text-faint); font-family: var(--mono); font-size: 11px; }
+
+  /* --- roster editor ---------------------------------------------------- */
+  .redit { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 16px; }
+  .rbadge {
+    font-size: 9.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+    background: rgba(232,168,63,.18); color: #f0c274; border-radius: 3px; padding: 1px 5px;
+    margin-left: 6px; white-space: nowrap;
+  }
+  table.rt td.act button { margin-left: 4px; }
 </style>
 </head>
 <body class="solid">
@@ -556,6 +583,87 @@
       </h2>
       <div class="tablescroll"><table class="rt" id="rostertable"></table></div>
       <div class="result" id="rostermsg"></div>
+      <div class="btnrow" style="margin-top:12px">
+        <button class="primary" id="radd">Add a driver</button>
+      </div>
+
+      <div class="redit" id="reditwrap" hidden>
+        <h3 id="redittitle">Edit driver</h3>
+        <div class="grid-2">
+          <div class="field">
+            <label for="e_iracingId">iRacing customer ID</label>
+            <input id="e_iracingId" inputmode="numeric" placeholder="123456">
+            <div class="hint">The number under Account &gt; My Account &gt; Customer ID.
+              This is what joins a profile to a car, so it cannot be changed on an
+              existing entry: delete and re-add instead.</div>
+          </div>
+          <div class="field">
+            <label for="e_displayName">Name on screen</label>
+            <input id="e_displayName" placeholder="Alex Rivera">
+          </div>
+          <div class="field">
+            <label for="e_carNumber">Car number</label>
+            <input id="e_carNumber" placeholder="7">
+          </div>
+          <div class="field">
+            <label for="e_team">Team</label>
+            <input id="e_team" placeholder="Northgate Racing">
+          </div>
+          <div class="field">
+            <label for="e_country">Country</label>
+            <input id="e_country" placeholder="GB">
+          </div>
+          <div class="field">
+            <label for="e_pronouns">Pronouns</label>
+            <input id="e_pronouns" placeholder="he/him">
+          </div>
+          <div class="field">
+            <label for="e_hometown">Home town</label>
+            <input id="e_hometown" placeholder="Leeds">
+          </div>
+          <div class="field">
+            <label for="e_accentColor">Accent colour</label>
+            <input id="e_accentColor" placeholder="#ff8800">
+          </div>
+        </div>
+        <div class="field">
+          <label for="e_bio">One line bio</label>
+          <input id="e_bio" placeholder="Endurance specialist, two-time class winner">
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label for="e_headshot">Headshot URL</label>
+            <input id="e_headshot" placeholder="https://&hellip;/photo.jpg">
+          </div>
+          <div class="field">
+            <label for="e_sponsor">Sponsor</label>
+            <input id="e_sponsor" placeholder="Kestrel Logistics">
+          </div>
+          <div class="field">
+            <label for="e_twitch">Twitch</label>
+            <input id="e_twitch" placeholder="handle">
+          </div>
+          <div class="field">
+            <label for="e_instagram">Instagram</label>
+            <input id="e_instagram" placeholder="handle">
+          </div>
+          <div class="field">
+            <label for="e_youtube">YouTube</label>
+            <input id="e_youtube" placeholder="handle">
+          </div>
+          <div class="field">
+            <label for="e_x">X</label>
+            <input id="e_x" placeholder="handle">
+          </div>
+        </div>
+        <div class="btnrow">
+          <button class="primary" id="rsaveDriver">Save driver</button>
+          <button id="rrevert" hidden>Revert to the shared roster</button>
+          <button id="reditclose">Close</button>
+        </div>
+        <div class="result" id="reditmsg"></div>
+      </div>
+
       <h3 class="sub">Import and export</h3>
       <div class="btnrow">
         <button id="rexport">Download roster.json</button>
@@ -671,6 +779,24 @@
 
   <!-- ======================================================= SIM CONTROL -->
   <section class="tab" id="tab-control">
+    <div class="card">
+      <h2>Battle box</h2>
+      <p class="lede">Pin the battle box to the cars you want on screen. Two
+        cars get the full head-to-head with the live gap and trend; three or
+        more get a stacked box with the interval down the order. Leave nothing
+        ticked and the box picks the closest fight itself.</p>
+      <div class="field">
+        <label for="btitle">Title (optional)</label>
+        <input id="btitle" placeholder="FIGHT FOR THE PODIUM">
+      </div>
+      <div class="bpick" id="bpick"></div>
+      <div class="btnrow" style="margin-top:12px">
+        <button class="primary" id="bapply">Show these</button>
+        <button id="bclear">Back to automatic</button>
+      </div>
+      <div class="result" id="bmsg2"></div>
+    </div>
+
     <div id="controlnote"></div>
     <div id="controlbody">
       <div class="card">
@@ -1207,15 +1333,22 @@
 
   /* ============================================================== roster */
 
+  /* Last roster read, so the editor can open an entry without another
+     round trip and without re-deriving it from the table markup. */
+  var rosterCache = [];
+
   function loadRoster() {
-    PW.api('/api/roster').then(function (r) {
-      renderRoster(r.drivers || []);
+    var done = PW.api('/api/roster').then(function (r) {
+      rosterCache = r.drivers || [];
+      renderRoster(rosterCache);
       renderSync(r.status || {});
+      return r;
     }).catch(function (e) {
       $('rostertable').innerHTML = '';
       say($('rostermsg'), 'bad', 'Could not read the roster: ' + e.message);
     });
     renderSignup();
+    return done;
   }
 
   function renderSignup() {
@@ -1246,12 +1379,16 @@
            '<td><div class="rshot">' + (d.headshot
               ? '<img src="' + esc(d.headshot) + '" alt="">' : esc(initials)) + '</div></td>' +
            '<td class="mono">' + esc(d.iracingId) + '</td>' +
-           '<td><b>' + esc(name) + '</b></td>' +
+           '<td><b>' + esc(name) + '</b>' +
+             (d.editedHere ? '<span class="rbadge">edited here</span>' : '') + '</td>' +
            '<td class="mono">' + esc(d.carNumber || '') + '</td>' +
            '<td class="dimc">' + esc(d.team || '') + '</td>' +
            '<td>' + (d.country ? PW.flag(d.country) + ' <span class="dimc">' + esc(d.country) + '</span>' : '<span class="faint">–</span>') + '</td>' +
            '<td class="dimc mono">' + esc(d.submittedAt || '') + '</td>' +
-           '<td class="act"><button class="danger" data-del="' + esc(d.iracingId) + '">Delete</button></td>' +
+           '<td class="act">' +
+             '<button data-edit-driver="' + esc(d.iracingId) + '">Edit</button>' +
+             '<button class="danger" data-del="' + esc(d.iracingId) + '">Delete</button>' +
+           '</td>' +
            '</tr>';
     });
     $('rostertable').innerHTML = h;
@@ -1728,6 +1865,190 @@
     });
   });
 
+  /* ========================================================= roster editing */
+
+  var EDIT_FIELDS = ['iracingId', 'displayName', 'carNumber', 'team', 'country',
+                     'pronouns', 'hometown', 'accentColor', 'bio', 'headshot',
+                     'sponsor', 'twitch', 'instagram', 'youtube', 'x'];
+  var editingDriver = null;
+
+  function openDriverEditor(d) {
+    editingDriver = d || {};
+    $('reditwrap').hidden = false;
+    $('redittitle').textContent = d ? ('Edit \u2014 ' + (d.displayName || d.iracingId))
+                                    : 'Add a driver';
+    EDIT_FIELDS.forEach(function (f) {
+      var el = $('e_' + f);
+      if (el) el.value = (editingDriver[f] == null) ? '' : editingDriver[f];
+    });
+    // The customer ID is the join key, so it is fixed once an entry exists.
+    $('e_iracingId').readOnly = !!(d && d.iracingId);
+    $('rrevert').hidden = !(d && d.editedHere);
+    clear($('reditmsg'));
+    $('reditwrap').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  $('rostertable').addEventListener('click', function (ev) {
+    var e = ev.target.closest('[data-edit-driver]');
+    if (!e) return;
+    var id = e.dataset.editDriver;
+    var d = (rosterCache || []).filter(function (x) {
+      return String(x.iracingId) === String(id);
+    })[0];
+    if (d) openDriverEditor(d);
+  });
+
+  if ($('radd')) $('radd').addEventListener('click', function () { openDriverEditor(null); });
+  if ($('reditclose')) $('reditclose').addEventListener('click', function () {
+    editingDriver = null;
+    $('reditwrap').hidden = true;
+  });
+
+  if ($('rsaveDriver')) $('rsaveDriver').addEventListener('click', function () {
+    var payload = {};
+    EDIT_FIELDS.forEach(function (f) {
+      var el = $('e_' + f);
+      if (el && el.value.trim()) payload[f] = el.value.trim();
+    });
+    if (!/^\d+$/.test(String(payload.iracingId || ''))) {
+      return say($('reditmsg'), 'bad',
+        'The customer ID must be the number from the driver\u2019s iRacing account, not a name.');
+    }
+    if (!payload.displayName) {
+      return say($('reditmsg'), 'bad', 'Give the driver a name.');
+    }
+    say($('reditmsg'), 'info', 'Saving\u2026');
+    PW.api('/api/roster/edit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(function (j) {
+      editingDriver = j.entry;
+      return loadRoster().then(function () {
+        openDriverEditor(j.entry);
+        say($('reditmsg'), 'ok',
+          'Saved, and kept when the roster next refreshes from the league.');
+      });
+    }).catch(function (e) {
+      say($('reditmsg'), 'bad', 'Could not save: ' + e.message);
+    });
+  });
+
+  if ($('rrevert')) $('rrevert').addEventListener('click', function () {
+    if (!editingDriver || !editingDriver.iracingId) return;
+    PW.api('/api/roster/revert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ iracingId: editingDriver.iracingId })
+    }).then(function () {
+      return loadRoster();
+    }).then(function () {
+      $('reditwrap').hidden = true;
+      editingDriver = null;
+      say($('rostermsg'), 'ok',
+        'Local changes released. The next pull will take the league\u2019s version.');
+    }).catch(function (e) {
+      say($('reditmsg'), 'bad', 'Could not revert: ' + e.message);
+    });
+  });
+
+  /* ====================================================== battle box picker */
+
+  /* The car list is rebuilt only when the field itself changes. It used to be
+     rebuilt on every tick because the position labels move, which silently
+     cleared the operator's ticks halfway through choosing four cars. Positions
+     are now written in place instead. */
+  var pickSig = null;
+
+  function renderBattlePicker() {
+    var el = $('bpick');
+    if (!el) return;
+    var drivers = (PW.meta && PW.meta.drivers) || {};
+    var keys = Object.keys(drivers);
+    if (!keys.length) {
+      pickSig = null;
+      el.innerHTML = '<div class="lgempty">No cars in the session yet.</div>';
+      return;
+    }
+
+    var cars = keys.map(function (k) { return drivers[k]; })
+      .filter(function (d) { return !d.isPace && !d.isSpectator; });
+    cars.sort(function (a, b) { return String(a.num).localeCompare(String(b.num), undefined, { numeric: true }); });
+
+    var sig = cars.map(function (d) { return d.idx + ':' + d.num; }).join(',');
+    if (sig !== pickSig) {
+      pickSig = sig;
+      // Keep whatever was already ticked across a genuine field change.
+      var was = {};
+      Array.prototype.forEach.call(el.querySelectorAll('input:checked'), function (i) {
+        was[i.value] = true;
+      });
+      var pinned = {};
+      ((PW.hello && PW.hello.battle && PW.hello.battle.cars) || []).forEach(function (n) {
+        pinned[String(n)] = true;
+      });
+      el.innerHTML = cars.map(function (d) {
+        var col = d.classColor || '#8894a4';
+        var on = was[String(d.num)] || pinned[String(d.num)];
+        return '<label data-idx="' + d.idx + '">' +
+          '<input type="checkbox" value="' + esc(d.num) + '"' + (on ? ' checked' : '') + '>' +
+          '<span class="bnum" style="background:' + esc(col) + ';color:#0b0d10">' +
+            esc(d.num) + '</span>' +
+          '<span class="bn">' + esc(PW.displayName(d.idx) || d.name) + '</span>' +
+          '<span class="bp"></span>' +
+          '</label>';
+      }).join('');
+    }
+
+    // Positions only, so nothing the operator is touching gets replaced.
+    Array.prototype.forEach.call(el.querySelectorAll('label[data-idx]'), function (lab) {
+      var car = PW.carByIdx(parseInt(lab.dataset.idx, 10));
+      var txt = car && car.p ? 'P' + car.p : '';
+      var bp = lab.querySelector('.bp');
+      if (bp && bp.textContent !== txt) bp.textContent = txt;
+    });
+  }
+
+  function pickedCars() {
+    return Array.prototype.slice
+      .call($('bpick').querySelectorAll('input:checked'))
+      .map(function (i) { return i.value; });
+  }
+
+  function postBattle(cars, title) {
+    return PW.api('/api/battle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cars: cars, title: title || '' })
+    });
+  }
+
+  if ($('bapply')) {
+    $('bapply').addEventListener('click', function () {
+      var cars = pickedCars();
+      if (cars.length === 1) {
+        return say($('bmsg2'), 'bad', 'Pick at least two cars, or clear them all for automatic.');
+      }
+      postBattle(cars, $('btitle').value).then(function () {
+        say($('bmsg2'), 'ok', cars.length
+          ? 'Battle box pinned to ' + cars.length + ' cars. It changes on screen straight away.'
+          : 'Back to picking the closest fight.');
+      }).catch(function (e) {
+        say($('bmsg2'), 'bad', 'Could not set it: ' + e.message);
+      });
+    });
+
+    $('bclear').addEventListener('click', function () {
+      Array.prototype.forEach.call($('bpick').querySelectorAll('input'), function (i) {
+        i.checked = false;
+      });
+      $('btitle').value = '';
+      postBattle([], '').then(function () {
+        say($('bmsg2'), 'ok', 'Back to picking the closest fight.');
+      });
+    });
+  }
+
   /* ========================================================= sim control */
 
   function controlAvailable() {
@@ -1736,6 +2057,7 @@
   }
 
   function renderControl() {
+    renderBattlePicker();
     var ok = controlAvailable();
     $('controlbody').classList.toggle('locked', !ok);
     $('controlnote').innerHTML = ok
