@@ -1,0 +1,382 @@
+<!doctype html>
+<!--
+  PitWall — Scrolling ticker
+  ---------------------------------------------------------------------------
+  A horizontal crawl of the running order, the way a television broadcast puts
+  timing along the bottom of the screen. Works as a 1920 wide OBS browser
+  source and as a thin strip pinned to the edge of a screen in the in-car HUD.
+
+  The anatomy is deliberate. A fixed block on the left carries the flag and the
+  lap count, because those are the two things a viewer always wants and they
+  must never be halfway through sliding off the edge. Everything else crawls
+  past it. The whole bar tints to the flag, so a caution is unmissable even in
+  peripheral vision.
+
+  HOW THE SCROLL STAYS SMOOTH
+  ---------------------------
+  The field is rendered twice into one track and the track is translated by a
+  distance derived from elapsed time, wrapping at exactly half its width. That
+  gives a seamless loop with no reset. Every entry is a fixed width worked out
+  from its columns, so a gap going from 9.9 to 10.1 never changes the layout
+  under the scroll, which is what makes cheaper tickers jitter.
+
+  Recommended OBS source: 1920 x 64 at position 0, 1016.
+
+  Query string options
+    cols=LIST       columns per entry   (default pos,num,name,gap)
+    speed=PX        crawl speed in pixels per second   (default 90)
+    dir=l|r         crawl direction     (default l, right to left)
+    side=left|right where the fixed block sits          (default left)
+    rows=N          limit to the top N  (default 0, the whole field)
+    class=NAME      only cars in this class
+    h=PX            bar height          (default 58)
+    tint=0          flag colours the stripe only, not the whole bar
+    gapstyle=gap|int  which gap the default column set shows
+    lap=0           hide the lap counter block
+    names=short|full|surname|abbrev
+    scale=1.2       overall scale       (PW.applyChrome)
+    opacity=0.85    panel opacity       (PW.applyChrome)
+    server=URL      point at a PitWall elsewhere (pitwall.js)
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PitWall — Ticker</title>
+<link rel="stylesheet" href="../shared/base.css">
+<style>
+  html, body { overflow: hidden; }
+
+  #root { width: 100%; }
+
+  #bar {
+    display: none;
+    align-items: stretch;
+    height: var(--h, 58px);
+    border-radius: 5px;
+    overflow: hidden;
+    background: rgba(var(--panel), var(--panel-opacity));
+    border: 1px solid var(--line);
+    /* The tint is a wash over the panel rather than a replacement for it, so
+       the text underneath keeps its contrast in every flag state. */
+    transition: background-image 260ms ease;
+  }
+  body.ready #bar { display: flex; }
+  #bar.right { flex-direction: row-reverse; }
+
+  /* ---- fixed block ---- */
+  .ident { display: flex; align-items: stretch; flex: 0 0 auto; }
+  #bar.right .ident { flex-direction: row-reverse; }
+
+  .stripe {
+    flex: 0 0 12px;
+    background: var(--text-faint);
+    transition: background-color 200ms ease;
+  }
+  .lapbox {
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 0 14px;
+    background: rgba(0, 0, 0, 0.34);
+    min-width: 104px;
+  }
+  .lapbox .l1 {
+    font-family: var(--chrome); font-size: 0.56rem; font-weight: 800;
+    letter-spacing: 0.18em; color: var(--text-faint); line-height: 1.5;
+  }
+  .lapbox .l2 {
+    font-family: var(--mono); font-variant-numeric: tabular-nums;
+    font-size: 1.02rem; font-weight: 700; line-height: 1.1; white-space: nowrap;
+  }
+  .lapbox.hide { display: none; }
+
+  /* ---- crawl ---- */
+  .crawl {
+    flex: 1 1 auto;
+    position: relative;
+    overflow: hidden;
+    min-width: 0;
+  }
+  .track {
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    display: flex;
+    align-items: center;
+    will-change: transform;
+  }
+  .ent {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex: 0 0 auto;
+    padding: 0 16px;
+    border-right: 1px solid rgba(255, 255, 255, 0.07);
+    height: 100%;
+  }
+  .ent .cells { gap: 8px; }
+  .ent .cells .cx { font-size: 0.86rem; }
+  .ent.me { background: rgba(255, 255, 255, 0.09); }
+  .ent.pit { opacity: 0.72; }
+
+  /* Flag washes.
+     A gradient rather than a background-color, deliberately: the bar's own
+     panel colour IS a background-color, so tinting with one replaces the panel
+     instead of sitting on it and the text loses its ground. Painted as an
+     image, the tint composites over the panel the way it should.
+     Low alpha on purpose: this sits behind live timing and has to signal
+     rather than shout over it. */
+  #bar.t-green     { background-image: linear-gradient(rgba(35, 190, 96, 0.30), rgba(35, 190, 96, 0.30)); }
+  #bar.t-yellow    { background-image: linear-gradient(rgba(230, 190, 40, 0.30), rgba(230, 190, 40, 0.30)); }
+  #bar.t-red       { background-image: linear-gradient(rgba(215, 60, 50, 0.38), rgba(215, 60, 50, 0.38)); }
+  #bar.t-white     { background-image: linear-gradient(rgba(235, 238, 242, 0.18), rgba(235, 238, 242, 0.18)); }
+  #bar.t-checkered { background-image: linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.14)); }
+
+  .stripe.f-green     { background: var(--green); }
+  .stripe.f-yellow    { background: var(--yellow); }
+  .stripe.f-red       { background: var(--red); }
+  .stripe.f-white     { background: var(--white-flag); }
+  .stripe.f-checkered {
+    background-image:
+      linear-gradient(45deg, #fff 25%, transparent 25%, transparent 75%, #fff 75%),
+      linear-gradient(45deg, #fff 25%, #111 25%, #111 75%, #fff 75%);
+    background-size: 12px 12px;
+    background-position: 0 0, 6px 6px;
+  }
+
+  /* A red flag is the one state worth a little motion of its own. */
+  @keyframes pulse { 50% { opacity: 0.45; } }
+  .stripe.f-red { animation: pulse 1s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) {
+    .stripe.f-red { animation: none; }
+  }
+
+  .empty {
+    display: flex; align-items: center; padding: 0 18px;
+    color: var(--text-faint); font-size: 0.8rem;
+  }
+</style>
+</head>
+<body class="overlay">
+  <div id="pw-status"></div>
+  <div id="root" class="scale-root">
+    <div id="bar">
+      <div class="ident">
+        <div class="stripe" id="stripe"></div>
+        <div class="lapbox" id="lapbox">
+          <span class="l1" id="lapLabel">LAP</span>
+          <span class="l2" id="lapValue">–</span>
+        </div>
+      </div>
+      <div class="crawl" id="crawl">
+        <div class="track" id="track"></div>
+      </div>
+    </div>
+  </div>
+
+<script src="../shared/pitwall.js"></script>
+<script src="../shared/columns.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  PW.applyChrome();
+
+  var OPT = {
+    cols:     PW.opt('cols', ''),
+    speed:    Math.max(10, Math.min(400, PW.optNum('speed', 90))),
+    dir:      PW.opt('dir', 'l') === 'r' ? 'r' : 'l',
+    side:     PW.opt('side', 'left') === 'right' ? 'right' : 'left',
+    rows:     Math.max(0, PW.optNum('rows', 0)),
+    klass:    PW.opt('class', ''),
+    h:        Math.max(24, PW.optNum('h', 58)),
+    tint:     PW.optBool('tint', true),
+    gapstyle: PW.opt('gapstyle', 'gap') === 'int' ? 'int' : 'gap',
+    lapblk:   PW.optBool('lap', true),
+    names:    PW.opt('names', 'short'),
+    avgn:     PW.optNum('avgn', 5),
+    tband:    PW.optBool('tband', false),
+    units:    PW.opt('units', 'kph'),
+    irStyle:  PW.opt('irstyle', 'short')
+  };
+
+  var elBar    = document.getElementById('bar');
+  var elStripe = document.getElementById('stripe');
+  var elCrawl  = document.getElementById('crawl');
+  var elTrack  = document.getElementById('track');
+  var elLapBox = document.getElementById('lapbox');
+  var elLapL   = document.getElementById('lapLabel');
+  var elLapV   = document.getElementById('lapValue');
+
+  document.getElementById('root').style.setProperty('--h', OPT.h + 'px');
+  if (OPT.side === 'right') elBar.classList.add('right');
+  if (!OPT.lapblk) elLapBox.classList.add('hide');
+
+  var DEFAULT_COLS = 'pos,num,name,' + OPT.gapstyle;
+  var COLSPEC = PW.parseCols(OPT.cols, DEFAULT_COLS);
+
+  function timedSession() {
+    return !!(PW.tick && PW.tick.session && PW.tick.session.mode === 'timed');
+  }
+  var COLSERIAL = 0;
+  function cols() {
+    if (PW.optsSerial !== COLSERIAL) {
+      COLSERIAL = PW.optsSerial;
+      COLSPEC = PW.parseCols(PW.opt('cols', ''), DEFAULT_COLS);
+    }
+    return PW.usableCols(COLSPEC, timedSession());
+  }
+
+  /* Every entry is the same width, worked out from the column widths rather
+     than from the text. Text that changes width under a scroll is what makes a
+     ticker shimmer, and a gap column goes from three characters to five the
+     moment someone drops ten seconds back. */
+  function entryWidth(list) {
+    var w = 32;                       // the padding either side
+    list.forEach(function (c) { w += c.w + 9; });
+    return Math.max(140, w);
+  }
+
+  /* ------------------------------------------------------------- the field */
+
+  function field() {
+    var cars = PW.cars().filter(function (c) {
+      if (c.st === 'out') return false;
+      if (OPT.klass) {
+        var d = PW.driver(c.i) || {};
+        if (String(d.classShort || '').toLowerCase() !== OPT.klass.toLowerCase()) return false;
+      }
+      return true;
+    });
+    cars.sort(function (a, b) { return (a.p || 999) - (b.p || 999); });
+    if (OPT.rows > 0) cars = cars.slice(0, OPT.rows);
+    return cars;
+  }
+
+  /* -------------------------------------------------------------- the bar */
+
+  function paintIdent() {
+    var s = (PW.tick && PW.tick.session) || {};
+    var flag = s.flag || 'none';
+
+    var sc = 'stripe f-' + flag;
+    if (elStripe.className !== sc) elStripe.className = sc;
+
+    var bc = 'ticker' + (OPT.tint && flag !== 'none' ? ' t-' + flag : '');
+    if (OPT.side === 'right') bc += ' right';
+    if (elBar.className !== bc) elBar.className = bc;
+
+    // Lap count in a race, time remaining in anything else, because a practice
+    // session counting "lap 4 of nothing" tells a viewer less than the clock.
+    var label, value;
+    if (!timedSession() && s.lapsTotal) {
+      label = 'LAP';
+      // RaceLaps keeps counting past the distance on the chequered lap, and
+      // "LAP 44 / 42" reads as a fault rather than as a finish.
+      var done = s.raceLaps != null ? s.raceLaps : 0;
+      value = Math.max(0, Math.min(done, s.lapsTotal)) + ' / ' + s.lapsTotal;
+    } else if (s.timeRemain != null) {
+      label = 'REMAINING';
+      value = PW.fmtClock(s.timeRemain);
+    } else if (s.raceLaps != null) {
+      label = 'LAP';
+      value = String(Math.max(0, s.raceLaps));
+    } else {
+      label = 'SESSION';
+      value = s.type || '–';
+    }
+    if (elLapL.textContent !== label) elLapL.textContent = label;
+    if (elLapV.textContent !== value) elLapV.textContent = value;
+  }
+
+  /* The track holds the field twice. Half of it scrolling past is a full loop,
+     so wrapping at half the width is seamless with nothing to reset. */
+  var built = '';
+  var entryW = 0;
+
+  function buildTrack(cars, list) {
+    var sig = cars.map(function (c) { return c.i; }).join(',') + '|' +
+              list.map(function (c) { return c.key + c.w; }).join(',');
+    if (sig === built) return false;
+    built = sig;
+    entryW = entryWidth(list);
+
+    elTrack.innerHTML = '';
+    if (!cars.length) {
+      elTrack.appendChild(PW.el('div', 'empty', 'Waiting for cars'));
+      return true;
+    }
+    for (var copy = 0; copy < 2; copy++) {
+      cars.forEach(function (c) {
+        var e = PW.el('div', 'ent');
+        e.style.width = entryW + 'px';
+        e.appendChild(PW.el('div', 'cells'));
+        e._idx = c.i;
+        elTrack.appendChild(e);
+      });
+    }
+    return true;
+  }
+
+  function paintEntries(cars, list) {
+    var focus = PW.focusIdx();
+    var per = cars.length;
+    if (!per) return;
+    for (var k = 0; k < elTrack.children.length; k++) {
+      var node = elTrack.children[k];
+      var c = cars[k % per];
+      if (!c) continue;
+      PW.paintCells(node.firstChild, list, PW.cellCtx(c, OPT));
+      node.classList.toggle('me', focus != null && c.i === focus);
+      node.classList.toggle('pit', c.st === 'pit' || c.st === 'stall');
+    }
+  }
+
+  /* --------------------------------------------------------------- motion */
+
+  var t0 = null, paused = 0, lastFlag = null;
+
+  function frame(now) {
+    if (t0 === null) t0 = now;
+    var s = (PW.tick && PW.tick.session) || {};
+
+    /* Hold the crawl still for a moment when the flag changes, so a caution
+       does not arrive halfway through a slide and get missed. */
+    if (s.flag !== lastFlag) {
+      lastFlag = s.flag;
+      paused = now + 900;
+    }
+
+    var half = elTrack.scrollWidth / 2;
+    if (half > 0 && now > paused) {
+      var travelled = ((now - t0) / 1000) * OPT.speed;
+      var x = -(travelled % half);
+      if (OPT.dir === 'r') x = x + half - elCrawl.offsetWidth;
+      elTrack.style.transform = 'translateX(' + x.toFixed(1) + 'px)';
+    } else if (now <= paused) {
+      t0 += 16;                       // hold position without losing phase
+    }
+    requestAnimationFrame(frame);
+  }
+
+  /* --------------------------------------------------------------- render */
+
+  function render() {
+    if (!PW.meta || !PW.tick) {
+      document.body.classList.remove('ready');
+      return;
+    }
+    document.body.classList.add('ready');
+    paintIdent();
+    var list = cols();
+    var cars = field();
+    buildTrack(cars, list);
+    paintEntries(cars, list);
+  }
+
+  PW.on('meta', render);
+  PW.on('tick', render);
+  PW.on('close', function () { document.body.classList.remove('ready'); });
+  PW.start({ sub: ['meta', 'tick'], rate: 5 });
+  requestAnimationFrame(frame);
+}());
+</script>
+</body>
+</html>

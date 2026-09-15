@@ -396,6 +396,77 @@
     margin-left: 6px; white-space: nowrap;
   }
   table.rt td.act button { margin-left: 4px; }
+
+  /* ------------------------------------------------------- widget profiles */
+  .wgrid { display: grid; grid-template-columns: 230px 1fr; gap: 18px; align-items: start; }
+  @media (max-width: 900px) { .wgrid { grid-template-columns: 1fr; } }
+  .plist { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+  .plist button {
+    text-align: left; padding: 8px 10px; border-radius: 6px; width: 100%;
+    background: var(--panel-2); border: 1px solid var(--line); cursor: pointer;
+    color: var(--text); font: inherit; font-size: 13px;
+  }
+  .plist button.on { border-color: var(--accent); background: rgba(232, 68, 58, 0.1); }
+  .plist button small { display: block; color: var(--text-faint); font-size: 11px; }
+
+  .wrow2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 620px) { .wrow2 { grid-template-columns: 1fr; } }
+
+  .seg { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
+  .seg button {
+    padding: 5px 12px; border-radius: 5px; border: 1px solid var(--line);
+    background: var(--panel-2); color: var(--text-dim); cursor: pointer;
+    font: inherit; font-size: 12px;
+  }
+  .seg button.on { border-color: var(--accent); color: var(--text); background: rgba(232, 68, 58, 0.12); }
+  .seg button.has::after { content: " •"; color: var(--accent); }
+
+  .chosen { display: flex; flex-direction: column; gap: 3px; margin-bottom: 12px; }
+  .chosen .ci {
+    display: flex; align-items: center; gap: 8px; padding: 5px 8px;
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px;
+    cursor: grab; font-size: 12.5px;
+  }
+  .chosen .ci.drag { opacity: 0.4; }
+  .chosen .ci .grip { color: var(--text-faint); cursor: grab; }
+  .chosen .ci .lab { flex: 1 1 auto; font-weight: 600; }
+  .chosen .ci input { width: 58px; text-align: right; font-size: 12px; padding: 2px 5px; }
+  .chosen .ci .rm {
+    background: none; border: 0; color: var(--text-faint); cursor: pointer;
+    font-size: 15px; line-height: 1; padding: 0 2px;
+  }
+  .chosen .ci .rm:hover { color: var(--red); }
+  .chosen .none { color: var(--text-faint); font-size: 12px; padding: 8px 0; }
+
+  .avail { display: flex; flex-direction: column; gap: 8px; }
+  .avail .grp { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+  .avail .gname {
+    font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-faint); width: 62px; flex: 0 0 62px; font-weight: 700;
+  }
+  .avail .add {
+    padding: 3px 8px; border-radius: 4px; border: 1px solid var(--line);
+    background: transparent; color: var(--text-dim); cursor: pointer;
+    font: inherit; font-size: 11.5px; display: inline-flex; align-items: center; gap: 5px;
+  }
+  .avail .add:hover { border-color: var(--accent); color: var(--text); }
+  .avail .add.used { opacity: 0.35; }
+
+  .src {
+    font-size: 8.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 1px 4px; border-radius: 3px;
+  }
+  .src.sim      { background: rgba(53, 208, 127, 0.16); color: #35d07f; }
+  .src.roster   { background: rgba(59, 130, 246, 0.18); color: #6da8f6; }
+  .src.derived  { background: rgba(176, 108, 255, 0.18); color: #c79bff; }
+  .src.estimate { background: rgba(255, 204, 51, 0.16); color: #ffcc33; }
+
+  .wopts { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+  .wcols { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .wcols .field { display: flex; align-items: center; gap: 8px; }
+  .wcols label { font-size: 12px; flex: 1 1 auto; }
+  .wcols input[type=color] { width: 40px; height: 26px; padding: 0; }
+
 </style>
 </head>
 <body class="solid">
@@ -418,6 +489,7 @@
     <button data-tab="diagnostics">Diagnostics <span id="diagbadge"></span></button>
     <button data-tab="leagues">Leagues <span id="leaguebadge"></span></button>
     <button data-tab="overlays">Overlays</button>
+    <button data-tab="widgets">Widgets</button>
     <button data-tab="roster">Roster <span id="rosterbadge"></span></button>
     <button data-tab="league">League</button>
     <button data-tab="control">Sim control</button>
@@ -565,6 +637,88 @@
     </div>
   </section>
 
+
+  <!-- =========================================================== WIDGETS -->
+  <section class="tab" id="tab-widgets">
+    <div class="card">
+      <h2>Widget profiles</h2>
+      <p class="lede">A saved layout, referenced from a widget URL as
+        <code>?profile=name</code>. The engine serves it, so the URL in OBS stays
+        short and a change here reaches every source pointed at it without you
+        touching OBS. Anything written directly into a URL still wins, so a
+        source you have deliberately set up differently is never overruled.</p>
+      <div class="wgrid">
+        <div class="wlist">
+          <div class="btnrow">
+            <button class="primary" id="wnew">New profile</button>
+          </div>
+          <div id="wprofiles" class="plist"></div>
+          <p class="hint" id="wcount"></p>
+        </div>
+
+        <div class="weditor" id="weditor" hidden>
+          <div class="wrow2">
+            <div class="field">
+              <label for="wname">Name</label>
+              <input id="wname" maxlength="60" placeholder="Race tower">
+            </div>
+            <div class="field">
+              <label for="wwidget">Widget</label>
+              <select id="wwidget">
+                <option value="tower">Leaderboard / tower</option>
+                <option value="relative">Relative</option>
+                <option value="ticker">Scrolling ticker</option>
+              </select>
+            </div>
+          </div>
+
+          <h3 class="sub">Session</h3>
+          <p class="hint">Practice, qualifying and the race can each carry their
+            own columns. Edit the base first, then only the differences on the
+            others. The swap happens on its own when the session changes.</p>
+          <div class="seg" id="wsession">
+            <button data-layer="base" class="on">Base</button>
+            <button data-layer="race">Race</button>
+            <button data-layer="qualify">Qualifying</button>
+            <button data-layer="practice">Practice</button>
+          </div>
+
+          <h3 class="sub">Columns</h3>
+          <p class="hint">Drag to reorder. The number beside each one is its
+            width in pixels. The badge says where the figure comes from, which
+            is worth knowing before you call a race on it.</p>
+          <div id="wchosen" class="chosen"></div>
+          <div id="wavailable" class="avail"></div>
+
+          <h3 class="sub">Options</h3>
+          <div id="woptions" class="wopts"></div>
+
+          <h3 class="sub">Colours</h3>
+          <p class="hint">One colour per meaningful state. Leave a swatch alone
+            to keep the default.</p>
+          <div id="wcolours" class="wcols"></div>
+
+          <div class="btnrow">
+            <button class="primary" id="wsave">Save profile</button>
+            <button id="wdup">Duplicate</button>
+            <button id="wdel" class="danger">Delete</button>
+            <span id="wmsg" class="faint" style="font-size:12px"></span>
+          </div>
+
+          <h3 class="sub">URL for OBS</h3>
+          <div class="bigurl" id="wurl"></div>
+          <div class="btnrow">
+            <button id="wcopy">Copy URL</button>
+            <button id="wopen">Open in a tab</button>
+          </div>
+
+          <h3 class="sub">Live preview</h3>
+          <div class="previewframe" id="wpreview"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- ============================================================ ROSTER -->
   <section class="tab" id="tab-roster">
     <div class="signup">
@@ -654,6 +808,17 @@
           <div class="field">
             <label for="e_x">X</label>
             <input id="e_x" placeholder="handle">
+          </div>
+          <div class="field">
+            <label for="e_tagLabel">League tag</label>
+            <input id="e_tagLabel" maxlength="12" placeholder="TEAM, ROOKIE, WATCH">
+            <span class="hint">A short label that marks this driver out in every
+              list. Stored with the roster, so everyone running PitWall from it
+              sees the same tags.</span>
+          </div>
+          <div class="field">
+            <label for="e_tagColour">Tag colour</label>
+            <input id="e_tagColour" type="color" value="#b06cff">
           </div>
         </div>
         <div class="btnrow">
@@ -860,6 +1025,7 @@
 </div>
 
 <script src="../shared/pitwall.js"></script>
+<script src="../shared/columns.js"></script>
 <script>
 (function () {
   'use strict';
@@ -931,7 +1097,7 @@
 
   /* ================================================================ tabs */
 
-  var TABS = ['status', 'diagnostics', 'leagues', 'overlays', 'roster', 'league', 'control'];
+  var TABS = ['status', 'diagnostics', 'leagues', 'overlays', 'widgets', 'roster', 'league', 'control'];
   var loaded = {};
 
   function showTab(name) {
@@ -948,6 +1114,7 @@
       if (name === 'diagnostics') runDiagnostics();
       if (name === 'leagues') loadLeagues();
       if (name === 'overlays') initOverlays();
+      if (name === 'widgets') initWidgets();
       if (name === 'roster') loadRoster();
       if (name === 'league') fillLeague();
       if (name === 'control') renderControl();
@@ -1140,6 +1307,8 @@
      'Every car around a map of the circuit, coloured by class.'],
     ['broadcast/standings.html', 'Standings board', 1920, 1080,
      'Full-field results board for the grid walk, a caution period or the podium.'],
+    ['broadcast/ticker.html', 'Scrolling ticker', 1920, 64,
+     'The whole field crawling across the bottom of the frame, with the flag and the lap count pinned on the left.'],
     ['hud/relative.html', 'HUD · Relative', 400, 320,
      'Cars around you by track position. The one widget every driver wants.'],
     ['hud/standings.html', 'HUD · Standings', 400, 600,
@@ -1869,7 +2038,8 @@
 
   var EDIT_FIELDS = ['iracingId', 'displayName', 'carNumber', 'team', 'country',
                      'pronouns', 'hometown', 'accentColor', 'bio', 'headshot',
-                     'sponsor', 'twitch', 'instagram', 'youtube', 'x'];
+                     'sponsor', 'twitch', 'instagram', 'youtube', 'x',
+                     'tagLabel', 'tagColour'];
   var editingDriver = null;
 
   function openDriverEditor(d) {
@@ -1881,6 +2051,11 @@
       var el = $('e_' + f);
       if (el) el.value = (editingDriver[f] == null) ? '' : editingDriver[f];
     });
+    // The tag is stored nested, because that is the shape the widgets read;
+    // it is edited as two plain fields, because that is easier to type.
+    var tag = editingDriver.tag || {};
+    if ($('e_tagLabel')) $('e_tagLabel').value = tag.label || '';
+    if ($('e_tagColour')) $('e_tagColour').value = tag.colour || '#b06cff';
     // The customer ID is the join key, so it is fixed once an entry exists.
     $('e_iracingId').readOnly = !!(d && d.iracingId);
     $('rrevert').hidden = !(d && d.editedHere);
@@ -1910,6 +2085,7 @@
       var el = $('e_' + f);
       if (el && el.value.trim()) payload[f] = el.value.trim();
     });
+    if (!payload.tagLabel) delete payload.tagColour;
     if (!/^\d+$/.test(String(payload.iracingId || ''))) {
       return say($('reditmsg'), 'bad',
         'The customer ID must be the number from the driver\u2019s iRacing account, not a name.');
@@ -2178,6 +2354,439 @@
   PW.on('tick', function () {
     renderStatus();
   });
+
+  /* ====================================================== widget profiles */
+
+  /*
+   * The deep settings editor. The HUD's own settings window keeps the things
+   * you want in front of you mid-session (on, off, which screen, size); this
+   * is where the detail lives, because a column picker with thirty-two entries
+   * and a live preview needs a browser window, not a 420px panel over a race.
+   */
+
+  var WIDGET_PAGES = {
+    tower:    { path: '/broadcast/tower.html',  w: 460,  h: 700,
+                dflt: 'st,gap,int,last,best' },
+    relative: { path: '/hud/relative.html',     w: 340,  h: 300,
+                dflt: 'num,cls,tage,last' },
+    ticker:   { path: '/broadcast/ticker.html', w: 1000, h: 70,
+                dflt: 'pos,num,name,gap' }
+  };
+
+  /* Options offered per widget. Kept here rather than derived from the pages
+     so that the editor can describe each one in words; a select called
+     "group" means nothing until someone tells you what it groups. */
+  var WIDGET_OPTS = {
+    common: [
+      ['names',  'Name style',   'select', ['short', 'full', 'surname', 'abbrev']],
+      ['scale',  'Scale',        'number', 1],
+      ['opacity','Panel opacity','number', 0.92],
+      ['avgn',   'Average over', 'select', ['3', '5', '10']],
+      ['tband',  'Tyre age as NEW / OK / OLD', 'bool', false],
+      ['units',  'Speed units',  'select', ['kph', 'mph']],
+      ['irstyle','iRating style','select', ['short', 'long']]
+    ],
+    tower: [
+      ['rows',   'Rows (0 = fit the source)', 'number', 0],
+      ['top',    'Pinned top N', 'number', 0],
+      ['cycle',  'Cycle the rest every N seconds', 'number', 0],
+      ['group',  'Group by class', 'select', ['none', 'class']],
+      ['focus',  'Highlight the followed car', 'bool', false],
+      ['heads',  'Column headings', 'bool', false],
+      ['fixed',  'Built-in position, number and name', 'bool', true],
+      ['rowh',   'Row height', 'number', 30]
+    ],
+    relative: [
+      ['ahead',  'Cars ahead',  'number', 3],
+      ['behind', 'Cars behind', 'number', 3],
+      ['w',      'Width',       'number', 300],
+      ['rowh',   'Row height',  'number', 30]
+    ],
+    ticker: [
+      ['speed',  'Crawl speed, pixels per second', 'number', 90],
+      ['h',      'Bar height', 'number', 58],
+      ['side',   'Fixed block', 'select', ['left', 'right']],
+      ['dir',    'Crawl direction', 'select', ['l', 'r']],
+      ['rows',   'Limit to top N (0 = all)', 'number', 0],
+      ['tint',   'Tint the whole bar with the flag', 'bool', true],
+      ['lap',    'Show the lap counter', 'bool', true]
+    ]
+  };
+
+  var STATE_COLOURS = [
+    ['cme',      'Followed car', '#12b8ff'],
+    ['clead',    'Class leader', '#ffcc33'],
+    ['clapped',  'A lap down',   '#7b8794'],
+    ['clapping', 'Lapping you',  '#e8a33f'],
+    ['cpit',     'In the pits',  '#ffcc33'],
+    ['coff',     'Off track',    '#e0762b'],
+    ['ctag',     'Tagged driver','#b06cff'],
+    ['cfast',    'Fastest lap',  '#b06cff']
+  ];
+
+  var wProfiles = [];
+  var wCurrent = null;         // the profile being edited
+  var wLayer = 'base';         // base | race | qualify | practice
+
+  function initWidgets() { loadProfiles(); bindWidgets(); }
+
+  function loadProfiles() {
+    return PW.api('/api/profiles').then(function (j) {
+      wProfiles = j.profiles || [];
+      renderProfileList();
+      $('wcount').textContent = wProfiles.length
+        ? wProfiles.length + ' saved'
+        : 'No profiles yet. Every widget works without one; a profile just saves you a very long URL.';
+    }).catch(function (e) {
+      $('wcount').textContent = 'Could not load profiles: ' + e.message;
+    });
+  }
+
+  function renderProfileList() {
+    var host = $('wprofiles');
+    host.innerHTML = '';
+    wProfiles.forEach(function (p) {
+      var b = document.createElement('button');
+      b.className = (wCurrent && wCurrent.id === p.id) ? 'on' : '';
+      b.innerHTML = '<span></span><small></small>';
+      b.firstChild.textContent = p.name;
+      b.lastChild.textContent = p.widget;
+      b.addEventListener('click', function () { editProfile(p); });
+      host.appendChild(b);
+    });
+  }
+
+  function blankProfile() {
+    return { id: '', name: '', widget: 'tower', opts: {}, sessions: {} };
+  }
+
+  function editProfile(p) {
+    wCurrent = JSON.parse(JSON.stringify(p || blankProfile()));
+    wCurrent.sessions = wCurrent.sessions || {};
+    wLayer = 'base';
+    $('weditor').hidden = false;
+    $('wname').value = wCurrent.name || '';
+    $('wwidget').value = wCurrent.widget || 'tower';
+    renderProfileList();
+    renderEditor();
+  }
+
+  /* The options being edited right now: the base, or one session overlay. */
+  function layerOpts() {
+    if (wLayer === 'base') return wCurrent.opts;
+    if (!wCurrent.sessions[wLayer]) wCurrent.sessions[wLayer] = {};
+    return wCurrent.sessions[wLayer];
+  }
+
+  /* What a widget would actually receive in this layer: the base with the
+     overlay on top. Shown in the preview so you see the result, not the diff. */
+  function effectiveOpts() {
+    var out = {};
+    var k;
+    for (k in wCurrent.opts) if (wCurrent.opts.hasOwnProperty(k)) out[k] = wCurrent.opts[k];
+    if (wLayer !== 'base' && wCurrent.sessions[wLayer]) {
+      var lay = wCurrent.sessions[wLayer];
+      for (k in lay) if (lay.hasOwnProperty(k)) out[k] = lay[k];
+    }
+    return out;
+  }
+
+  function currentCols() {
+    var spec = effectiveOpts().cols;
+    if (spec === undefined) spec = WIDGET_PAGES[wCurrent.widget].dflt;
+    return String(spec).split(',').map(function (s) { return s.trim(); })
+      .filter(Boolean).map(function (part) {
+        var bits = part.split(':');
+        return { key: bits[0], w: bits[1] ? parseInt(bits[1], 10) : null };
+      }).filter(function (c) { return !!PW.COLS[c.key]; });
+  }
+
+  function writeCols(list) {
+    layerOpts().cols = list.map(function (c) {
+      return c.w ? c.key + ':' + c.w : c.key;
+    }).join(',');
+    renderEditor();
+  }
+
+  function renderEditor() {
+    Array.prototype.forEach.call($('wsession').children, function (b) {
+      b.classList.toggle('on', b.dataset.layer === wLayer);
+      var has = b.dataset.layer !== 'base' &&
+                wCurrent.sessions[b.dataset.layer] &&
+                Object.keys(wCurrent.sessions[b.dataset.layer]).length > 0;
+      b.classList.toggle('has', !!has);
+    });
+    renderChosen();
+    renderAvailable();
+    renderOptions();
+    renderColours();
+    renderPreview();
+  }
+
+  function srcBadge(key) {
+    var s = PW.COLS[key].src;
+    return '<span class="src ' + s + '">' + s.slice(0, 3) + '</span>';
+  }
+
+  function renderChosen() {
+    var host = $('wchosen');
+    var list = currentCols();
+    host.innerHTML = '';
+    if (!list.length) {
+      host.innerHTML = '<div class="none">No columns. Add some from below.</div>';
+      return;
+    }
+    list.forEach(function (c, i) {
+      var def = PW.COLS[c.key];
+      var row = document.createElement('div');
+      row.className = 'ci';
+      row.draggable = true;
+      row.dataset.i = i;
+      row.innerHTML =
+        '<span class="grip">⋮⋮</span>' + srcBadge(c.key) +
+        '<span class="lab"></span>' +
+        '<input type="number" min="16" max="400" step="2">' +
+        '<button class="rm" title="Remove">×</button>';
+      row.querySelector('.lab').textContent = (def.label || c.key) + '  (' + c.key + ')';
+      var wIn = row.querySelector('input');
+      wIn.value = c.w || def.w;
+      wIn.addEventListener('change', function () {
+        var v = parseInt(wIn.value, 10);
+        list[i].w = (isFinite(v) && v !== def.w) ? v : null;
+        writeCols(list);
+      });
+      row.querySelector('.rm').addEventListener('click', function () {
+        list.splice(i, 1);
+        writeCols(list);
+      });
+      host.appendChild(row);
+    });
+    wireDrag(host, list);
+  }
+
+  /* Reordering by drag. Deliberately plain HTML5 drag events rather than a
+     library: it is forty lines and it has to work inside OBS's browser too. */
+  function wireDrag(host, list) {
+    var from = null;
+    host.addEventListener('dragstart', function (ev) {
+      var ci = ev.target.closest('.ci');
+      if (!ci) return;
+      from = parseInt(ci.dataset.i, 10);
+      ci.classList.add('drag');
+      ev.dataTransfer.effectAllowed = 'move';
+      try { ev.dataTransfer.setData('text/plain', String(from)); } catch (e) { /* Firefox */ }
+    });
+    host.addEventListener('dragover', function (ev) { ev.preventDefault(); });
+    host.addEventListener('drop', function (ev) {
+      ev.preventDefault();
+      var ci = ev.target.closest('.ci');
+      if (!ci || from === null) return;
+      var to = parseInt(ci.dataset.i, 10);
+      if (from === to) return;
+      var moved = list.splice(from, 1)[0];
+      list.splice(to, 0, moved);
+      from = null;
+      writeCols(list);
+    });
+    host.addEventListener('dragend', function () {
+      from = null;
+      Array.prototype.forEach.call(host.children, function (n) { n.classList.remove('drag'); });
+    });
+  }
+
+  function renderAvailable() {
+    var host = $('wavailable');
+    var chosen = {};
+    currentCols().forEach(function (c) { chosen[c.key] = true; });
+    host.innerHTML = '';
+    PW.COL_GROUPS.forEach(function (g) {
+      var row = document.createElement('div');
+      row.className = 'grp';
+      row.innerHTML = '<span class="gname">' + g[0] + '</span>';
+      g[1].forEach(function (key) {
+        var def = PW.COLS[key];
+        if (!def) return;
+        var b = document.createElement('button');
+        b.className = 'add' + (chosen[key] ? ' used' : '');
+        b.innerHTML = srcBadge(key) + '<span></span>';
+        b.lastChild.textContent = def.label || key;
+        b.title = key + (def.src === 'estimate' ? ' — an estimate, not a measurement' : '');
+        b.addEventListener('click', function () {
+          var list = currentCols();
+          if (chosen[key]) {
+            writeCols(list.filter(function (c) { return c.key !== key; }));
+          } else {
+            list.push({ key: key, w: null });
+            writeCols(list);
+          }
+        });
+        row.appendChild(b);
+      });
+      host.appendChild(row);
+    });
+  }
+
+  function renderOptions() {
+    var host = $('woptions');
+    host.innerHTML = '';
+    var opts = layerOpts();
+    var eff = effectiveOpts();
+    var defs = (WIDGET_OPTS[wCurrent.widget] || []).concat(WIDGET_OPTS.common);
+    defs.forEach(function (o) {
+      var key = o[0], label = o[1], kind = o[2], dflt = o[3];
+      var f = document.createElement('div');
+      f.className = 'field';
+      var id = 'wo_' + key;
+      var cur = eff[key];
+      var html = '<label for="' + id + '">' + label + '</label>';
+      if (kind === 'bool') {
+        html += '<select id="' + id + '">' +
+          '<option value="">Default (' + (dflt ? 'on' : 'off') + ')</option>' +
+          '<option value="1">On</option><option value="0">Off</option></select>';
+      } else if (kind === 'select') {
+        html += '<select id="' + id + '"><option value="">Default (' + dflt[0] + ')</option>' +
+          dflt.map(function (v) { return '<option value="' + v + '">' + v + '</option>'; }).join('') +
+          '</select>';
+      } else {
+        html += '<input id="' + id + '" type="number" step="any" placeholder="Default (' + dflt + ')">';
+      }
+      f.innerHTML = html;
+      host.appendChild(f);
+      var el = $(id);
+      el.value = (cur === undefined || cur === null) ? '' : String(cur);
+      el.addEventListener('change', function () {
+        if (el.value === '') delete opts[key];
+        else opts[key] = el.value;
+        renderPreview();
+      });
+    });
+  }
+
+  function renderColours() {
+    var host = $('wcolours');
+    host.innerHTML = '';
+    var opts = layerOpts();
+    var eff = effectiveOpts();
+    STATE_COLOURS.forEach(function (c) {
+      var f = document.createElement('div');
+      f.className = 'field';
+      var id = 'wc_' + c[0];
+      f.innerHTML = '<label for="' + id + '">' + c[1] + '</label>' +
+                    '<input id="' + id + '" type="color">' +
+                    '<button class="rm" title="Back to default" ' +
+                    'style="background:none;border:0;color:var(--text-faint);cursor:pointer">×</button>';
+      host.appendChild(f);
+      var el = $(id);
+      el.value = eff[c[0]] || c[2];
+      el.addEventListener('change', function () { opts[c[0]] = el.value; renderPreview(); });
+      f.querySelector('.rm').addEventListener('click', function () {
+        delete opts[c[0]];
+        renderEditor();
+      });
+    });
+  }
+
+  function profileUrl(forPreview) {
+    var page = WIDGET_PAGES[wCurrent.widget];
+    var base = location.origin + page.path;
+    if (!forPreview && wCurrent.id) return base + '?profile=' + encodeURIComponent(wCurrent.id);
+    // The preview cannot use ?profile= until the profile is saved, so it sends
+    // the options it is holding right now. That is the point of a preview.
+    var eff = effectiveOpts();
+    var q = Object.keys(eff).map(function (k) {
+      return encodeURIComponent(k) + '=' + encodeURIComponent(eff[k]);
+    });
+    return base + (q.length ? '?' + q.join('&') : '');
+  }
+
+  function renderPreview() {
+    var page = WIDGET_PAGES[wCurrent.widget];
+    $('wurl').textContent = profileUrl(false);
+    var host = $('wpreview');
+    var url = profileUrl(true);
+    if (host._url === url) return;
+    host._url = url;
+    host.innerHTML = '';
+    var f = document.createElement('iframe');
+    f.src = url;
+    f.width = page.w;
+    f.height = page.h;
+    f.style.border = '0';
+    f.style.maxWidth = '100%';
+    host.appendChild(f);
+  }
+
+  function bindWidgets() {
+    if ($('wnew')._bound) return;
+    $('wnew')._bound = true;
+
+    $('wnew').addEventListener('click', function () { editProfile(null); });
+
+    $('wsession').addEventListener('click', function (ev) {
+      var b = ev.target.closest('[data-layer]');
+      if (!b) return;
+      wLayer = b.dataset.layer;
+      renderEditor();
+    });
+
+    $('wname').addEventListener('input', function () { wCurrent.name = $('wname').value; });
+    $('wwidget').addEventListener('change', function () {
+      wCurrent.widget = $('wwidget').value;
+      // Columns are per widget; carrying a ticker's set into a relative would
+      // produce something that renders but makes no sense.
+      delete wCurrent.opts.cols;
+      Object.keys(wCurrent.sessions).forEach(function (k) { delete wCurrent.sessions[k].cols; });
+      renderEditor();
+    });
+
+    $('wsave').addEventListener('click', function () {
+      if (!wCurrent.name.trim()) return say($('wmsg'), 'bad', 'Give the profile a name.');
+      say($('wmsg'), 'info', 'Saving…');
+      PW.api('/api/profiles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(wCurrent)
+      }).then(function (j) {
+        wCurrent = j.profile;
+        return loadProfiles().then(function () {
+          renderEditor();
+          say($('wmsg'), 'ok', 'Saved. Point a browser source at the URL below.');
+        });
+      }).catch(function (e) { say($('wmsg'), 'bad', e.message); });
+    });
+
+    $('wdup').addEventListener('click', function () {
+      if (!wCurrent.id) return say($('wmsg'), 'bad', 'Save it first, then duplicate.');
+      PW.api('/api/profiles/duplicate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: wCurrent.id })
+      }).then(function (j) {
+        return loadProfiles().then(function () { editProfile(j.profile); });
+      }).catch(function (e) { say($('wmsg'), 'bad', e.message); });
+    });
+
+    $('wdel').addEventListener('click', function () {
+      if (!wCurrent.id) { $('weditor').hidden = true; return; }
+      PW.api('/api/profiles/delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: wCurrent.id })
+      }).then(function () {
+        wCurrent = null;
+        $('weditor').hidden = true;
+        loadProfiles();
+      }).catch(function (e) { say($('wmsg'), 'bad', e.message); });
+    });
+
+    $('wcopy').addEventListener('click', function () {
+      var t = $('wurl').textContent;
+      if (navigator.clipboard) navigator.clipboard.writeText(t);
+      say($('wmsg'), 'ok', 'Copied.');
+    });
+    $('wopen').addEventListener('click', function () {
+      window.open($('wurl').textContent, '_blank', 'noopener');
+    });
+  }
+
   PW.on('hello', function () { if (loaded.control) renderControl(); });
   PW.start({ sub: ['meta', 'tick'], rate: 2, name: 'control' });
 })();

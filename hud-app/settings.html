@@ -130,6 +130,15 @@
   footer .note { font-size: 12px; color: var(--faint); flex: 1 1 260px; }
 
   .empty { color: var(--faint); padding: 30px 0; text-align: center; }
+
+  .f.wide { grid-column: 1 / -1; }
+  .f input[type=text] {
+    width: 100%; font-family: ui-monospace, 'Cascadia Mono', monospace; font-size: 12px;
+  }
+  .f .hint {
+    display: block; margin-top: 3px; font-size: 10.5px; line-height: 1.4;
+    color: var(--dim, #8a93a0);
+  }
 </style>
 </head>
 <body>
@@ -161,6 +170,7 @@
       Settings follow you between setups. Positions are saved per screen
       arrangement, so changing monitors does not scatter your layout.
     </div>
+    <button id="editor">Open the full editor</button>
     <button id="reset">Reset layout for this screen setup</button>
     <button id="quit">Quit PitWall HUD</button>
   </footer>
@@ -180,8 +190,18 @@
     });
   }
 
+  function hintHtml(spec) {
+    return spec.hint ? '<span class="hint">' + esc(spec.hint) + '</span>' : '';
+  }
+
   function fieldHtml(name, spec, value) {
     var id = 'f-' + name + '-' + spec.key;
+    if (spec.type === 'text') {
+      return '<div class="f wide"><label for="' + id + '">' + esc(spec.label) + '</label>' +
+        '<input type="text" id="' + id + '" data-w="' + esc(name) + '" data-k="' + esc(spec.key) + '"' +
+        ' value="' + esc(value) + '" spellcheck="false" autocapitalize="off">' +
+        hintHtml(spec) + '</div>';
+    }
     if (spec.type === 'bool') {
       return '<div class="f bool">' +
         '<input type="checkbox" id="' + id + '" data-w="' + esc(name) + '" data-k="' + esc(spec.key) + '"' +
@@ -196,13 +216,14 @@
       }).join('');
       return '<div class="f"><label for="' + id + '">' + esc(spec.label) + '</label>' +
         '<select id="' + id + '" data-w="' + esc(name) + '" data-k="' + esc(spec.key) + '">' +
-        opts + '</select></div>';
+        opts + '</select>' + hintHtml(spec) + '</div>';
     }
     return '<div class="f"><label for="' + id + '">' + esc(spec.label) + '</label>' +
       '<input type="number" id="' + id + '" data-w="' + esc(name) + '" data-k="' + esc(spec.key) + '"' +
       (spec.min != null ? ' min="' + spec.min + '"' : '') +
       (spec.max != null ? ' max="' + spec.max + '"' : '') +
-      ' step="' + (spec.step || 1) + '" value="' + esc(value) + '"></div>';
+      ' step="' + (spec.step || 1) + '" value="' + esc(value) + '">' +
+      hintHtml(spec) + '</div>';
   }
 
   function render(s) {
@@ -283,6 +304,7 @@
       var v;
       if (el.type === 'checkbox') v = el.checked;
       else if (el.type === 'number') v = el.value === '' ? 0 : Number(el.value);
+      else if (el.type === 'text') v = el.value.trim();
       else v = el.value;
       var payload = {};
       payload[el.dataset.k] = v;
@@ -299,6 +321,11 @@
   });
   document.getElementById('reload').addEventListener('click', function () {
     window.hud.reload().then(render);
+  });
+  document.getElementById('editor').addEventListener('click', function () {
+    // Opens the control panel's Widgets tab in a browser. The column picker
+    // and the live preview need more room than a settings panel has.
+    window.hud.openEditor();
   });
   document.getElementById('reset').addEventListener('click', function () {
     window.hud.reset().then(render);

@@ -82,6 +82,42 @@ def run(port: int, sdk_connected: bool, sdk_error: Optional[str], demo: bool) ->
             )
         )
         checks.append(_check("Web server", OK, f"Listening on port {port}.", ""))
+
+    # Windows keeps content types in the registry, and ordinary software
+    # rewrites them. Setting Notepad as the program that opens .html files is
+    # enough to have Windows record that .html is plain text. PitWall states
+    # its own content types and never asks, so this cannot break a page any
+    # more, but a machine in that state will also hand Chrome plain text for
+    # any local .html file it opens, so it is worth naming.
+    try:
+        import mimetypes
+
+        wrong = []
+        for ext, expected in ((".html", "text/html"), (".css", "text/css"),
+                              (".js", "javascript")):
+            got = mimetypes.guess_type("x" + ext)[0] or "nothing"
+            if expected not in got:
+                wrong.append(f"{ext} is registered as {got}")
+        if wrong:
+            checks.append(
+                _check(
+                    "Windows content types",
+                    WARN,
+                    "This PC's registry has the wrong type for " + ", ".join(wrong) + ". "
+                    "PitWall ignores it and sends the correct type itself, so the "
+                    "overlays are unaffected.",
+                    "If local web pages open as code elsewhere, right-click any .html "
+                    "file, choose Open with, then Choose another app, pick your browser "
+                    "and tick Always use this app.",
+                )
+            )
+        else:
+            checks.append(
+                _check("Windows content types", OK,
+                       "HTML, CSS and JavaScript are registered correctly.", "")
+            )
+    except Exception:
+        pass
         return {"checks": checks, "summary": _summarise(checks)}
 
     # --- sim running ----------------------------------------------------

@@ -138,6 +138,11 @@
   }
   .row.me .nm { font-weight: 800; color: var(--text); }
   .row.me .gap { color: var(--text-dim); font-size: 11px; letter-spacing: 0.08em; }
+
+  /* Column strip sizing for the in-car list. The shared look lives in
+     base.css; only the density is a relative-specific choice. */
+  .cells { gap: 5px; }
+  .cells .cx { font-size: 11.5px; }
 </style>
 </head>
 <body class="overlay">
@@ -147,6 +152,7 @@
   </div>
 
 <script src="../shared/pitwall.js"></script>
+<script src="../shared/columns.js"></script>
 <script>
 (function () {
   'use strict';
@@ -159,8 +165,30 @@
     width:   PW.optNum('w', 300),
     chips:   PW.optBool('class', true),
     irating: PW.optBool('irating', false),
-    inc:     PW.optBool('inc', false)
+    inc:     PW.optBool('inc', false),
+    /* The shared column engine. Empty keeps the original three toggles, so an
+       existing HUD layout is unaffected; anything here replaces them. */
+    cols:    PW.opt('cols', ''),
+    heads:   PW.optBool('heads', false),
+    names:   PW.opt('names', 'short'),
+    avgn:    PW.optNum('avgn', 5),
+    tband:   PW.optBool('tband', false),
+    units:   PW.opt('units', 'kph'),
+    irStyle: PW.opt('irstyle', 'short')
   };
+
+  var COLSPEC = PW.parseCols(OPT.cols, '');
+  var COLSERIAL = 0;
+  function timedSession() {
+    return !!(PW.tick && PW.tick.session && PW.tick.session.mode === 'timed');
+  }
+  function effectiveCols() {
+    if (PW.optsSerial !== COLSERIAL) {
+      COLSERIAL = PW.optsSerial;
+      COLSPEC = PW.parseCols(PW.opt('cols', ''), '');
+    }
+    return COLSPEC.length ? PW.usableCols(COLSPEC, timedSession()) : [];
+  }
   document.getElementById('root').style.setProperty('--w', OPT.width + 'px');
 
   var wrap = document.getElementById('wrap');
@@ -258,6 +286,7 @@
       '<div class="class-bar"></div>' +
       '<div class="car-num num"></div>' +
       '<div class="nm"></div>' +
+      '<div class="cells"></div>' +
       '<div class="chip"></div>' +
       '<div class="ir num"></div>' +
       '<div class="ic num"></div>' +
@@ -287,28 +316,37 @@
 
     q[0].style.background = d.classColor || 'var(--text-faint)';
     setText(q[1], d.num != null ? d.num : '');
-    setText(q[2], PW.displayName(c.i));
+    setText(q[2], PW.displayName(c.i, OPT.names));
 
-    var chipOn = mc && OPT.chips && !!d.classShort;
-    show(q[3], chipOn);
+    var cols = effectiveCols();
+    show(q[3], cols.length > 0);
+    if (cols.length) {
+      PW.paintCells(q[3], cols, PW.cellCtx(c, OPT, { rel: e.rel, me: e.me }));
+    }
+
+    // The original three toggles stay available and are simply switched off
+    // when a column list is given, so nothing shows twice.
+    var legacy = cols.length === 0;
+    var chipOn = legacy && mc && OPT.chips && !!d.classShort;
+    show(q[4], chipOn);
     if (chipOn) {
-      setText(q[3], d.classShort);
-      q[3].style.background = d.classColor || 'var(--text-faint)';
+      setText(q[4], d.classShort);
+      q[4].style.background = d.classColor || 'var(--text-faint)';
     }
 
-    show(q[4], OPT.irating);
-    if (OPT.irating) setText(q[4], d.irating ? (d.irating >= 1000 ? (d.irating / 1000).toFixed(1) + 'k' : d.irating) : '');
+    show(q[5], legacy && OPT.irating);
+    if (legacy && OPT.irating) setText(q[5], d.irating ? (d.irating >= 1000 ? (d.irating / 1000).toFixed(1) + 'k' : d.irating) : '');
 
-    show(q[5], OPT.inc);
-    if (OPT.inc) {
+    show(q[6], legacy && OPT.inc);
+    if (legacy && OPT.inc) {
       var n = (c.inc != null && c.inc >= 0) ? c.inc : null;
-      setText(q[5], n === null ? '' : n + 'x');
-      q[5].className = 'ic num' + (n !== null && n >= 8 ? ' hot' : '');
+      setText(q[6], n === null ? '' : n + 'x');
+      q[6].className = 'ic num' + (n !== null && n >= 8 ? ' hot' : '');
     }
 
-    setText(q[6], e.me ? '' : (e.ld > 0 ? '+' + e.ld + 'L' : (e.ld < 0 ? e.ld + 'L' : '')));
+    setText(q[7], e.me ? '' : (e.ld > 0 ? '+' + e.ld + 'L' : (e.ld < 0 ? e.ld + 'L' : '')));
 
-    var gap = q[7];
+    var gap = q[8];
     if (e.me) {
       setText(gap, 'YOU');
       gap.className = 'gap num';
@@ -327,11 +365,18 @@
     }
 
     var cls = 'row';
-    if (e.me) cls += ' me';
-    if (e.ld > 0) cls += ' up';
-    else if (e.ld < 0) cls += ' down';
+    if (e.me) cls += ' me is-me';
+    if (e.ld > 0) { cls += ' up is-lapping'; }
+    else if (e.ld < 0) { cls += ' down is-lapped'; }
     if (c.st === 'pit' || c.st === 'stall') cls += ' is-pit';
+    if (c.st === 'off') cls += ' is-off';
     if (c.st === 'out') cls += ' is-out';
+    if (c.fast) cls += ' is-fastest';
+    var tag = d.profile && d.profile.tag;
+    if (tag && tag.colour) {
+      cls += ' is-tagged';
+      node.style.setProperty('--st-tag', tag.colour);
+    }
     if (node.className !== cls) node.className = cls;
   }
 

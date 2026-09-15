@@ -185,7 +185,11 @@
 
   .nm {
     flex: 1 1 auto;
-    min-width: 0;
+    /* Columns never shrink, so without a floor here the name is the only
+       elastic thing in the row and a wide column set squeezes it to nothing.
+       Better to overflow the panel, which the operator can see and fix by
+       widening the source, than to silently delete the driver's name. */
+    min-width: 72px;
     display: flex;
     align-items: center;
     gap: 5px;
@@ -213,6 +217,25 @@
     white-space: nowrap;
   }
   .cell.c2 { color: var(--text-dim); }
+
+  .cells .cx { font-size: 12.5px; }
+
+  /* fixed=0: the column list owns the whole row. */
+  .row.nofixed .pos,
+  .row.nofixed .class-bar,
+  .row.nofixed .car-num,
+  .row.nofixed .nm,
+  .row.nofixed .secs { display: none; }
+  .row.nofixed .cells { flex: 1 1 auto; }
+
+    .collabels2 {
+    display: flex; align-items: center; gap: 6px; flex: 0 0 auto;
+    font-size: 9.5px; letter-spacing: 0.1em; color: var(--text-faint);
+    font-weight: 700; text-transform: uppercase;
+  }
+  .collabels2 span { flex: 0 0 auto; text-align: right; }
+  .collabels2 span.al-l { text-align: left; }
+  .collabels2 span.al-c { text-align: center; }
   /* Not streamed: dimmed a little, but nothing like the struck-through
      treatment a retired car gets. */
   .row.is-nodata .nm, .row.is-nodata .pos { opacity: 0.72; }
@@ -246,7 +269,7 @@
   }
 
   /* column label alignment mirrors the row grid */
-  .collabels .l-name { flex: 1 1 auto; min-width: 0; }
+  .collabels .l-name { flex: 1 1 auto; min-width: 72px; }
   .collabels .l-pos  { width: 26px; flex: 0 0 26px; text-align: right; }
   .collabels .l-num  { flex: 0 0 30px; }
   .collabels .l-cell { flex: 0 0 56px; text-align: right; }
@@ -263,6 +286,7 @@
   </div>
 
 <script src="../shared/pitwall.js"></script>
+<script src="../shared/columns.js"></script>
 <script>
 (function () {
   'use strict';
@@ -287,8 +311,42 @@
     focus:  PW.optBool('focus', false),
     top:    Math.max(0, PW.optNum('top', 0)),
     cycle:  Math.max(0, PW.optNum('cycle', 0)),
-    header: PW.optBool('header', true)
+    header: PW.optBool('header', true),
+    /* The full column spec. Empty means "behave exactly as before", which is
+       what every OBS source already pointing at this page will get. */
+    cols:   PW.opt('cols', ''),
+    /* The built-in left section: position, class bar, car number, name and
+       sector pips. On by default because that is the tower everyone already
+       has. Turn it off and the column list controls the entire row, which is
+       what you want when the tower is being used as an in-car leaderboard. */
+    fixed:  PW.optBool('fixed', true),
+    heads:  PW.optBool('heads', false),
+    names:  PW.opt('names', 'short'),
+    avgn:   PW.optNum('avgn', 5),
+    tband:  PW.optBool('tband', false),
+    units:  PW.opt('units', 'kph'),
+    irStyle: PW.opt('irstyle', 'short')
   };
+
+  /* The column list actually drawn this tick. With cols= it is that list,
+     minus anything meaningless in this session type. Without it, the two
+     legacy columns, so nothing that works today changes. */
+  var COLSPEC = PW.parseCols(OPT.cols, '');
+  var COLSERIAL = 0;
+  function effectiveCols() {
+    /* Re-read when a per-session layer has been applied. */
+    if (PW.optsSerial !== COLSERIAL) {
+      COLSERIAL = PW.optsSerial;
+      OPT.cols = PW.opt('cols', '');
+      COLSPEC = PW.parseCols(OPT.cols, '');
+    }
+    if (COLSPEC.length) return PW.usableCols(COLSPEC, timedSession());
+    var keys = [col1(), col2()].filter(Boolean);
+    return PW.parseCols(keys.join(','), '');
+  }
+  function colSig(cols) {
+    return cols.map(function (c) { return c.key + ':' + c.w; }).join(',');
+  }
 
   var elHead = document.getElementById('head');
   var elRows = document.getElementById('rows');
@@ -432,10 +490,16 @@
       h += '</div>';
     }
     h += '<div class="collabels">';
-    h += '<span class="l-pos">POS</span><span class="l-bar"></span><span class="l-num">CAR</span>';
-    h += '<span class="l-name">DRIVER</span><span class="l-secs"></span>';
-    h += '<span class="l-cell">' + esc(COLS[col1()]) + '</span>';
-    if (col2()) h += '<span class="l-cell">' + esc(COLS[col2()]) + '</span>';
+    if (OPT.fixed) {
+      h += '<span class="l-pos">POS</span><span class="l-bar"></span><span class="l-num">CAR</span>';
+      h += '<span class="l-name">DRIVER</span><span class="l-secs"></span>';
+    }
+    h += '<span class="collabels2">';
+    effectiveCols().forEach(function (col) {
+      h += '<span class="al-' + col.align + '" style="width:' + col.w + 'px">' +
+           esc(col.label) + '</span>';
+    });
+    h += '</span>';
     h += '</div>';
     if (elHead._h !== h) { elHead.innerHTML = h; elHead._h = h; }
   }
@@ -609,11 +673,8 @@
       '<div class="car-num num"></div>' +
       '<div class="nm"><span class="fl"></span><span class="dn"></span></div>' +
       '<div class="secs"></div>' +
-      '<div class="cell num c1"></div>';
-    // Always present, shown or hidden per tick: the effective second column
-    // changes when the session type changes, and a row built during the race
-    // must be able to grow one when qualifying starts.
-    r.appendChild(PW.el('div', 'cell num c2'));
+      '<div class="cells"></div>';
+    if (!OPT.fixed) r.classList.add('nofixed');
     return r;
   }
 
@@ -672,23 +733,47 @@
       secs.children[j].className = pb ? 'pbs' : '';
     }
 
-    var pit = pitCell(c, now);
-    var v1 = pit || cellFor(c, col1(), caution);
-    cell(q[5], v1);
-    var second = col2();
-    q[6].hidden = !second;
-    if (second) cell(q[6], cellFor(c, second, caution));
-    else setText(q[6], '');
+    var cols = effectiveCols();
+    paintCells(q[5], cols, c, caution, now);
 
     // purple on the name unless a BEST column is already carrying the purple
-    var bestCol = col1() === 'best' || col2() === 'best';
+    var bestCol = cols.some(function (x) { return x.key === 'best'; });
     nm.children[1].className = 'dn' + (c.fast && !bestCol ? ' fastest' : '');
 
     node.classList.toggle('is-pit', c.st === 'pit');
     node.classList.toggle('is-stall', c.st === 'stall');
+    node.classList.toggle('is-off', c.st === 'off');
     node.classList.toggle('is-out', c.st === 'out');
     node.classList.toggle('is-nodata', c.st === 'nodata');
     node.classList.toggle('is-focus', (OPT.focus || OPT.top > 0) && focusIdx != null && c.i === focusIdx);
+    node.classList.toggle('is-me', focusIdx != null && c.i === focusIdx);
+    node.classList.toggle('is-leader', classGaps() ? c.cp === 1 : c.p === 1);
+    node.classList.toggle('is-fastest', !!c.fast);
+    node.classList.toggle('is-tagged', !!(p && p.tag && p.tag.colour));
+    if (p && p.tag && p.tag.colour) node.style.setProperty('--st-tag', p.tag.colour);
+  }
+
+  /* One row's column strip, drawn by the shared painter. The override keeps
+     the tower's own two rules: a car in the pit lane shows PIT where its gap
+     would be, and the gap and interval columns follow the class grouping. */
+  function paintCells(host, cols, c, caution, now) {
+    var ctx = PW.cellCtx(c, OPT);
+    PW.paintCells(host, cols, ctx, function (col, i) {
+      if (i === 0 && !hasStatusCol(cols)) {
+        var pit = pitCell(c, now);
+        if (pit) return { text: pit.t, cls: pit.c || '', title: '', colour: '' };
+      }
+      if (col.key === 'gap' || col.key === 'int') {
+        var g = gapCell(c, col.key, caution);
+        return { text: g.t, cls: g.c || '', title: '', colour: '' };
+      }
+      return null;
+    });
+  }
+
+  function hasStatusCol(cols) {
+    for (var i = 0; i < cols.length; i++) if (cols[i].key === 'st') return true;
+    return false;
   }
 
   function cell(node, v) {

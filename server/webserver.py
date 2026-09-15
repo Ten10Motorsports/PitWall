@@ -244,6 +244,9 @@ class Handler(BaseHTTPRequestHandler):
     web_root: str
     data_dir: str
     quiet: bool = True
+    # Set by main.py once the profile store exists. Left as None so the web
+    # server stays usable on its own, which is how its tests run.
+    profiles = None
 
     # -- plumbing --------------------------------------------------------
 
@@ -337,6 +340,39 @@ class Handler(BaseHTTPRequestHandler):
 
     # -- static ----------------------------------------------------------
 
+    # Content types are stated here rather than asked of mimetypes.
+    #
+    # On Windows, Python's mimetypes module reads HKEY_CLASSES_ROOT, and plenty
+    # of ordinary software rewrites the entries for .js and .css to text/plain.
+    # A stylesheet served as text/plain is rejected outright by every browser in
+    # standards mode, so the page still arrives, still has all its content, and
+    # renders as an unstyled wall of text that looks exactly like something is
+    # badly broken. The registry on the machine is not something this app can
+    # fix, and it is not something a user should have to know about, so the
+    # eight types PitWall actually serves are pinned here and the registry is
+    # never consulted for them.
+    TYPES = {
+        ".html": "text/html; charset=utf-8",
+        ".htm":  "text/html; charset=utf-8",
+        ".css":  "text/css; charset=utf-8",
+        ".js":   "text/javascript; charset=utf-8",
+        ".mjs":  "text/javascript; charset=utf-8",
+        ".json": "application/json; charset=utf-8",
+        ".svg":  "image/svg+xml",
+        ".png":  "image/png",
+        ".jpg":  "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".gif":  "image/gif",
+        ".webp": "image/webp",
+        ".ico":  "image/x-icon",
+        ".woff": "font/woff",
+        ".woff2": "font/woff2",
+        ".ttf":  "font/ttf",
+        ".txt":  "text/plain; charset=utf-8",
+        ".md":   "text/plain; charset=utf-8",
+        ".csv":  "text/csv; charset=utf-8",
+    }
+
     ALIASES = {
         "/favicon.ico": "/favicon.svg",
         "/": "/control/index.html",
@@ -346,7 +382,26 @@ class Handler(BaseHTTPRequestHandler):
         "/hud": "/hud/index.html",
     }
 
+    # The short names are directories. Serving the index straight from the bare
+    # name leaves the browser with a base URL that has no trailing slash, so a
+    # relative link inside the page resolves one level too high: /hud asking
+    # for relative.html gets /relative.html, which is nothing. Redirecting to
+    # the slash form costs one round trip on a local server and makes every
+    # relative link in every page behave the way its author expected.
+    DIR_ALIASES = ("/control", "/timing", "/register", "/hud")
+
     def _static(self, path: str) -> None:
+        if path in self.DIR_ALIASES:
+            target = path + "/"
+            q = urlparse(self.path).query
+            if q:
+                target += "?" + q
+            self.send_response(301)
+            self.send_header("Location", target)
+            self.send_header("Content-Length", "0")
+            self._cors()
+            self.end_headers()
+            return
         if path in self.ALIASES:
             path = self.ALIASES[path]
         if path.startswith("/uploads/"):
@@ -365,12 +420,16 @@ class Handler(BaseHTTPRequestHandler):
             full = os.path.join(full, "index.html")
         if not os.path.isfile(full):
             return self._text("Not found: " + path, 404)
-        ctype, _ = mimetypes.guess_type(full)
+        ext = os.path.splitext(full)[1].lower()
+        ctype = self.TYPES.get(ext)
+        if ctype is None:
+            ctype, _ = mimetypes.guess_type(full)
         try:
             with open(full, "rb") as fh:
                 body = fh.read()
         except OSError:
             return self._text("Not found", 404)
+        body = self._inject_profile(full, body)
         self.send_response(200)
         self.send_header("Content-Type", ctype or "application/octet-stream")
         self.send_header("Content-Length", str(len(body)))
@@ -382,6 +441,35 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
         except OSError:
             pass
+
+    # A widget asked for ?profile=name, so the saved options are inlined into
+    # the page before any of its own script runs. Doing it here rather than in
+    # the browser avoids the one alternative, a synchronous request at load
+    # time, which blocks the page and is exactly the sort of thing that turns
+    # into a black browser source ten seconds before a green flag.
+    def _inject_profile(self, full: str, body: bytes) -> bytes:
+        if self.profiles is None or not full.endswith(".html"):
+            return body
+        q = urlparse(self.path).query
+        name = (parse_qs(q).get("profile") or [""])[0]
+        if not name:
+            return body
+        try:
+            prof = self.profiles.get(name)
+        except Exception:
+            return body
+        if not prof or not prof.get("name"):
+            return body
+        try:
+            blob = json.dumps(prof).replace("</", "<\\/")
+            tag = ("<script>window.PW_PROFILE=" + blob + ";</script>").encode("utf-8")
+            marker = b"</head>"
+            i = body.find(marker)
+            if i < 0:
+                return body
+            return body[:i] + tag + body[i:]
+        except Exception:
+            return body
 
     # -- websocket -------------------------------------------------------
 
@@ -482,8 +570,10 @@ class Server:
                 "router": self.router,
                 "web_root": web_root,
                 "data_dir": data_dir,
+                "profiles": None,
             },
         )
+        self.handler_class = handler
         self.httpd = ThreadingHTTPServer((host, port), handler)
         self.httpd.daemon_threads = True
         self.thread: Optional[threading.Thread] = None

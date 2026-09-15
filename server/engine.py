@@ -133,6 +133,20 @@ class CarState:
         self.last_pit_lap = 0
         self.pit_road_time = 0.0
         self.clean_laps: List[float] = []
+        # Every non-pit lap, unfiltered. clean_laps is band-filtered around the
+        # car's best so the lap-distance spline is not poisoned by a lap spent
+        # in traffic; average pace wants exactly those laps back, because a
+        # driver stuck behind someone is genuinely lapping that slowly.
+        self.recent_laps: List[float] = []
+        # Highest speed observed on the lap now running, and on the one just
+        # finished. Estimated, see Engine._sample_speed.
+        self.lap_top_speed = 0.0
+        self.top_speed = 0.0
+        self.last_speed_pct: Optional[float] = None
+        self.last_speed_t: Optional[float] = None
+        # True once we have actually watched this car come down pit road, so
+        # tyre age can say whether it is a measurement or an assumption.
+        self.pit_seen = False
         self.stint_start_lap = 0
         self.driver_id: Optional[int] = None
         self.driver_name: str = ""
@@ -218,6 +232,11 @@ class Engine:
         self.roster_lookup = None      # callable(driver_dict) -> profile or None
         self.events: List[Dict[str, Any]] = []
         self.ready = False
+        self.track_m = 0.0             # track length in metres, for speed
+        self.grid: Dict[int, int] = {}  # car index -> starting position
+        self.grid_source = ""          # "qualifying" | "green" | ""
+        self._ir_change: Dict[int, float] = {}
+        self._ir_change_at = 0.0
 
     # -- session info ----------------------------------------------------
 
@@ -244,6 +263,8 @@ class Engine:
             "type": wi.get("TrackType") or "",
             "direction": wi.get("TrackDirection") or "",
         }
+        self.track_m = float(number(wi.get("TrackLength"))) * 1000.0
+
         self.event = {
             "series": wi.get("SeriesID"),
             "season": wi.get("SeasonID"),
@@ -260,6 +281,29 @@ class Engine:
             "date": opts.get("Date"),
             "greenWhiteCheckered": opts.get("GreenWhiteCheckeredLimit"),
         }
+
+        # --- starting grid ------------------------------------------------
+        # Positions gained is only meaningful against where a driver started.
+        # Qualifying results are the truth when they exist; when they do not,
+        # because the session was a heat, a rolling start from a previous race
+        # or an offline test, update() falls back to a snapshot taken the
+        # moment the session goes green.
+        if not self.grid or self.grid_source != "qualifying":
+            qual = dig(info, "QualifyResultsInfo", "Results", default=[]) or []
+            got: Dict[int, int] = {}
+            for r in qual:
+                if not isinstance(r, dict):
+                    continue
+                ci, pos = r.get("CarIdx"), r.get("Position")
+                if ci is None or pos is None:
+                    continue
+                try:
+                    got[int(ci)] = int(pos) + 1
+                except (TypeError, ValueError):
+                    continue
+            if got:
+                self.grid = got
+                self.grid_source = "qualifying"
 
         sectors = dig(info, "SplitTimeInfo", "Sectors", default=[]) or []
         pcts = []
@@ -416,6 +460,7 @@ class Engine:
             pit = bool(onpit[i]) if i < len(onpit) else False
             if pit and not car.in_pit:
                 car.in_pit = True
+                car.pit_seen = True
                 car.pit_enter_time = st
                 car.last_pit_lap = lap
             elif not pit and car.in_pit:
@@ -435,6 +480,8 @@ class Engine:
                         car.stint_start_lap = lap
                         self.push_event("pitStop", idx=i, duration=round(dur, 2), lap=lap)
                     car.stall_enter_time = None
+
+            self._sample_speed(car, pct, st, pit)
 
             # --- lap rollover --------------------------------------------
             crossed = False
@@ -476,6 +523,7 @@ class Engine:
             self._mark_sectors(car, p, st)
             car.last_pct = p
 
+        self._capture_grid(v)
         self._update_fastest(v)
         self._collect_inputs(v)
 
@@ -498,6 +546,10 @@ class Engine:
         if lap_time and lap_time > 5.0:
             car.last_time = lap_time
             car.last_sectors = list(car.sectors)
+            if not was_pit_lap:
+                car.recent_laps.append(lap_time)
+                if len(car.recent_laps) > 20:
+                    del car.recent_laps[:-20]
             best_ref = car.best_time
             if best_ref is None or lap_time < best_ref:
                 if not was_pit_lap:
@@ -547,6 +599,11 @@ class Engine:
         car.last_lap_seen = lap
         car.lap_start = st
         car.stint_laps = max(0, lap - car.stint_start_lap)
+        # Top speed belongs to a completed lap, so it rolls over here rather
+        # than climbing all race.
+        if car.lap_top_speed > 0.0:
+            car.top_speed = car.lap_top_speed
+        car.lap_top_speed = 0.0
         car.spline_marks = [None] * SPLINE_BINS
         # The lap-distance model is anchored on bin 0; without this the very
         # first mark is never written and the spline never builds.
@@ -555,6 +612,119 @@ class Engine:
         car.sectors = [None] * max(1, len(self.sectors_pct))
         car.sector_marks = [None] * max(1, len(self.sectors_pct))
         car.sector_marks[0] = st
+
+    # -- derived figures ---------------------------------------------------
+
+    def _sample_speed(self, car, pct: float, st: float, pit: bool) -> None:
+        """
+        Estimate a car's speed from how fast its lap distance changes.
+
+        iRacing publishes Speed for your own car and for nobody else, so this
+        is the only route to a speed figure for the field. It is distance over
+        time and nothing cleverer: a car that is teleported, towed or reset
+        produces a nonsense sample, which is why the jump is bounded, and a car
+        in the pit lane is skipped entirely rather than reporting sixty.
+
+        Everything built on this is labelled an estimate in the UI.
+        """
+        if self.track_m <= 0.0 or pct is None or pct < 0.0:
+            car.last_speed_pct = pct
+            car.last_speed_t = st
+            return
+        if not pit and car.last_speed_pct is not None and car.last_speed_t is not None:
+            dt = st - car.last_speed_t
+            if 0.02 <= dt <= 1.0:
+                dp = pct - car.last_speed_pct
+                if dp < -0.5:
+                    dp += 1.0            # crossed the start/finish line
+                if 0.0 < dp < 0.25:      # anything larger is a teleport
+                    kph = (dp * self.track_m / dt) * 3.6
+                    if 0.0 < kph < 500.0 and kph > car.lap_top_speed:
+                        car.lap_top_speed = kph
+        car.last_speed_pct = pct
+        car.last_speed_t = st
+
+    def _capture_grid(self, v: Dict[str, Any]) -> None:
+        """
+        Snapshot the order at the green flag, when qualifying results are not
+        available. Called every tick and does nothing once it has a grid.
+        """
+        if self.grid:
+            return
+        if self._mode_of(self._session_type(v)) != "race":
+            return
+        state = int(v.get("SessionState") or 0)
+        if state < 4:                    # 4 = Racing
+            return
+        posn = v.get("CarIdxPosition") or []
+        got: Dict[int, int] = {}
+        for i, p in enumerate(posn):
+            if i == self.pace_car_idx:
+                continue
+            try:
+                p = int(p)
+            except (TypeError, ValueError):
+                continue
+            if p > 0:
+                got[i] = p
+        if len(got) >= 2:
+            self.grid = got
+            self.grid_source = "green"
+
+    @staticmethod
+    def _avg_of(times: List[float], n: int) -> Optional[float]:
+        """Mean of the last n laps, or None if there are not n of them yet."""
+        if len(times) < n:
+            return None
+        window = times[-n:]
+        return sum(window) / float(len(window))
+
+    # iRacing's rating model. B is the published scale constant; the expected
+    # score for a driver is the sum of the probabilities that each rival
+    # finishes behind them, and the change is how far the result beat that.
+    _IR_B = 1600.0 / math.log(2.0)
+
+    def _irating_changes(self, entries: List[Dict[str, Any]]) -> Dict[int, float]:
+        """
+        Projected iRating change if the session ended right now.
+
+        This is the community-reconstructed formula, which matches iRacing
+        closely for a normal race and diverges for the cases iRacing treats
+        specially: drivers who did not take the start, disconnections, and
+        sessions where the field changes size part way through. It is a
+        projection of an unfinished race either way, so it is shown as a
+        guide rather than a promise.
+        """
+        field = []
+        for e in entries:
+            d = self.drivers.get(e["i"]) or {}
+            ir = d.get("irating") or 0
+            if d.get("isPace") or d.get("isSpectator") or ir <= 0:
+                continue
+            field.append((e["i"], float(ir), e["order"]))
+        n = len(field)
+        if n < 2:
+            return {}
+
+        # Precompute exp(-IR/B) once per driver: the pairwise loop below reads
+        # it n times and this is the only expensive part.
+        expo = {i: math.exp(-ir / self._IR_B) for i, ir, _ in field}
+        out: Dict[int, float] = {}
+        for i, ir_i, pos_i in field:
+            ei = expo[i]
+            expected = 0.0
+            for j, ir_j, _ in field:
+                if j == i:
+                    continue
+                ej = expo[j]
+                denom = (1.0 - ei) * ej + (1.0 - ej) * ei
+                if denom <= 0.0:
+                    continue
+                # Probability that i finishes ahead of j.
+                expected += ((1.0 - ei) * ej) / denom
+            beaten = float(n - pos_i)
+            out[i] = (beaten - expected) * (200.0 / float(n))
+        return out
 
     def _mark_sectors(self, car, pct: float, st: float) -> None:
         ns = len(self.sectors_pct)
@@ -638,6 +808,10 @@ class Engine:
         self.player_fuel_laps = []
         self._last_fuel = None
         self._last_fuel_lap = -1
+        self.grid = {}
+        self.grid_source = ""
+        self._ir_change = {}
+        self._ir_change_at = 0.0
 
     # -- building the outgoing state -------------------------------------
 
@@ -715,6 +889,8 @@ class Engine:
         paceline = v.get("CarIdxPaceLine") or []
         pacerow = v.get("CarIdxPaceRow") or []
         tyre = v.get("CarIdxTireCompound") or []
+        p2ps = v.get("CarIdxP2P_Status") or []
+        p2pc = v.get("CarIdxP2P_Count") or []
 
         under_caution = bool(flags_raw & enums.CAUTION_MASK)
         mode = self._mode_of(self._session_type(v))
@@ -757,6 +933,8 @@ class Engine:
                     "paceLine": paceline[i] if i < len(paceline) else -1,
                     "paceRow": pacerow[i] if i < len(pacerow) else -1,
                     "tyre": tyre[i] if i < len(tyre) else -1,
+                    "p2pOn": bool(p2ps[i]) if i < len(p2ps) else False,
+                    "p2pLeft": p2pc[i] if i < len(p2pc) else -1,
                 }
             )
 
@@ -888,6 +1066,18 @@ class Engine:
         by_order = sorted(live, key=lambda e: e["order"])
         now_s = float(v.get("SessionTime") or 0.0)
 
+        # The rating projection is O(n squared) over the field. At sixty cars
+        # that is well under a millisecond, but there is no reason to pay it
+        # twenty times a second when the answer only moves when a position
+        # does, so it is recomputed twice a second and cached between.
+        if timed:
+            ir_changes: Dict[int, float] = {}
+        else:
+            if now_s - self._ir_change_at > 0.5 or not self._ir_change:
+                self._ir_change = self._irating_changes(by_order)
+                self._ir_change_at = now_s
+            ir_changes = self._ir_change
+
         for e in by_order:
             car: CarState = e["car"]
             d = e["d"]
@@ -922,8 +1112,25 @@ class Engine:
                     "pitdur": _r(car.last_pit_duration, 1),
                     "pitlap": car.last_pit_lap,
                     "stint": max(0, e["lap"] - car.stint_start_lap),
+                    # Laps since we last saw this car on pit road. "tk" says
+                    # whether that is a measurement or an assumption: false
+                    # means we have never watched it pit, so the number is
+                    # laps since we started watching, not tyre age.
+                    "tage": max(0, e["lap"] - car.stint_start_lap),
+                    "tk": bool(car.pit_seen),
+                    "plt": _r(car.pit_road_time, 1),
                     "fr": e["fastRepairs"],
                     "tyre": e["tyre"],
+                    "p2p": e["p2pOn"],
+                    "p2pn": e["p2pLeft"],
+                    "a3": _r(self._avg_of(car.recent_laps, 3)),
+                    "a5": _r(self._avg_of(car.recent_laps, 5)),
+                    "a10": _r(self._avg_of(car.recent_laps, 10)),
+                    "tsp": _r(car.top_speed, 1) if car.top_speed > 0 else None,
+                    "grid": self.grid.get(e["i"]),
+                    "gain": (self.grid.get(e["i"]) - e["order"]
+                             if self.grid.get(e["i"]) else None),
+                    "irc": _r(ir_changes.get(e["i"]), 0),
                     "pl": e["paceLine"],
                     "pr": e["paceRow"],
                     "fast": e["i"] == fastest_idx,
@@ -1103,6 +1310,7 @@ class Engine:
             "type": _text((cur or {}).get("SessionType")),
             "mode": self._mode_of((cur or {}).get("SessionType")),
             "state": enums.SESSION_STATE.get(int(v.get("SessionState") or 0), "Invalid"),
+            "grid": self.grid_source,
             "time": _r(v.get("SessionTime"), 2),
             "timeRemain": None if enums.is_unlimited_time(time_remain) else _r(time_remain, 1),
             "timeTotal": None if enums.is_unlimited_time(v.get("SessionTimeTotal")) else _r(v.get("SessionTimeTotal"), 1),

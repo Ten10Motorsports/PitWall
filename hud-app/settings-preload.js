@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('hud', {
   reset:       ()               => ipcRenderer.invoke('hud:reset'),
   reload:      ()               => ipcRenderer.invoke('hud:reload'),
   openControl: ()               => ipcRenderer.invoke('hud:openControl'),
+  openEditor:  ()               => ipcRenderer.invoke('hud:openEditor'),
   quit:        ()               => ipcRenderer.invoke('hud:quit'),
 
   /* The main process pushes a fresh state whenever something changes it from

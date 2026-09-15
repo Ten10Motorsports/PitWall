@@ -40,6 +40,25 @@
   function params() {
     if (PW._opts) return PW._opts;
     var q = {};
+
+    /*
+     * A saved profile goes underneath the query string, never over it.
+     *
+     * window.PW_PROFILE is inlined by the server when a page is requested with
+     * ?profile=name, so it is already here before any widget reads an option.
+     * Its values are applied first and the URL is applied on top, which means
+     * an explicit parameter always wins. That ordering is what makes it safe
+     * to edit a profile while six OBS sources are pointed at it: a source that
+     * needed one thing different has it pinned in its own URL, and nothing
+     * anyone changes centrally can take that away.
+     */
+    var prof = global.PW_PROFILE;
+    if (prof && prof.opts) {
+      for (var pk in prof.opts) {
+        if (prof.opts.hasOwnProperty(pk)) q[String(pk).toLowerCase()] = String(prof.opts[pk]);
+      }
+    }
+
     var s = global.location.search.replace(/^\?/, '');
     s.split('&').forEach(function (pair) {
       if (!pair) return;
@@ -51,6 +70,51 @@
     PW._opts = q;
     return q;
   }
+
+  /*
+   * Per-session-type options from the profile.
+   *
+   * A league night is practice, then qualifying, then the race, and the
+   * columns worth showing differ in each. Rather than make someone reload six
+   * browser sources between sessions, a profile can carry an overlay per
+   * session type which is applied when the session changes. Anything pinned in
+   * the URL still wins, for the same reason as above.
+   */
+  PW.optsSerial = 0;
+
+  PW.sessionOpts = function (mode, type) {
+    var prof = global.PW_PROFILE;
+    if (!prof || !prof.sessions) return false;
+    var key = null;
+    var t = String(type || '').toLowerCase();
+    if (mode === 'race') key = 'race';
+    else if (t.indexOf('qual') >= 0) key = 'qualify';
+    else key = 'practice';
+    if (PW._sessionKey === key) return false;
+    PW._sessionKey = key;
+
+    var layer = prof.sessions[key];
+    PW._opts = null;                    // force a rebuild from the base
+    var base = params();
+    if (layer) {
+      var urlKeys = {};
+      var s = global.location.search.replace(/^\?/, '');
+      s.split('&').forEach(function (pair) {
+        var i = pair.indexOf('=');
+        urlKeys[(i < 0 ? pair : pair.slice(0, i)).toLowerCase()] = true;
+      });
+      for (var k in layer) {
+        if (!layer.hasOwnProperty(k)) continue;
+        var lk = String(k).toLowerCase();
+        if (urlKeys[lk]) continue;      // the URL asked for this explicitly
+        base[lk] = String(layer[k]);
+      }
+    }
+    return true;
+  };
+
+  /* Named after the widget, not the driver: PW.profile(idx) is a person. */
+  PW.widgetProfile = function () { return global.PW_PROFILE || null; };
 
   PW.opt = function (name, dflt) {
     var v = params()[String(name).toLowerCase()];
@@ -147,6 +211,15 @@
         break;
       case 'tick':
         PW.tick = msg;
+        /* A profile can carry a different layout per session type. Applying it
+           here, before the widgets are told about the tick, means the swap
+           happens between sessions with nothing to reload and nobody touching
+           OBS. Widgets that care watch PW.optsSerial. */
+        if (msg.session && PW.sessionOpts(msg.session.mode, msg.session.type)) {
+          PW.optsSerial += 1;
+          try { PW.applyChrome(); } catch (e) { /* a widget may not use chrome */ }
+          emit('optionschanged', msg.session);
+        }
         emit('tick', msg);
         break;
       case 'inputs':
@@ -415,6 +488,24 @@
     if (PW.optBool('debug', false)) root.classList.add('pw-debug');
     var op = PW.optNum('opacity', NaN);
     if (!isNaN(op)) root.style.setProperty('--panel-opacity', op);
+
+    /* Per-state colours. One option per meaningful state rather than a free
+       CSS box: a league wants its own palette, not the ability to break a
+       graphic that is already live. */
+    var STATE_COLOURS = {
+      cme: '--st-me', clead: '--st-leader', clapped: '--st-lapped',
+      clapping: '--st-lapping', cpit: '--st-pit', coff: '--st-off',
+      ctag: '--st-tag', cfast: '--st-fast'
+    };
+    Object.keys(STATE_COLOURS).forEach(function (k) {
+      var v = PW.opt(k, null);
+      if (v) root.style.setProperty(STATE_COLOURS[k], v);
+    });
+
+    var rowH = PW.optNum('rowh', NaN);
+    if (!isNaN(rowH) && rowH > 8) root.style.setProperty('--row-h', rowH + 'px');
+    var fs = PW.optNum('textsize', NaN);
+    if (!isNaN(fs) && fs > 0) root.style.setProperty('--text-scale', fs);
   };
 
   global.PW = PW;

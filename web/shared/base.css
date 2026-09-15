@@ -38,6 +38,20 @@
   --purple: #b06cff;
   --pb: #35d07f;
 
+  /* Row state colours.
+     Named by what they mean, not by what they look like, so a league can set
+     them from the settings editor without anything in a widget having to know
+     a hex value. Overridden per widget through the c* query options, which
+     PW.applyChrome writes onto :root. */
+  --st-me:      #12b8ff;   /* the car the HUD or camera is following */
+  --st-leader:  #ffcc33;   /* the class leader */
+  --st-lapped:  #7b8794;   /* a car a lap or more down on you */
+  --st-lapping: #e8a33f;   /* a car about to put a lap on you */
+  --st-pit:     #ffcc33;   /* in the pit lane */
+  --st-off:     #e0762b;   /* off track */
+  --st-tag:     #b06cff;   /* a driver tagged in the roster */
+  --st-fast:    #b06cff;   /* holder of the fastest lap */
+
   --row-h: 30px;
   --radius: 4px;
 }
@@ -258,3 +272,71 @@ textarea { resize: vertical; min-height: 72px; }
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* ---------------------------------------------------------------------------
+   Shared column strip (web/shared/columns.js)
+
+   The tower, the relative, the in-car leaderboard and the ticker all draw the
+   same cells, so they look the same in all four rather than four people's idea
+   of what a gap should look like.
+   --------------------------------------------------------------------------- */
+.cells { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.cells .cx {
+  flex: 0 0 auto;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.cells .cx.al-l { text-align: left; }
+.cells .cx.al-c { text-align: center; }
+
+.cells .cx .chip {
+  display: inline-block; padding: 0 4px; border-radius: 3px;
+  font-size: 0.78em; font-weight: 800; letter-spacing: 0.03em;
+  color: #06080a; line-height: 1.45;
+}
+.cells .cx .badge {
+  display: inline-block; padding: 0 4px; border-radius: 3px;
+  font-size: 0.76em; font-weight: 800; letter-spacing: 0.06em; line-height: 1.45;
+}
+.cells .cx .badge.pit    { background: var(--yellow); color: #101010; }
+.cells .cx .badge.off    { background: #e0762b; color: #101010; }
+.cells .cx .badge.out    { background: rgba(255, 255, 255, 0.16); color: var(--text-dim); }
+.cells .cx .badge.nodata { background: none; color: var(--text-faint); }
+.cells .cx .badge.p2p-on { background: #12b8ff; color: #06080a; }
+
+.cells .cx .purple { color: var(--purple); }
+.cells .cx .good   { color: var(--pb); }
+.cells .cx .bad    { color: #e8705f; }
+.cells .cx .up     { color: var(--pb); }
+.cells .cx .down   { color: #e8705f; }
+.cells .cx .level  { color: var(--text-faint); }
+.cells .cx .ahead  { color: #12b8ff; }
+.cells .cx .behind { color: #e8a33f; }
+/* An estimate is never allowed to look like a measurement. */
+.cells .cx .unsure { color: var(--text-dim); font-style: italic; }
+
+/* ---------------------------------------------------------------------------
+   Row states, shared by the tower, the relative and the ticker.
+
+   Each rule reads a --st-* variable rather than a literal, so the settings
+   editor can repaint a league's colours without a widget knowing anything
+   about it. The states are deliberately expressed as colour on the text or a
+   3px rail rather than as a filled row: a list where four rows are flooded
+   with colour is unreadable at a glance, which is the one thing it has to be.
+   --------------------------------------------------------------------------- */
+.row.is-me      { box-shadow: inset 3px 0 0 var(--st-me); background: rgba(255, 255, 255, 0.055); }
+.row.is-leader  .pos { color: var(--st-leader); }
+.row.is-lapped  .nm  { color: var(--st-lapped); }
+.row.is-lapping .nm  { color: var(--st-lapping); }
+.row.is-tagged  { box-shadow: inset 3px 0 0 var(--st-tag); }
+.row.is-tagged  .nm  { color: var(--st-tag); }
+.row.is-fastest .nm  { color: var(--st-fast); }
+.row.is-pit     .nm  { color: var(--st-pit); }
+.row.is-off     .nm  { color: var(--st-off); }
+/* The car being followed outranks every other state: it is the one row the
+   person watching is actually looking for. */
+.row.is-me.is-tagged { box-shadow: inset 3px 0 0 var(--st-me); }

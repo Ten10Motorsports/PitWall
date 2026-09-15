@@ -1,249 +1,228 @@
-PITWALL 1.6.0  -  COMPLETE UPLOAD
+PITWALL 1.7.0  -  COMPLETE UPLOAD
 =================================
 
-This zip is the whole project. Every file in it replaces or adds to what is
-in the repository. You upload it once, tag a release, and GitHub builds both
-downloads for you.
-
-Nothing to install. No Git, no Python, no Node. Web browser only.
+91 files. The whole project. One upload, one tag.
 
 
-WHAT IS NEW IN THIS VERSION
----------------------------
+READ THIS PART FIRST, IT IS WHY 1.6.0 DID NOT BUILD THE HUD
+-----------------------------------------------------------
 
-  * PitWall-HUD.exe  -  a second download, for drivers.
-      Transparent click-through widgets drawn over iRacing, with a settings
-      window. One file. It starts the timing engine itself, hidden, so a
-      driver never sees a console window and never runs anything else.
-      Widgets: Relative, Leaderboard, Flags, Blind spot, Lap time graph,
-      Delta, Fuel, Inputs. Every widget has settings and every setting is
-      saved. Ctrl+Shift+E unlocks them for dragging, Ctrl+Shift+E again
-      locks them. Ctrl+Shift+S opens settings. It also sits in the tray.
-      Layouts are saved per screen arrangement, so a triple-screen rig and a
-      single screen each keep their own positions.
+Last time, every visible file uploaded perfectly and the two HIDDEN items did
+not. Windows hides anything starting with a dot, so ".github" and ".gitignore"
+were not in the selection. The old workflow ran instead of the new one, it knew
+nothing about the driver HUD, and the release came out with four assets instead
+of five.
 
-  * Rotating tower. Top 10 stays pinned, the block underneath cycles
-    11-20, 21-30 and so on, then starts again.
+.github is still the old version in the repository right now. If you miss it
+again, the same thing happens again.
 
-  * League profiles that save. Create, edit, duplicate, delete, switch
-    between them, and keep a schedule of rounds per league.
-
-  * Roster edits that survive a pull. Anything you edit by hand is kept
-    when the roster is pulled again, and marked so you can revert it.
-
-  * Battle box picker. Choose 2 or 4 drivers by hand, or leave it on auto.
-
-  * Drivers no longer show as OUT when they are simply not being streamed
-    to your client. See the note at the bottom about Max Cars.
-
-  * Practice and qualifying now score correctly, ordered by best lap.
-
-  * A bad value coming out of the sim can no longer end a broadcast. The
-    engine coerces every text field, and a failed tick is logged and skipped
-    instead of stopping the app.
+So: Step 2 below is not optional, and step 4 is where you prove it worked.
 
 
-STEP 1  -  EXTRACT THE ZIP
---------------------------
-
-Do this properly or the upload lands wrong.
+STEP 1  -  EXTRACT THE ZIP PROPERLY
+-----------------------------------
 
   1. Right-click the zip file.
-  2. Choose "Extract All...".
-  3. Click "Extract".
-  4. A normal folder window opens. Work in THAT window.
+  2. Choose "Extract All...", then click "Extract".
+  3. A normal folder window opens. Work in THAT window.
 
-Do NOT drag files straight out of the zip preview window. Windows flattens
-the folders when you do, and you end up with files called "index (1).html"
-sitting loose at the top of the repository.
+Never drag files out of the zip preview window. Windows flattens the folders
+when you do, and you get loose files called "index (1).html" at the top of the
+repository.
 
 
-STEP 2  -  SHOW HIDDEN FILES
-----------------------------
+STEP 2  -  SHOW THE HIDDEN ITEMS
+--------------------------------
 
-Two of the items start with a dot and Windows hides them by default. They
-are the most important ones: the .github folder is what builds the two .exe
-files for you.
-
-  1. In the extracted folder window, click "View" in the toolbar.
-  2. Point at "Show".
-  3. Click "Hidden items" so it is ticked.
-
-You should now see ".github" and ".gitignore" appear in the folder.
+  4. Click "View" in the toolbar of that folder window.
+  5. Point at "Show".
+  6. Click "Hidden items" so it is ticked.
+     (Windows 10: click the "View" tab, then tick the "Hidden items" checkbox
+     on the right.)
+  7. LOOK AT THE FOLDER. Two faded items called ".github" and ".gitignore"
+     must now be visible. If they are not, the tick did not take. Do it again
+     before going any further. This is the step that silently failed last time.
 
 
 STEP 3  -  UPLOAD
 -----------------
 
-  1. Open this page:
-
-         https://github.com/Ten10Motorsports/PitWall
-
-  2. Click "Add file" near the top right, then "Upload files".
-
-  3. Go back to the extracted folder window.
-     Press Ctrl+A to select everything, including .github and .gitignore.
-
-  4. Drag the whole selection onto the upload page.
-
-  5. WAIT. It takes a minute or two. There are 89 files and a lot of them
-     are inside folders.
-
-  Selecting everything also picks up this text file. That is fine. It
-  just lands in the repository as a note and changes nothing.
+  8. Open https://github.com/Ten10Motorsports/PitWall
+  9. Click "Add file", then "Upload files".
+ 10. Back in the folder window, press Ctrl+A. The status bar at the bottom
+     should read 17 items selected. That includes this text file, which is
+     harmless in the repository.
+ 11. Drag the whole selection onto the dashed box in the browser.
+ 12. Wait one to three minutes. Do not click anything.
 
 
-STEP 4  -  CHECK BEFORE YOU COMMIT
-----------------------------------
-
-This is the step that catches the mistake that has bitten before. Look at
-the list of files on the upload page.
-
-  RIGHT:   .github/workflows/release.yml
-           server/engine.py
-           web/hud/blindspot.html
-           hud-app/main.js
-
-  WRONG:   release.yml
-           engine.py
-           index (1).html
-
-Names must have folders in front of them, with forward slashes. If they do
-not, the folders were flattened. Click the X on the page to cancel, go back
-to Step 1, and extract the zip properly this time.
-
-When the list looks right:
-
-  6. In the "Commit changes" box at the bottom, type:  PitWall 1.6.0
-  7. Leave "Commit directly to the main branch" selected.
-  8. Click "Commit changes".
-
-
-STEP 5  -  CUT THE RELEASE
---------------------------
-
-Uploading the files does not build anything. The build only runs when a
-version tag appears. This is the part that was missed last time, which is
-why the download only had source code in it.
-
-  1. Open this page:
-
-         https://github.com/Ten10Motorsports/PitWall/releases/new
-
-  2. Click the "Choose a tag" button.
-  3. Type:  v1.6.0
-  4. A line appears underneath reading "Create new tag: v1.6.0 on publish".
-     CLICK THAT LINE. If you do not click it, no tag is created and no
-     build runs.
-  5. In the "Release title" box, type:  PitWall 1.6.0
-  6. Leave the description empty. It gets filled in automatically.
-  7. Click "Publish release".
-
-Do not use "Run workflow" from the Actions tab instead. That builds the
-files but does not attach them to a release, which is exactly what went
-wrong before.
-
-
-STEP 6  -  WAIT FOR THE BUILD
+STEP 4  -  CHECK, THEN COMMIT
 -----------------------------
 
-  1. Open this page:
+ 13. Scroll the list of file names. They must have folders in front of them:
 
-         https://github.com/Ten10Motorsports/PitWall/actions
+        RIGHT   server/engine.py
+                web/shared/columns.js
+                .github/workflows/release.yml
 
-  2. The top entry will have a spinning yellow dot. Leave it alone.
+        WRONG   engine.py
+                columns.js
+                index (1).html
 
-  3. This build takes longer than previous ones, roughly 8 to 15 minutes,
-     because it now downloads Electron and packages the driver HUD as well
-     as the main app. Earlier versions took about 4 minutes. A yellow dot
-     after 10 minutes is normal, not a failure.
+ 14. Use Ctrl+F on the page and search for:   .github/workflows/release.yml
+     If it is not in the list, stop. The hidden folder was missed again.
+     Click the browser back button to abandon the upload and go to step 1.
 
-  4. When the dot turns into a green tick, open:
+ 15. Commit message:  PitWall 1.7.0
+ 16. Leave "Commit directly to the main branch" selected. Click the green
+     "Commit changes".
 
-         https://github.com/Ten10Motorsports/PitWall/releases/latest
+ 17. Prove the workflow updated. Open this page and press Ctrl+F for the
+     phrase "Build the in-game HUD":
 
-     Under "Assets" you should see:
+        https://github.com/Ten10Motorsports/PitWall/blob/main/.github/workflows/release.yml
 
-         PitWall-HUD.exe        (driver download, roughly 80 to 120 MB)
-         PitWall.exe            (broadcaster download)
-         PitWall-windows.zip    (broadcaster download with the guides)
-         Source code (zip)
-         Source code (tar.gz)
-
-If the dot turns red, click into the run and find the step with the red
-cross next to it. Send me the name of that step and the last twenty lines
-of red text underneath it.
+     If that phrase is not in the file, there is no point tagging anything.
 
 
-WHO DOWNLOADS WHAT
-------------------
+STEP 5  -  TAG THE RELEASE
+--------------------------
 
-  Whoever runs the stream:   PitWall-windows.zip
-                             Contains PitWall.exe, the setup guide and the
-                             preview page. Extract it, double-click
-                             PitWall.exe, browser opens the control panel.
+Uploading builds nothing. The build only runs when a version tag appears.
 
-  A driver who wants a HUD:  PitWall-HUD.exe
-                             One file. Double-click it. The settings window
-                             opens the first time so widgets can be turned
-                             on. Nothing else to download, nothing to run
-                             alongside it.
+ 18. Open https://github.com/Ten10Motorsports/PitWall/releases/new
+ 19. Click "Choose a tag" and type:  v1.7.0
+ 20. A line appears underneath reading "Create new tag: v1.7.0 on publish".
+     CLICK THAT LINE. If you do not, no tag is created and nothing builds.
+ 21. Release title:  PitWall 1.7.0
+ 22. Leave the description empty. Click "Publish release".
 
-A driver does NOT need PitWall.exe as well. The HUD carries its own copy of
-the engine inside it and starts it quietly in the background.
+Do not use "Run workflow" from the Actions tab. That builds the files and
+attaches them to nothing.
 
 
-ONE HONEST WARNING ABOUT THE HUD
---------------------------------
+STEP 6  -  WAIT
+---------------
 
-The HUD has been built and driven end to end here, on Linux, under a real
-Electron runtime: widget layout, the settings window, saving settings,
-locking and unlocking, and the packaging step that carries the engine inside
-the app were all verified working. What has never run yet is the Windows
-packaging step on GitHub's own Windows machine. That is the one thing that
-cannot be rehearsed from here.
+ 23. https://github.com/Ten10Motorsports/PitWall/actions
+ 24. Eight to fifteen minutes. It downloads Electron and packages the HUD as
+     well as the main app, so a yellow dot at ten minutes is normal.
+ 25. Green tick, then open:
+        https://github.com/Ten10Motorsports/PitWall/releases/latest
+     Assets should list FIVE things, including PitWall-HUD.exe at roughly
+     80 to 120 MB.
 
-So expect one of two outcomes at Step 6:
-
-  * A green tick, and PitWall-HUD.exe appears on the release. Done.
-
-  * A red cross on the step called "Build the in-game HUD" or "Check the
-    HUD binary exists". If that happens, the main PitWall.exe is still
-    built and still attached, so the broadcast side is unaffected. Send me
-    the red text and it gets fixed in one pass.
-
-The build deliberately fails rather than shipping a broken file: if the HUD
-comes out smaller than 40 MB it means Electron or the engine did not get
-packed in, and the workflow stops there instead of publishing something that
-would not start.
+If it goes red, click into the run, find the step with the red cross, and send
+me its name and the last twenty lines of red text.
 
 
-REQUIREMENTS FOR THE HUD, FOR DRIVERS
--------------------------------------
 
-  * iRacing must be running in WINDOWED or BORDERLESS mode.
-    Exclusive fullscreen hands the entire screen to one program, so no
-    desktop overlay of any kind can draw on top of it. This is a Windows
-    limitation, not something the app can work around.
+THE FIX FOR "EVERYTHING WAS JUST CODE"
+--------------------------------------
 
-  * Not VR. A desktop window is never visible inside a headset. There is no
-    partial version of this: a headset only shows what the VR runtime draws.
+If the HUD widgets or the control panel came up showing raw HTML instead of a
+graphic, that is fixed in this version, and the cause is worth knowing.
+
+Windows keeps a list of content types in its registry. When a web page is
+served, that list decides whether a browser treats the file as a page to render
+or as text to display. Setting Notepad, or any editor, as the program that
+opens .html files rewrites that registry entry to say .html is plain text. From
+then on, every local page served by anything on that PC arrives as text and is
+shown as code, with no styling and nothing loaded, which is exactly what you
+saw.
+
+PitWall no longer asks Windows. It states the content type of every file it
+serves, so a machine in that state cannot break the overlays any more.
+
+Two things worth doing anyway, because the same registry entry affects every
+other local page on that PC:
+
+  * Right-click any .html file, choose "Open with", then "Choose another app",
+    pick Chrome or Edge, and tick "Always use this app".
+  * After starting PitWall, open the Diagnostics tab in the control panel.
+    There is a new check called "Windows content types" that reports whether
+    this PC has the entry set correctly.
+
+WHAT IS NEW IN 1.7.0
+--------------------
+
+THE COLUMN ENGINE
+  Every list now draws from one set of column definitions: the broadcast tower,
+  the in-car relative, the in-car leaderboard and the new ticker. A column means
+  the same thing in all four. Thirty-two of them, all optional, in any order,
+  with a width each.
+
+  Add them to any widget with cols= in the URL, or build a layout in the control
+  panel and reference it by name. Leaving cols= out keeps exactly the behaviour
+  each page had before, so nothing you already have in OBS changes.
+
+NEW COLUMNS
+  Last pit lap, pit stationary time, total pit lane time, number of stops, tyre
+  age, tyre compound, average of the last 3, 5 or 10 laps, positions gained
+  against the grid, projected iRating change, estimated top speed, incidents,
+  fast repairs, push to pass, licence, iRating, team, car, class and league tag.
+
+  Columns that cannot mean anything in the current session remove themselves.
+  Pit stops, tyre age and positions gained disappear in qualifying on their own.
+
+TWO OF THEM ARE ESTIMATES, AND THEY SAY SO
+  They are drawn in grey italic wherever they appear.
+
+  Tyre age has no telemetry behind it. iRacing does not publish how old anyone's
+  tyres are, so this counts laps since we last saw that car on pit road. A stop
+  made before PitWall started is invisible, a car that pitted for fuel only
+  still reads as fresh tyres, and a car outside your Max Cars limit can pit
+  unseen. Until we have actually watched a car pit, the number is laps since we
+  started watching, and hovering the cell says so.
+
+  Top speed is inferred from how quickly a car covers track distance, because
+  iRacing publishes speed for your own car and nobody else's.
+
+  Tyre compound is real telemetry, but iRacing only fills it in for cars with
+  more than one compound. In a single-compound GT3 field every car reports the
+  same value, so the column shows a dash rather than inventing one.
+
+  Other cars' tyre wear, tyre temperature and fuel load are not available to any
+  overlay at all. Anything that appears to show them is showing your own car.
+
+THE SCROLLING TICKER
+  New browser source at 1920 x 64. The field crawling across the bottom of the
+  frame, with the flag colour and LAP 14 / 40 pinned in a block on the left so
+  they are never mid-scroll. The whole bar tints to the flag: green, yellow,
+  white, chequered, red. In a timed session the block shows time remaining.
+  Also a widget in the driver HUD.
+
+PROFILES
+  A saved layout, stored by the engine, referenced as ?profile=race-tower. Your
+  OBS URLs stop being four hundred characters long, and a change reaches every
+  source pointed at it without touching OBS. Anything written into a URL still
+  wins, so a source you set up differently is never overruled.
+
+  Build them in the control panel under the new Widgets tab: drag to reorder
+  columns, a width each, colour pickers for every car state, and a live preview.
+
+PER SESSION LAYOUTS
+  A profile can carry different columns for practice, qualifying and the race.
+  The swap happens on its own when the session changes. Nothing to reload.
+
+DRIVER TAGS
+  Tag a driver in the roster with a short label and a colour and their row
+  stands out in every list. Tags live with the roster, so the whole league sees
+  the same ones. The HUD always highlights the driver using it.
+
+DRAG TO RESIZE IN THE HUD
+  Ctrl+Shift+E to unlock, then drag the red corner grip of any widget to resize
+  it. Text size is a separate control, so a wide leaderboard does not force
+  enormous type. Sizes are still saved per screen arrangement.
 
 
-TWO THINGS STILL TO DO ON YOUR SIDE
------------------------------------
+STILL TO DO ON YOUR SIDE
+------------------------
 
-  1. The driver card source in OBS is still set to 500 wide by 200 tall.
-     The card is drawn at its correct position inside a 1920x1080 canvas,
-     which is entirely outside a 200px tall source, so it shows as an empty
-     outline. Fix: right-click the source, Properties, set Width 1920 and
-     Height 1080, leave the position at 0,0. Every PitWall browser source
-     should be 1920x1080. You crop or move the graphic in OBS, not by
-     shrinking the source.
+  1. OBS browser sources must be 1920x1080 at position 0,0. The driver card
+     source is still 500 by 200, which is why it shows an empty outline. Crop
+     in OBS, do not shrink the source.
 
-  2. Set Max Cars to 63 on the iRacing website, under Account then Settings.
-     iRacing only streams a limited number of cars to your client, and a car
-     it is not streaming looks identical to a car that has left the session.
-     This version handles that far better on its own, showing dashes instead
-     of declaring a driver OUT, but raising Max Cars removes the cause
-     rather than papering over it.
+  2. Set Max Cars to 63 on the iRacing website. Below that, iRacing does not
+     stream every car to your PC, and the missing cars break pit detection,
+     tyre age and positions for part of the field.

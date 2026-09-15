@@ -55,7 +55,8 @@ from server.control import Control  # noqa: E402
 from server.demo import DemoFeed  # noqa: E402
 from server.engine import Engine  # noqa: E402
 from server.irsdk import IRSDK  # noqa: E402
-from server.leagues import LeagueStore  # noqa: E402
+from server.leagues import LeagueStore
+from server.profiles import ProfileStore  # noqa: E402
 from server.roster import RosterStore  # noqa: E402
 from server.sessionyaml import parse as parse_session  # noqa: E402
 from server.wanted import WANTED  # noqa: E402
@@ -124,6 +125,7 @@ class PitWall:
         self.demo = args.demo
         self.roster = RosterStore(self.data_dir, self.config)
         self.leagues = LeagueStore(self.data_dir)
+        self.profiles = ProfileStore(self.data_dir)
         self.battle: Optional[Dict[str, Any]] = None
         self.engine = Engine(self.config)
         self.engine.roster_lookup = self.roster.lookup
@@ -155,13 +157,19 @@ class PitWall:
             return False
         self.server.hub.hello = {
             "app": "PitWall",
-            "version": "1.6.0",
+            "version": "1.7.0",
             "demo": self.demo,
             "league": self.config.get("league", {}),
             "event": self.leagues.event_payload(),
             "battle": self.battle,
             "controlAvailable": self.control.available,
         }
+        # The static handler inlines a profile into any page requested with
+        # ?profile=name, so it needs to be able to read them.
+        try:
+            self.server.handler_class.profiles = self.profiles
+        except Exception:
+            pass
         self._routes()
         return True
 
@@ -378,6 +386,42 @@ class PitWall:
         r.add(("POST", "/api/leagues/duplicate"), leagues_duplicate)
         r.add(("POST", "/api/leagues/activate"), leagues_activate)
         r.add(("POST", "/api/leagues/round"), leagues_round)
+
+        # -- widget profiles ---------------------------------------------
+        # A saved layout, referenced from a widget URL as ?profile=name. The
+        # server inlines it into the page, so the browser never has to make a
+        # blocking request before it can draw.
+
+        def profiles_get(h, q):
+            h._json({
+                "profiles": self.profiles.list(),
+                "status": self.profiles.status(),
+            })
+
+        def profiles_save(h, body):
+            try:
+                saved = self.profiles.upsert(body or {})
+            except ValueError as exc:
+                return h._json({"error": str(exc)}, 400)
+            h._json({"ok": True, "profile": saved})
+
+        def profiles_delete(h, body):
+            h._json({"ok": self.profiles.delete(str((body or {}).get("id") or ""))})
+
+        def profiles_duplicate(h, body):
+            copy = self.profiles.duplicate(str((body or {}).get("id") or ""))
+            if not copy:
+                return h._json({"error": "No profile with that name is saved."}, 404)
+            h._json({"ok": True, "profile": copy})
+
+        def profile_one(h, q):
+            h._json(self.profiles.get((q.get("id") or [""])[0]))
+
+        r.add(("GET", "/api/profiles"), profiles_get)
+        r.add(("POST", "/api/profiles"), profiles_save)
+        r.add(("POST", "/api/profiles/delete"), profiles_delete)
+        r.add(("POST", "/api/profiles/duplicate"), profiles_duplicate)
+        r.add(("GET", "/api/profile"), profile_one)
 
         r.add(("GET", "/api/trackmap"), api_trackmap)
         r.add(("GET", "/api/status"), api_status)
@@ -641,6 +685,7 @@ class PitWall:
             ("broadcast/battle.html", "1920 x 1080"),
             ("broadcast/trackmap.html", "600 x 600"),
             ("broadcast/standings.html", "1920 x 1080"),
+            ("broadcast/ticker.html", "1920 x 64"),
         ):
             print(f"    {base}/{name:<32} {size}")
         if lan:

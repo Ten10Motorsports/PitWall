@@ -46,7 +46,16 @@ FIELDS = [
     "iracingId", "displayName", "carNumber", "team", "country", "pronouns",
     "hometown", "bio", "twitch", "youtube", "instagram", "x", "discord",
     "headshot", "sponsor", "sponsorLogo", "accentColor", "number", "notes",
+    # League tags: a short label and a colour that make a driver stand out in
+    # every list. Stored with the roster rather than on one machine, so a tag
+    # a steward adds is seen by everyone running PitWall from that roster.
+    "tagLabel", "tagColour",
 ]
+
+# A tag colour has to end up in a CSS custom property, so it is validated as a
+# colour here rather than trusted. Anything else is dropped, not escaped: a
+# broken colour is a broken graphic and there is no safe way to guess.
+_COLOUR = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 
 _SAFE = re.compile(r"[^A-Za-z0-9._-]")
 
@@ -165,6 +174,14 @@ class RosterStore:
             if data:
                 target = "headshot" if key == "headshotData" else "sponsorLogo"
                 entry[target] = self._store_image(data, f"{cid}-{target}")
+
+        # Fold the two flat tag fields into the shape the widgets read.
+        label = str(entry.pop("tagLabel", "") or "").strip()[:12]
+        colour = str(entry.pop("tagColour", "") or "").strip()
+        if not _COLOUR.match(colour):
+            colour = ""
+        if label or colour:
+            entry["tag"] = {"label": label, "colour": colour or "#b06cff"}
 
         entry["submittedAt"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         if local_edit:

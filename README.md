@@ -306,3 +306,104 @@ parties can consume it, and a whole commercial ecosystem is built on it.
 PitWall does not inject, hook, or write to the sim, and does not synthesise
 inputs. If you redistribute live timing publicly for a league, check your
 league's and iRacing's broadcast policy separately.
+
+## Columns, profiles and the ticker (1.7)
+
+### The column engine
+
+Every list in PitWall draws from one set of column definitions in
+`web/shared/columns.js`: the broadcast tower, the in-car relative, the in-car
+leaderboard and the scrolling ticker. A column means the same thing in all four
+and is written once.
+
+Add columns to any of them with `cols=`, comma separated, in the order you want
+them. An optional width in pixels follows a colon:
+
+    ?cols=st,gain,gap,int,last,best,tage,comp,stops,irc,name:180
+
+Leaving `cols` out keeps exactly the behaviour that page had before, so nothing
+already set up in OBS changes.
+
+| Key | Column | Where the figure comes from |
+| --- | --- | --- |
+| `pos` `cpos` | Position, class position | Sim |
+| `gain` | Positions gained or lost against the grid | Derived |
+| `num` `name` `team` `car` `cls` `lic` `ir` `tag` `flag` | Identity | Roster |
+| `gap` `int` `cgap` `cint` | Gap to leader, interval, same by class | Derived |
+| `last` `best` `cur` | Lap times | Sim |
+| `avg` | Average of the last 3, 5 or 10 laps, pit laps excluded | Derived |
+| `delta` | Predicted difference to your pace | Derived |
+| `rel` | Time to reach you on track | Derived |
+| `lap` `sec` | Lap number, sector times | Sim |
+| `st` | Running, pit, off, retired, no data | Sim |
+| `stops` `pitlap` `pittime` `pitlane` | Pit stop count, lap, stationary time, lane time | Sim |
+| `tage` | Laps since we last saw that car on pit road | **Estimate** |
+| `comp` | Tyre compound | Sim, where iRacing publishes it |
+| `inc` `fr` `p2p` | Incidents, fast repairs, push to pass | Sim |
+| `irc` | Projected iRating change if the race ended now | Derived |
+| `tsp` | Top speed on the last lap | **Estimate** |
+
+Columns that cannot mean anything in the current session remove themselves.
+Pit stops, tyre age and positions gained disappear in qualifying; the tower
+switches to lap times on its own and back again when the race starts.
+
+### The two estimates, and why they are labelled
+
+Both are drawn in grey italic wherever they appear, and an estimate is never
+allowed to look like a measurement.
+
+**Tyre age** has no telemetry behind it. iRacing does not publish how old
+anyone's tyres are, so every overlay that shows it counts laps since it last
+saw that car come down pit road. Three things follow: a stop made before
+PitWall started is invisible, a car that pitted for fuel only still reads as
+fresh tyres, and a car outside your Max Cars streaming limit can pit unseen.
+Until we have actually watched a car pit, the number is laps since we started
+watching, and the column says so on hover.
+
+**Top speed** is inferred from how quickly a car covers track distance,
+because iRacing publishes speed for your own car and for nobody else. It is
+roughly right on a green-flag lap and wrong in the pit lane.
+
+**Tyre compound** is real telemetry, but iRacing only fills it in for cars that
+have more than one compound. In a single-compound field every car reports the
+same value, and the column shows a dash rather than inventing one.
+
+Other cars' tyre wear, tyre temperature and fuel load are not available to any
+overlay. Anything claiming to show them is showing you your own car's numbers.
+
+### Profiles
+
+A saved layout, stored by the engine and referenced from a widget URL:
+
+    http://127.0.0.1:8099/broadcast/tower.html?profile=race-tower
+
+Build one in the control panel under **Widgets**: a column picker you can drag
+to reorder, a width per column, colour pickers for every car state, and a live
+preview beside it. The profile can also carry a different layout for practice,
+qualifying and the race, which swaps itself when the session changes with
+nothing to reload.
+
+Anything written directly into a URL beats the profile, always. A source you
+have deliberately set up differently cannot be overruled by someone editing the
+profile centrally.
+
+### The scrolling ticker
+
+    http://127.0.0.1:8099/broadcast/ticker.html      1920 x 64
+
+The field crawling across the bottom of the frame, with the flag colour and
+`LAP 14 / 40` pinned in a block on the left so they are never mid-scroll. The
+whole bar tints to the flag: green, yellow, white, chequered and red. In a
+timed session the block shows time remaining instead.
+
+`speed=` sets the crawl in pixels per second, `side=right` moves the fixed
+block, `h=` sets the bar height, `rows=` limits it to the top N, and `tint=0`
+colours only the stripe. It is also a widget in the driver HUD, for pinning
+along the top or bottom edge of a screen.
+
+### Driver tags
+
+Tag a driver in the roster with a short label and a colour and their row stands
+out in every list. Tags live with the roster, so everyone running PitWall from
+it sees the same ones. The HUD always highlights the driver using it, tagged or
+not.

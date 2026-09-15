@@ -61,7 +61,15 @@ const WIDGETS = {
       { key: 'behind',  label: 'Cars behind',     type: 'number', min: 0, max: 8, def: 3 },
       { key: 'class',   label: 'Class chips',     type: 'bool',   def: true },
       { key: 'irating', label: 'Show iRating',    type: 'bool',   def: false },
-      { key: 'inc',     label: 'Show incidents',  type: 'bool',   def: false }
+      { key: 'inc',     label: 'Show incidents',  type: 'bool',   def: false },
+      { key: 'cols',    label: 'Columns',         type: 'text',   def: '',
+        hint: 'Leave empty for the three toggles above. Anything here replaces them: '
+            + 'num, cls, lic, ir, tage, comp, last, best, avg, irc, tsp, stops, pitlap, inc.' },
+      { key: 'profile', label: 'Saved profile',   type: 'text',   def: '',
+        hint: 'The name of a profile built in the control panel. Carries columns, '
+            + 'colours and a different layout per session type.' },
+      { key: 'avgn',    label: 'Average over N laps', type: 'choice', def: '5', options: ['3', '5', '10'] },
+      { key: 'tband',   label: 'Tyre age as NEW / OK / OLD', type: 'bool', def: false }
     ]
   },
   leaderboard: {
@@ -73,14 +81,41 @@ const WIDGETS = {
       { key: 'rows',   label: 'Rows',        type: 'number', min: 4, max: 40, def: 16 },
       { key: 'top',    label: 'Pin top N',   type: 'number', min: 0, max: 20, def: 0 },
       { key: 'cycle',  label: 'Rotate every (s), 0 is off', type: 'number', min: 0, max: 120, def: 0 },
+      { key: 'cols',   label: 'Columns',     type: 'text',   def: '',
+        hint: 'Comma separated, in order. Empty keeps the two simple columns below. '
+            + 'gap, int, last, best, avg, delta, tage, comp, stops, pitlap, pittime, '
+            + 'irc, tsp, gain, ir, lic, inc, st.' },
+      { key: 'profile', label: 'Saved profile', type: 'text', def: '',
+        hint: 'A profile built in the control panel, which can also swap columns '
+            + 'between practice, qualifying and the race on its own.' },
       { key: 'col',    label: 'Column',      type: 'choice', def: 'gap',
         options: ['gap', 'int', 'last', 'best', 'delta'] },
       { key: 'col2',   label: 'Second column', type: 'choice', def: '',
         options: ['', 'gap', 'int', 'last', 'best', 'delta'] },
+      { key: 'heads',  label: 'Column headings', type: 'bool', def: false },
+      { key: 'fixed',  label: 'Built-in position, number and name', type: 'bool', def: true },
       { key: 'group',  label: 'Group by class', type: 'choice', def: 'none', options: ['none', 'class'] },
       { key: 'focus',  label: 'Follow my car', type: 'bool', def: true },
       { key: 'names',  label: 'Names',       type: 'choice', def: 'short',
         options: ['short', 'surname', 'full', 'first'] }
+    ]
+  },
+  ticker: {
+    label: 'Scrolling ticker',
+    blurb: 'The whole field crawling past in one strip, with the flag and the lap count '
+         + 'pinned on the left. Made for the top or bottom edge of a screen.',
+    page: 'broadcast/ticker.html',
+    size: [1200, 58], place: 'bottom-centre', on: false,
+    settings: [
+      { key: 'cols',    label: 'Columns',  type: 'text',   def: '',
+        hint: 'Empty gives position, number, name and gap.' },
+      { key: 'profile', label: 'Saved profile', type: 'text', def: '' },
+      { key: 'speed',   label: 'Crawl speed, pixels per second', type: 'number', min: 10, max: 400, def: 90 },
+      { key: 'h',       label: 'Bar height', type: 'number', min: 24, max: 160, def: 58 },
+      { key: 'side',    label: 'Fixed block', type: 'choice', def: 'left', options: ['left', 'right'] },
+      { key: 'rows',    label: 'Limit to top N (0 is everyone)', type: 'number', min: 0, max: 63, def: 0 },
+      { key: 'tint',    label: 'Tint the whole bar with the flag', type: 'bool', def: true },
+      { key: 'lap',     label: 'Show the lap counter', type: 'bool', def: true }
     ]
   },
   flags: {
@@ -161,9 +196,19 @@ const WIDGETS = {
 };
 
 /* Settings every widget has, appended to each one's own. */
+/*
+ * Settings every widget has.
+ *
+ * `scale` is the TEXT size, not the window size: the window is resized by
+ * dragging its corner in edit mode. Keeping them apart is the whole point,
+ * because a wide leaderboard should not force enormous type and a narrow one
+ * should not become unreadable.
+ */
 const COMMON = [
-  { key: 'scale',   label: 'Scale',   type: 'number', min: 0.5, max: 2.5, step: 0.05, def: 1 },
-  { key: 'opacity', label: 'Opacity', type: 'number', min: 0.15, max: 1, step: 0.05, def: 0.9 }
+  { key: 'scale',   label: 'Text size', type: 'number', min: 0.5, max: 2.5, step: 0.05, def: 1,
+    hint: 'Independent of the window size. Drag the corner of a widget in edit '
+        + 'mode to change how big the box is.' },
+  { key: 'opacity', label: 'Opacity',   type: 'number', min: 0.15, max: 1, step: 0.05, def: 0.9 }
 ];
 
 function settingSpecs(name) {
@@ -573,7 +618,14 @@ function state() {
       on: !!config.enabled[name],
       settings: settingSpecs(name),
       values: config.settings[name] || {},
-      display: (lay[name] && lay[name].display) || mainDisplay().id
+      display: (lay[name] && lay[name].display) || mainDisplay().id,
+      // The URL this widget is actually loading. Worth showing: when a widget
+      // is blank the first question is always whether it is pointed where you
+      // think it is, and the answer is right here rather than in a log.
+      url: widgetUrl(name),
+      bounds: lay[name]
+        ? { w: lay[name].w, h: lay[name].h, x: lay[name].x, y: lay[name].y }
+        : { w: WIDGETS[name].size[0], h: WIDGETS[name].size[1] }
     })),
     displays: displays().map((d, i) => ({
       id: d.id,
@@ -690,6 +742,31 @@ if (!app.requestSingleInstanceLock()) {
 
 /* --------------------------------------------------------------------- IPC */
 
+/*
+ * Resize from the grip in the corner of a widget.
+ *
+ * The renderer sends where the pointer is in screen coordinates; the size is
+ * that minus the window's own origin. Working it out from absolute position
+ * rather than from accumulated deltas means there is no feedback loop between
+ * the window moving and the next measurement, which is what makes hand-rolled
+ * resizing creep away from the cursor.
+ */
+const MIN_W = 120, MIN_H = 40;
+
+ipcMain.on('pitwall:resize', (ev, pos) => {
+  if (!config.editMode || !pos) return;
+  const win = BrowserWindow.fromWebContents(ev.sender);
+  if (!win || win.isDestroyed()) return;
+  const b = win.getBounds();
+  const w = Math.max(MIN_W, Math.round(pos.x - b.x) + 2);
+  const h = Math.max(MIN_H, Math.round(pos.y - b.y) + 2);
+  if (w === b.width && h === b.height) return;
+  win.setBounds({ x: b.x, y: b.y, width: w, height: h });
+  for (const [name, other] of windows) {
+    if (other === win) { persistBounds(name, win); break; }
+  }
+});
+
 ipcMain.on('pitwall:persist', (ev, name) => {
   const win = BrowserWindow.fromWebContents(ev.sender);
   if (win) persistBounds(name, win);
@@ -703,4 +780,8 @@ ipcMain.handle('hud:setDisplay', (_e, name, id) => { moveToDisplay(name, id); re
 ipcMain.handle('hud:reset', () => { resetLayout(); return state(); });
 ipcMain.handle('hud:reload', () => { reloadAll(); return state(); });
 ipcMain.handle('hud:openControl', () => { shell.openExternal(config.server + '/control'); });
+/* The deep editor: column picker, colours and per-session layouts. It lives in
+   the browser because it needs the room, and because a live preview beside the
+   thing you are editing is worth more than keeping everything in one window. */
+ipcMain.handle('hud:openEditor', () => { shell.openExternal(config.server + '/control#widgets'); });
 ipcMain.handle('hud:quit', () => { app.quit(); });
